@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/compliance/digest/send",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}

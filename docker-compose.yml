@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Next.js Smart Manufacturing MES / ERP Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: apex-manufacturing-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://apex_admin:factory123@postgres:5432/apex_mes?schema=public
+      - NODE_ENV=production
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    networks:
+      - apex-network
+
+  # PostgreSQL 16 Enterprise Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: apex-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: apex_admin
+      POSTGRES_PASSWORD: factory123
+      POSTGRES_DB: apex_mes
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apex_admin -d apex_mes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - apex-network
+
+  # Eclipse Mosquitto MQTT & Sparkplug B Broker
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: apex-mqtt-broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    networks:
+      - apex-network
+
+  # Redis In-Memory Telemetry & Session Cache
+  redis:
+    image: redis:7-alpine
+    container_name: apex-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - apex-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  apex-network:
+    driver: bridge

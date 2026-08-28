@@ -1,0 +1,79 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+!/build/installer.nsh
+/dist-staging/
+
+# one-off dev tools (kept locally, not shipped)
+/dbprobe.cjs
+/migrate-*.ps1
+/fix_syntax*.js
+/ts_fixer*.js
+/patch_*.js
+/update_schema.js
+/scratch/
+/scratch_seed_holdpoints.js
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env
+.env.local
+.env.development.local
+.env.production.local
+!.env.example
+
+# vercel
+.vercel
+
+# desktop packaging
+/dist/
+/bmtest_tmp/
+/resources/schema.sql
+.freebuff/
+/dev.db
+*.exe
+
+# backups & databases
+/backups/
+*.db
+*.db-shm
+*.db-wal
+/pgdata/
+
+# logs
+*.log
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/src/generated/prisma
+
+.vercel

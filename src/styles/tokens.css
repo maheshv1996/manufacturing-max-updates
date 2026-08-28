@@ -1,0 +1,85 @@
+:root {
+  /* Elevations - Default Dark Theme */
+  --bg: #0b0c0e;
+  --surface-1: #141519;
+  --surface-2: #1b1d23;
+  --surface-3: #22252c;
+
+  /* Typography */
+  --text-1: #f9fafb; /* primary */
+  --text-2: #d1d5db; /* secondary */
+  --text-3: #9ca3af; /* muted */
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.08);
+
+  /* Brand/Accent - Default to Tailwind Blue, overridden by white-label */
+  --accent: var(--color-accent, #3b82f6);
+  --accent-soft: rgba(59, 130, 246, 0.15);
+
+  /* Semantic Status Colors */
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.15);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.15);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  --info: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.15);
+
+  /* Radii */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.dark {
+  --bg: #0b0c0e;
+  --surface-1: #141519;
+  --surface-2: #1b1d23;
+  --surface-3: #22252c;
+  --text-1: #f9fafb;
+  --text-2: #d1d5db;
+  --text-3: #9ca3af;
+  --border: rgba(255, 255, 255, 0.08);
+}
+
+/* Typography Utilities */
+.t-micro {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.t-body {
+  font-size: 14px;
+  color: var(--text-1);
+}
+
+.t-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.t-kpi {
+  font-size: 30px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+}
+
+/* Enforce tabular-nums for numeric columns/KPIs globally */
+.num,
+table td.num,
+table th.num,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
