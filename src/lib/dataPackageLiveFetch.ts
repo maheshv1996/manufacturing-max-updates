@@ -5,7 +5,7 @@ export async function fetchLiveDossierData(workOrderId: string) {
   if (!cleanId) return null;
 
   try {
-    return await prisma.workOrder.findUnique({
+    const workOrder = await prisma.workOrder.findUnique({
       where: { id: cleanId },
       include: {
         product: {
