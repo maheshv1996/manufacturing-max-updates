@@ -44,8 +44,17 @@ export async function getDigestData(
   const plantWhere = isAll ? {} : { plantId };
   const machinePlantWhere = isAll ? { isActive: true } : { plantId, isActive: true };
 
-  // Fetch OEE rules and Plant Name in parallel
-  const [oeeRules, plant, openWorkOrders] = await Promise.all([
+  // Fetch OEE rules, Plant, Open Work Orders, Machines, and Production/Downtime logs in a SINGLE flattened Promise.all
+  const [
+    oeeRules,
+    plant,
+    openWorkOrders,
+    machines,
+    currentPLogs,
+    currentDLogs,
+    prevPLogs,
+    prevDLogs,
+  ] = await Promise.all([
     getOEERules().catch(() => ({ excludePlanned: true, plannedCategories: ["MAINTENANCE", "SETUP"] })),
     isAll ? prisma.plant.findFirst() : prisma.plant.findUnique({ where: { id: plantId } }),
     prisma.workOrder.count({
@@ -54,38 +63,48 @@ export async function getDigestData(
         ...plantWhere,
       },
     }),
+    prisma.machine.findMany({
+      where: machinePlantWhere,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        idealCycleTimeSeconds: true,
+        oeeTarget: true,
+      },
+    }),
+    prisma.productionLog.findMany({
+      where: {
+        startTime: { gte: start, lte: end },
+        machine: machinePlantWhere,
+      },
+    }),
+    prisma.downtimeLog.findMany({
+      where: {
+        startTime: { gte: start, lte: end },
+        machine: machinePlantWhere,
+      },
+      include: { reason: true },
+    }),
+    prisma.productionLog.findMany({
+      where: {
+        startTime: { gte: prevStart, lte: prevEnd },
+        machine: machinePlantWhere,
+      },
+    }),
+    prisma.downtimeLog.findMany({
+      where: {
+        startTime: { gte: prevStart, lte: prevEnd },
+        machine: machinePlantWhere,
+      },
+      include: { reason: true },
+    }),
   ]);
 
   const plantName = plant?.name || (isAll ? "All Plants Facility" : "Manufacturing Plant");
 
-  // Helper to fetch and calculate real OEE per daily period
-  async function computeDailyMetrics(from: Date, to: Date) {
-    const [machines, pLogs, dLogs] = await Promise.all([
-      prisma.machine.findMany({
-        where: machinePlantWhere,
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          idealCycleTimeSeconds: true,
-          oeeTarget: true,
-        },
-      }),
-      prisma.productionLog.findMany({
-        where: {
-          startTime: { gte: from, lte: to },
-          machine: machinePlantWhere,
-        },
-      }),
-      prisma.downtimeLog.findMany({
-        where: {
-          startTime: { gte: from, lte: to },
-          machine: machinePlantWhere,
-        },
-        include: { reason: true },
-      }),
-    ]);
-
+  // Helper to aggregate metrics from pre-fetched arrays
+  function aggregateMetrics(pLogs: typeof currentPLogs, dLogs: typeof currentDLogs) {
     let totalGood = 0;
     let totalScrap = 0;
     let totalRework = 0;
@@ -214,10 +233,8 @@ export async function getDigestData(
     };
   }
 
-  const [currentStats, prevStats] = await Promise.all([
-    computeDailyMetrics(start, end),
-    computeDailyMetrics(prevStart, prevEnd),
-  ]);
+  const currentStats = aggregateMetrics(currentPLogs, currentDLogs);
+  const prevStats = aggregateMetrics(prevPLogs, prevDLogs);
 
   // Best and worst machines
   let bestMachine: { name: string; oee: number } | null = null;
