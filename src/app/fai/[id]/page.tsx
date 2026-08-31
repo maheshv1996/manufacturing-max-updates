@@ -6,7 +6,7 @@ import FaiDetailClient from "./FaiDetailClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function FaiDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function FaiDetailPage() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
   const requiredPerm = permissionForPath("/fai");
@@ -15,5 +15,5 @@ export default async function FaiDetailPage(props: { params: Promise<{ id: strin
     redirect("/login");
   }
 
-  return <FaiDetailClient {...props} />;
+  return <FaiDetailClient />;
 }
