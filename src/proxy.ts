@@ -16,6 +16,7 @@ const PUBLIC_PREFIXES = [
   "/onboarding",
   "/login",
   "/landing",
+  "/showroom", // Interactive client-side 3D demo showroom — public showcase
   "/terminal",
   "/track",
   "/api/setup",
