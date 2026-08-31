@@ -32,5 +32,14 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "scratch", "dist", "dist-staging"]
+  "exclude": [
+    "node_modules",
+    "scratch",
+    "scratch/**/*",
+    "**/*.scratch.ts",
+    "**/*.scratch.js",
+    "dist",
+    "dist-staging",
+    ".freebuff"
+  ]
 }
