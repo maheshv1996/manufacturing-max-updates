@@ -1,18 +1,18 @@
-import { redirect } from "next/navigation";
-import { verifySessionToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import AnalystClient from "./AnalystClient";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function AnalystPage() {
-  const cookieStore = await cookies();
-  const tokenStr = cookieStore.get("app_session")?.value;
-  if (!tokenStr) redirect("/login");
-
-  const token = await verifySessionToken(tokenStr);
-  if (!token) redirect("/login");
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/analyst");
+  if (!user || (!user.isOwner && requiredPerm && !can(user, requiredPerm))) {
+    redirect("/login");
+  }
 
   // Allow all roles, but data is scoped via getPlantScope
 
