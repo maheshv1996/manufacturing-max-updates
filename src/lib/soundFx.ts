@@ -188,8 +188,8 @@ class SoundEngine {
     }
   }
 
-  /** Industrial error buzz */
-  playError() {
+  /** Distinct piece punch click */
+  playPunch() {
     if (this.muted) return;
     const ctx = this.getContext();
     if (!ctx) return;
@@ -197,18 +197,24 @@ class SoundEngine {
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.setValueAtTime(140, now + 0.1);
-      gain.gain.setValueAtTime(0.07, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.05);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.3);
-    } catch {
-      // Quiet catch
-    }
+      osc.stop(now + 0.05);
+    } catch {}
+  }
+}
+
+export function triggerHaptic(pattern: number | number[] = 15) {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      navigator.vibrate(pattern);
+    } catch {}
   }
 }
 

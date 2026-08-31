@@ -47,6 +47,7 @@ import OfflineSyncBadge from "@/app/components/layout/OfflineSyncBadge";
 import DrawingLightboxModal from "@/app/components/modals/DrawingLightboxModal";
 import LanguageToggle from "@/app/components/layout/LanguageToggle";
 import { t, Language } from "@/lib/i18n";
+import { soundFx, triggerHaptic } from "@/lib/soundFx";
 
 interface OperatorUser {
   employeeNumber?: string | null;
@@ -697,6 +698,9 @@ export default function OperatorTabletView() {
   const performOperatorAction = async (payload: any) => {
     try {
       setActionLoading(true);
+      triggerHaptic(20);
+      soundFx.playPunch();
+
       const res = await offlineFetchWrapper("/api/operator/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -705,6 +709,8 @@ export default function OperatorTabletView() {
 
       const resData = await res.json();
       if (!res.ok && !resData.offline) {
+        soundFx.playError();
+        triggerHaptic([30, 50, 30]);
         if (resData.code === "CALIBRATION_EXPIRED") {
           setCalibrationBlock({
             toolName: resData.toolName,
@@ -715,6 +721,8 @@ export default function OperatorTabletView() {
           alert(resData.error || "Action failed");
         }
       } else {
+        soundFx.playSuccess();
+        triggerHaptic(15);
         if (resData.offline) {
           alert(
             "📡 Network Offline: Action saved to queue! Will auto-sync when connection restores.",
@@ -724,6 +732,8 @@ export default function OperatorTabletView() {
         await fetchLiveState(machineId, operatorId);
       }
     } catch (err) {
+      soundFx.playError();
+      triggerHaptic([50, 50, 50]);
       logClientError("Action error:", err, "OperatorTabletView");
       alert("Failed to perform action");
     } finally {

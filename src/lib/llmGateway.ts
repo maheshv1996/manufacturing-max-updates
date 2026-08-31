@@ -10,6 +10,23 @@ export interface LLMConfig {
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
+// Sliding-window rate limiter: max 60 requests per minute
+const requestTimestamps: number[] = [];
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+export function checkLlmRateLimit(): boolean {
+  const now = Date.now();
+  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - RATE_LIMIT_WINDOW_MS) {
+    requestTimestamps.shift();
+  }
+  if (requestTimestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+  requestTimestamps.push(now);
+  return true;
+}
+
 export async function getActiveLLMConfig(): Promise<LLMConfig> {
   try {
     const row = await prisma.setting.findUnique({ where: { key: "ai_llm_config" } });
@@ -55,6 +72,14 @@ export async function queryAuraLLM(
       text: "Please provide a valid question or command for AURA.",
       provider: "Built-in Industrial Engine",
       model: "Rule-Based Guard v1.0",
+    };
+  }
+
+  if (!checkLlmRateLimit()) {
+    return {
+      text: "⚠️ Rate limit reached (max 60 queries/min). Please pause for a moment before querying AURA again.",
+      provider: "Rate Limiter",
+      model: "Sliding Window Guard",
     };
   }
 

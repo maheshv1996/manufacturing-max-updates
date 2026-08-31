@@ -60,6 +60,25 @@ export async function fetchLiveDossierData(workOrderId: string) {
         },
       } as any,
     });
+
+    if (!workOrder) return null;
+
+    // Auto-attach PPAP Submissions for the product to complete aerospace/automotive dossier
+    let ppapSubmissions: any[] = [];
+    if (workOrder.productId) {
+      try {
+        ppapSubmissions = await prisma.ppapSubmission.findMany({
+          where: { productId: workOrder.productId },
+          include: { elements: { orderBy: { elementNo: "asc" } } },
+          orderBy: { createdAt: "desc" },
+        });
+      } catch {}
+    }
+
+    return {
+      ...workOrder,
+      ppapSubmissions,
+    };
   } catch (err) {
     console.error(`Failed to fetch live dossier data for work order ${cleanId}:`, err);
     return null;
