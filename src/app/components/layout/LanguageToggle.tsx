@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState } from "react";
 import { Language } from "@/lib/i18n";
 import { offlineFetchWrapper } from "@/lib/offlineSync";
@@ -53,7 +55,7 @@ export default function LanguageToggle({
           body: JSON.stringify({ lang: newLang }),
         });
       } catch (err) {
-        console.error("Failed to update user language preference:", err);
+        logClientError("Failed to update user language preference:", err, "LanguageToggle");
       }
     }
   };

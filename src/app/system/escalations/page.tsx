@@ -1,10 +1,22 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import EscalationsClient from "./EscalationsClient";
 
 export const metadata = {
   title: "Escalations | Manufacturing Max",
 };
 
-export default function EscalationsPage() {
+export default async function EscalationsPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/escalations");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="p-6">
       <div className="mb-5">

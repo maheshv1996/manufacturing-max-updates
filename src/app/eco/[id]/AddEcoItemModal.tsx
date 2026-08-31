@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
@@ -48,7 +50,7 @@ export default function AddEcoItemModal({
         alert("Failed to add item");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "AddEcoItemModal");
       alert("Error adding item or invalid JSON in Old/New Data");
     } finally {
       setLoading(false);

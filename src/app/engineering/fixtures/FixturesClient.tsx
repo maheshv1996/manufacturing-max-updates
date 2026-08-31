@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Loader2, X, Wrench, Pencil, Trash2 } from "lucide-react";
 
@@ -32,7 +34,7 @@ export default function FixturesClient() {
         setMachines(d.machines || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "FixturesClient");
     } finally {
       setLoading(false);
     }

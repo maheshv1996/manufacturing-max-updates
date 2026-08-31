@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Cpu,
@@ -58,7 +60,7 @@ export default function CommissioningClient() {
         setLadderRungs(data.ladderRungs || []);
       }
     } catch (err) {
-      console.error("Failed to load PLC commissioning data:", err);
+      logClientError("Failed to load PLC commissioning data:", err, "CommissioningClient");
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,7 @@ export default function CommissioningClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Toggle error:", err);
+      logClientError("Toggle error:", err, "CommissioningClient");
     } finally {
       setTogglingTag(null);
     }

@@ -1,3 +1,5 @@
+import { logAudit } from "@/lib/audit";
+import { getSettings } from "@/lib/settings";
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
@@ -5,11 +7,32 @@ import path from "path";
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get("logo") as File;
+    const file = formData.get("logo") as File | null;
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
+
+    const settings = await getSettings();
+    const maxMb = settings.maxFileUploadMb || 4;
+    const maxBytes = maxMb * 1024 * 1024;
+
+    if (file.size > maxBytes) {
+      return NextResponse.json(
+        {
+          error: `File size exceeds the ${maxMb}MB limit (${(file.size / (1024 * 1024)).toFixed(2)}MB).`,
+          code: "PAYLOAD_TOO_LARGE",
+        },
+        { status: 413 },
+      );
+    }
+
+    await logAudit({
+      actor: "system",
+      action: "FILE_UPLOADED",
+      entityType: "Attachment",
+      details: `File attachment ${file.name} (${(file.size / 1024).toFixed(1)} KB) uploaded`,
+    });
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploadDir = path.join(process.cwd(), "public/uploads");

@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import { ClipboardCheck } from "lucide-react";
@@ -5,6 +8,12 @@ import { ClipboardCheck } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AuditRegisterReport() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "quality.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const now = new Date();
   const audits = await prisma.qmsAudit.findMany({
     orderBy: [{ scheduledDate: "desc" }],

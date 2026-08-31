@@ -286,12 +286,13 @@ class DesktopApp {
         this.state.db = "running";
         return;
       }
-      this.log(`[db] starting postgres (${pgBin})…`);
+      this.log(`[db] starting postgres on port ${this.dbConfig?.port || embeddedDb.DEFAULT_PORT} (${pgBin})…`);
+      const port = this.dbConfig?.port || embeddedDb.DEFAULT_PORT;
       // windowsHide: true + stdio ignore keeps the postmaster out of a visible
       // console — otherwise a console window pops up on the desktop and a
       // Ctrl+C / console-close reaches the postmaster (0xC000013A fast
       // shutdown), taking the DB down. Output already goes to -l <log>.
-      const started = spawnSync(pgBin, ["-D", pgdata, "-l", path.join(this.dir.logs, "postgres.log"), "start"], {
+      const started = spawnSync(pgBin, ["-D", pgdata, "-o", `-p ${port}`, "-l", path.join(this.dir.logs, "postgres.log"), "start"], {
         stdio: "ignore",
         windowsHide: true,
         timeout: 60_000,

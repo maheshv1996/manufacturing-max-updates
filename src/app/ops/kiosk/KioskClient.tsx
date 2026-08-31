@@ -1,5 +1,6 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Plus, Play, Pause, AlertOctagon, Maximize, Cpu } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -33,7 +34,7 @@ export default function KioskClient() {
         setKiosk(data.kiosk || null);
       }
     } catch (err) {
-      console.error("Failed to load kiosk data:", err);
+      logClientError("Failed to load kiosk data:", err, "KioskClient");
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export default function KioskClient() {
         setKiosk(data.kiosk);
       }
     } catch (err) {
-      console.error("Action error:", err);
+      logClientError("Action error:", err, "KioskClient");
     } finally {
       setClocking(false);
     }
@@ -66,9 +67,9 @@ export default function KioskClient() {
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(console.error);
+      document.documentElement.requestFullscreen().catch((err) => logClientError(err, "KioskClient"));
     } else {
-      document.exitFullscreen().catch(console.error);
+      document.exitFullscreen().catch((err) => logClientError(err, "KioskClient"));
     }
   };
 

@@ -1,4 +1,8 @@
 "use client";
+
+
+import { logClientError } from "@/lib/clientLogger";
+import { offlineFetchWrapper } from "@/lib/offlineSync";
 import { can } from "@/lib/permissions";
 
 import { useState, useEffect } from "react";
@@ -35,7 +39,7 @@ export default function PlantSwitcher({ user }: { user: any }) {
           }
         }
       } catch (err) {
-        console.error("Failed to load plant switcher data", err);
+        logClientError("Failed to load plant switcher data", err, "PlantSwitcher");
       } finally {
         setLoading(false);
       }
@@ -67,7 +71,7 @@ export default function PlantSwitcher({ user }: { user: any }) {
       };
       updatedPrefs.selectedPlantId = plantId;
 
-      await fetch("/api/user/prefs", {
+      await offlineFetchWrapper("/api/user/prefs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedPrefs),
@@ -78,7 +82,7 @@ export default function PlantSwitcher({ user }: { user: any }) {
       // Sometimes router.refresh isn't enough to force a hard reload of all data
       window.location.reload();
     } catch (err) {
-      console.error("Failed to update selected plant", err);
+      logClientError("Failed to update selected plant", err, "PlantSwitcher");
     }
   };
 

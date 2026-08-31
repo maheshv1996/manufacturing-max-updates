@@ -1,7 +1,9 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
+    await logAudit({ actor: "system", action: "DATA_PACKAGE_CREATED", entityType: "WorkOrderDataPackage", details: "Data package created" });
   try {
     const body = await request.json();
     const { workOrderId, createdBy = "System" } = body;

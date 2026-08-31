@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import TallyExportButtons from "@/app/components/TallyExportButtons";
@@ -144,7 +146,7 @@ export default function QuotationsClient({
         setQuotations(json.quotations || []);
       }
     } catch (err) {
-      console.error("Failed to load quotations:", err);
+      logClientError("Failed to load quotations:", err, "QuotationsClient");
     } finally {
       setLoading(false);
     }
@@ -159,7 +161,7 @@ export default function QuotationsClient({
         setInvoices(json.invoices || []);
       }
     } catch (err) {
-      console.error("Failed to load invoices:", err);
+      logClientError("Failed to load invoices:", err, "QuotationsClient");
     } finally {
       setLoading(false);
     }
@@ -199,7 +201,7 @@ export default function QuotationsClient({
           setEstimateData(json.estimate);
         }
       } catch (err) {
-        console.error("Estimating failed:", err);
+        logClientError("Estimating failed:", err, "QuotationsClient");
       } finally {
         setEstimateLoading(false);
       }
@@ -367,7 +369,7 @@ export default function QuotationsClient({
         showToast(json?.error || "Update failed", "err");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "QuotationsClient");
     }
   };
 
@@ -399,7 +401,7 @@ export default function QuotationsClient({
         showToast(json?.error || "Decision failed", "err");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "QuotationsClient");
     }
   };
 

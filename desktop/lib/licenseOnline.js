@@ -27,7 +27,7 @@ const http = require("http");
  * @param {number} [opts.timeoutMs]  default 5000
  * @returns {Promise<{ok:boolean, offline:boolean, status?:string, reason:string}>}
  */
-function reVerifyOnline({ serverUrl, key, machineId, timeoutMs = 5000 }) {
+function reVerifyOnline({ serverUrl, key, machineId, diskSerial, timeoutMs = 5000 }) {
   return new Promise((resolve) => {
     if (!serverUrl) {
       return resolve({ ok: false, offline: true, reason: "DISABLED" });
@@ -39,6 +39,7 @@ function reVerifyOnline({ serverUrl, key, machineId, timeoutMs = 5000 }) {
       return resolve({ ok: false, offline: true, reason: "BAD_SERVER_URL" });
     }
     url.searchParams.set("machine", machineId);
+    if (diskSerial) url.searchParams.set("disk", diskSerial);
     if (key) url.searchParams.set("key", key);
 
     const lib = url.protocol === "http:" ? http : https;

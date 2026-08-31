@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Landmark, CheckCircle2 } from "lucide-react";
 
@@ -48,7 +50,7 @@ export default function ChallanPostButton({
       if (!res.ok) alert(d.error || "Post failed");
       else setPosted(true);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ChallanPostButton");
       alert("Post failed");
     } finally {
       setBusy(false);

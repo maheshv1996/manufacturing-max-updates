@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 export default function MonthPicker({
   periods,
   current,
@@ -7,11 +9,12 @@ export default function MonthPicker({
   periods: string[];
   current: string;
 }) {
+  const router = useRouter();
   return (
     <select
       defaultValue={current}
       onChange={(e) => {
-        window.location.href = `/quality/cost-of-quality?period=${e.target.value}`;
+        router.push(`/quality/cost-of-quality?period=${e.target.value}`);
       }}
       className="bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm font-bold"
     >

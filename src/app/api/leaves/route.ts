@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
         status: "PENDING",
       },
     });
+    await logAudit({ actor: "system", action: "LEAVE_REQUEST_SUBMITTED", entityType: "LeaveRequest", details: "Employee leave request submitted" });
 
     await prisma.auditLog.create({
       data: {

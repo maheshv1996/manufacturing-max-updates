@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import ReconcileClient from "./ReconcileClient";
@@ -7,6 +10,12 @@ export const metadata: Metadata = {
 };
 
 export default async function ReconcilePage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "supply.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const downtimeReasons = await prisma.downtimeReason.findMany({
     where: { isActive: true },
     orderBy: { category: "asc" },

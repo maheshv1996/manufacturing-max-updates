@@ -1,8 +1,9 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-let plcIO = {
+const plcIO = {
   digitalInputs: [
     {
       tag: "DI_01",
@@ -158,6 +159,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "COMMISSIONING_STEP_SAVED", entityType: "CommissioningChecklist", details: "Commissioning step saved" });
   try {
     const body = await req.json();
     const { tag, state } = body;

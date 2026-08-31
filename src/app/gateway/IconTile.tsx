@@ -62,7 +62,7 @@ export default function IconTile({
       onClick={onClick}
       onMouseMove={handleMove}
       onMouseEnter={() => {
-        tilt && scale.set(1.04);
+        if (tilt) scale.set(1.04);
         setHovered(true);
       }}
       onMouseLeave={() => {

@@ -205,6 +205,13 @@ export async function POST(req: Request) {
           update: { value: JSON.stringify(ids) },
           create: { key: "activeDepartments", value: JSON.stringify(ids) },
         });
+        if (Array.isArray(body.customDepartments) && body.customDepartments.length > 0) {
+          await prisma.setting.upsert({
+            where: { key: "custom_departments_v2" },
+            update: { value: JSON.stringify(body.customDepartments) },
+            create: { key: "custom_departments_v2", value: JSON.stringify(body.customDepartments) },
+          });
+        }
         return NextResponse.json({ success: true, count: ids.length });
       }
 

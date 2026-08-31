@@ -21,12 +21,18 @@ function getPool(): Pool {
       "sslmode=verify-full",
     );
   }
+
+  const maxConnections = process.env.DB_POOL_MAX
+    ? parseInt(process.env.DB_POOL_MAX, 10)
+    : 20;
+
   const pool = new Pool({
     connectionString,
-    max: 20,
+    max: Number.isFinite(maxConnections) && maxConnections > 0 ? maxConnections : 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
+
   if (process.env.NODE_ENV !== "production") {
     globalForPrisma.pool = pool;
   }

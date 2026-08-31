@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Briefcase,
@@ -128,7 +130,7 @@ export default function RecruitmentClient() {
         setTasks(d.onboardingTasks || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "RecruitmentClient");
     } finally {
       setLoading(false);
     }
@@ -150,7 +152,7 @@ export default function RecruitmentClient() {
       if (!res.ok) alert(d.error || "Action failed");
       else await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "RecruitmentClient");
       alert("Action failed");
     } finally {
       setSaving(false);

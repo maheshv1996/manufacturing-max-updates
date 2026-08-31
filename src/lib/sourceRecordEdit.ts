@@ -14,7 +14,21 @@ export interface EditRecordPayload {
     | "Tool"
     | "MaintenanceTool"
     | "PurchaseOrder"
-    | "WorkOrder";
+    | "WorkOrder"
+    | "Quotation"
+    | "PriceRevision"
+    | "ScrapQuarantine"
+    | "ReworkOrder"
+    | "Idea"
+    | "SafetyIncident"
+    | "Supplier"
+    | "RawMaterial"
+    | "BomLine"
+    | "Document"
+    | "PMRule"
+    | "DispatchRecord"
+    | "Invoice"
+    | "PermitToWork";
   entityId: string;
   updates: Record<string, any>;
   editorName: string;
@@ -43,7 +57,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         endTime: existing.endTime,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -87,7 +101,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         notes: existing.notes,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -127,7 +141,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         status: existing.status,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -158,12 +172,12 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       if (!existing) throw new Error(`MovementLog ${entityId} not found`);
 
       previousValues = {
-        quantity: existing.quantity,
         fromStation: existing.fromStation,
         toStation: existing.toStation,
+        quantity: existing.quantity,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -176,10 +190,10 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       ];
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
-      if (updates.quantity !== undefined)
-        dataToUpdate.quantity = Number(updates.quantity);
       if (updates.fromStation) dataToUpdate.fromStation = updates.fromStation;
       if (updates.toStation) dataToUpdate.toStation = updates.toStation;
+      if (updates.quantity !== undefined)
+        dataToUpdate.quantity = Number(updates.quantity);
 
       updatedRecord = await prisma.movementLog.update({
         where: { id: entityId },
@@ -192,17 +206,17 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       const existing = await prisma.inventoryTransaction.findUnique({
         where: { id: entityId },
       });
-      if (!existing)
-        throw new Error(`InventoryTransaction ${entityId} not found`);
+      if (!existing) throw new Error(`InventoryTransaction ${entityId} not found`);
 
       previousValues = {
         qty: existing.qty,
+        type: existing.type,
+        reference: existing.reference,
         unitCost: existing.unitCost,
         batchNo: existing.batchNo,
-        reference: existing.reference,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -216,11 +230,10 @@ export async function editSourceRecord(payload: EditRecordPayload) {
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
       if (updates.qty !== undefined) dataToUpdate.qty = Number(updates.qty);
-      if (updates.unitCost !== undefined)
-        dataToUpdate.unitCost = Number(updates.unitCost);
+      if (updates.type) dataToUpdate.type = updates.type;
+      if (updates.reference !== undefined) dataToUpdate.reference = updates.reference;
+      if (updates.unitCost !== undefined) dataToUpdate.unitCost = Number(updates.unitCost);
       if (updates.batchNo !== undefined) dataToUpdate.batchNo = updates.batchNo;
-      if (updates.reference !== undefined)
-        dataToUpdate.reference = updates.reference;
 
       updatedRecord = await prisma.inventoryTransaction.update({
         where: { id: entityId },
@@ -240,9 +253,10 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         passed: existing.passed,
         failed: existing.failed,
         notes: existing.notes,
+        defectCodeId: existing.defectCodeId,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -262,6 +276,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       if (updates.failed !== undefined)
         dataToUpdate.failed = Number(updates.failed);
       if (updates.notes !== undefined) dataToUpdate.notes = updates.notes;
+      if (updates.defectCodeId !== undefined) dataToUpdate.defectCodeId = updates.defectCodeId;
 
       updatedRecord = await prisma.qualityInspection.update({
         where: { id: entityId },
@@ -277,17 +292,12 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       if (!existing) throw new Error(`MaintenanceJob ${entityId} not found`);
 
       previousValues = {
-        priority: existing.priority,
-        type: existing.type,
+        title: existing.title,
         status: existing.status,
-        rootCause: existing.rootCause,
-        countermeasure: existing.countermeasure,
-        partsUsed: existing.partsUsed,
-        costRupees: existing.costRupees,
-        laborHours: existing.laborHours,
+        priority: existing.priority,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -300,19 +310,9 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       ];
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
-      if (updates.priority) dataToUpdate.priority = updates.priority;
-      if (updates.type) dataToUpdate.type = updates.type;
+      if (updates.title) dataToUpdate.title = updates.title;
       if (updates.status) dataToUpdate.status = updates.status;
-      if (updates.rootCause !== undefined)
-        dataToUpdate.rootCause = updates.rootCause;
-      if (updates.countermeasure !== undefined)
-        dataToUpdate.countermeasure = updates.countermeasure;
-      if (updates.partsUsed !== undefined)
-        dataToUpdate.partsUsed = updates.partsUsed;
-      if (updates.costRupees !== undefined)
-        dataToUpdate.costRupees = Number(updates.costRupees);
-      if (updates.laborHours !== undefined)
-        dataToUpdate.laborHours = Number(updates.laborHours);
+      if (updates.priority) dataToUpdate.priority = updates.priority;
 
       updatedRecord = await (prisma as any).maintenanceJob.update({
         where: { id: entityId },
@@ -332,10 +332,9 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         downtimeNotes: existing.downtimeNotes,
         safetyNotes: existing.safetyNotes,
         nextShiftActions: existing.nextShiftActions,
-        missReason: existing.missReason,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -356,8 +355,6 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         dataToUpdate.safetyNotes = updates.safetyNotes;
       if (updates.nextShiftActions !== undefined)
         dataToUpdate.nextShiftActions = updates.nextShiftActions;
-      if (updates.missReason !== undefined)
-        dataToUpdate.missReason = updates.missReason;
 
       updatedRecord = await prisma.shiftHandover.update({
         where: { id: entityId },
@@ -367,7 +364,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
     }
 
     case "ShiftCount": {
-      const existing = await prisma.shiftCount.findUnique({
+      const existing = await (prisma as any).shiftCount.findUnique({
         where: { id: entityId },
       });
       if (!existing) throw new Error(`ShiftCount ${entityId} not found`);
@@ -377,10 +374,9 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         inCount: existing.inCount,
         finalCount: existing.finalCount,
         status: existing.status,
-        note: existing.note,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -400,9 +396,8 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       if (updates.finalCount !== undefined)
         dataToUpdate.finalCount = Number(updates.finalCount);
       if (updates.status) dataToUpdate.status = updates.status;
-      if (updates.note !== undefined) dataToUpdate.note = updates.note;
 
-      updatedRecord = await prisma.shiftCount.update({
+      updatedRecord = await (prisma as any).shiftCount.update({
         where: { id: entityId },
         data: dataToUpdate,
       });
@@ -410,19 +405,19 @@ export async function editSourceRecord(payload: EditRecordPayload) {
     }
 
     case "Tool": {
-      const existing = await prisma.tool.findUnique({
+      const existing = await (prisma as any).tool.findUnique({
         where: { id: entityId },
       });
       if (!existing) throw new Error(`Tool ${entityId} not found`);
 
       previousValues = {
-        currentCycles: existing.currentCycles,
-        maxLifeCycles: existing.maxLifeCycles,
-        warningThreshold: existing.warningThreshold,
+        name: existing.name,
+        currentLife: existing.currentLife,
+        maxLife: existing.maxLife,
         status: existing.status,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -435,15 +430,14 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       ];
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
-      if (updates.currentCycles !== undefined)
-        dataToUpdate.currentCycles = Number(updates.currentCycles);
-      if (updates.maxLifeCycles !== undefined)
-        dataToUpdate.maxLifeCycles = Number(updates.maxLifeCycles);
-      if (updates.warningThreshold !== undefined)
-        dataToUpdate.warningThreshold = Number(updates.warningThreshold);
+      if (updates.name) dataToUpdate.name = updates.name;
+      if (updates.currentLife !== undefined)
+        dataToUpdate.currentLife = Number(updates.currentLife);
+      if (updates.maxLife !== undefined)
+        dataToUpdate.maxLife = Number(updates.maxLife);
       if (updates.status) dataToUpdate.status = updates.status;
 
-      updatedRecord = await prisma.tool.update({
+      updatedRecord = await (prisma as any).tool.update({
         where: { id: entityId },
         data: dataToUpdate,
       });
@@ -451,17 +445,22 @@ export async function editSourceRecord(payload: EditRecordPayload) {
     }
 
     case "MaintenanceTool": {
-      const existing = await (prisma as any).maintenanceTool.findUnique({
+      const existing = await prisma.maintenanceTool.findUnique({
         where: { id: entityId },
       });
       if (!existing) throw new Error(`MaintenanceTool ${entityId} not found`);
 
       previousValues = {
-        usedUnits: existing.usedUnits,
+        name: existing.name,
+        code: existing.code,
         ratedLifeUnits: existing.ratedLifeUnits,
+        usedUnits: existing.usedUnits,
+        regrinds: existing.regrinds,
+        maxRegrinds: existing.maxRegrinds,
+        lifeStatus: existing.lifeStatus,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -474,12 +473,19 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       ];
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
-      if (updates.usedUnits !== undefined)
-        dataToUpdate.usedUnits = Number(updates.usedUnits);
+      if (updates.name !== undefined) dataToUpdate.name = updates.name;
+      if (updates.code !== undefined) dataToUpdate.code = updates.code;
       if (updates.ratedLifeUnits !== undefined)
         dataToUpdate.ratedLifeUnits = Number(updates.ratedLifeUnits);
+      if (updates.usedUnits !== undefined)
+        dataToUpdate.usedUnits = Number(updates.usedUnits);
+      if (updates.regrinds !== undefined)
+        dataToUpdate.regrinds = Number(updates.regrinds);
+      if (updates.maxRegrinds !== undefined)
+        dataToUpdate.maxRegrinds = Number(updates.maxRegrinds);
+      if (updates.lifeStatus) dataToUpdate.lifeStatus = updates.lifeStatus;
 
-      updatedRecord = await (prisma as any).maintenanceTool.update({
+      updatedRecord = await prisma.maintenanceTool.update({
         where: { id: entityId },
         data: dataToUpdate,
       });
@@ -499,7 +505,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         status: existing.status,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -539,7 +545,7 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         cycleTimeSeconds: existing.cycleTimeSeconds,
       };
 
-      const history = (existing.adjustmentHistory as any[]) || [];
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
       const newHistory = [
         ...history,
         {
@@ -562,6 +568,532 @@ export async function editSourceRecord(payload: EditRecordPayload) {
         dataToUpdate.cycleTimeSeconds = Number(updates.cycleTimeSeconds);
 
       updatedRecord = await prisma.workOrder.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "Quotation": {
+      const existing = await prisma.quotation.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`Quotation ${entityId} not found`);
+
+      previousValues = {
+        quotedPrice: existing.quotedPrice,
+        estimatedCost: existing.estimatedCost,
+        marginPct: existing.marginPct,
+        discountPct: existing.discountPct,
+        status: existing.status,
+        notes: existing.notes,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.quotedPrice !== undefined) dataToUpdate.quotedPrice = Number(updates.quotedPrice);
+      if (updates.estimatedCost !== undefined) dataToUpdate.estimatedCost = Number(updates.estimatedCost);
+      if (updates.marginPct !== undefined) dataToUpdate.marginPct = Number(updates.marginPct);
+      if (updates.discountPct !== undefined) dataToUpdate.discountPct = Number(updates.discountPct);
+      if (updates.status) dataToUpdate.status = updates.status;
+      if (updates.notes !== undefined) dataToUpdate.notes = updates.notes;
+
+      updatedRecord = await prisma.quotation.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "PriceRevision": {
+      const existing = await prisma.priceRevision.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`PriceRevision ${entityId} not found`);
+
+      previousValues = {
+        oldPrice: existing.oldPrice,
+        newPrice: existing.newPrice,
+        reason: existing.reason,
+        status: existing.status,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.oldPrice !== undefined) dataToUpdate.oldPrice = Number(updates.oldPrice);
+      if (updates.newPrice !== undefined) dataToUpdate.newPrice = Number(updates.newPrice);
+      if (updates.reason) dataToUpdate.reason = updates.reason;
+      if (updates.status) dataToUpdate.status = updates.status;
+
+      updatedRecord = await prisma.priceRevision.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "ScrapQuarantine": {
+      const existing = await prisma.scrapQuarantine.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`ScrapQuarantine ${entityId} not found`);
+
+      previousValues = {
+        quantity: existing.quantity,
+        defectCode: existing.defectCode,
+        status: existing.status,
+        dispositionNotes: existing.dispositionNotes,
+        costEstimate: existing.costEstimate,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.quantity !== undefined) dataToUpdate.quantity = Number(updates.quantity);
+      if (updates.defectCode !== undefined) dataToUpdate.defectCode = updates.defectCode;
+      if (updates.status) dataToUpdate.status = updates.status;
+      if (updates.dispositionNotes !== undefined) dataToUpdate.dispositionNotes = updates.dispositionNotes;
+      if (updates.costEstimate !== undefined) dataToUpdate.costEstimate = Number(updates.costEstimate);
+
+      updatedRecord = await prisma.scrapQuarantine.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "ReworkOrder": {
+      const existing = await (prisma as any).reworkOrder.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`ReworkOrder ${entityId} not found`);
+
+      previousValues = {
+        quantity: existing.quantity,
+        status: existing.status,
+        notes: existing.notes,
+        reworkCost: existing.reworkCost,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.quantity !== undefined) dataToUpdate.quantity = Number(updates.quantity);
+      if (updates.status) dataToUpdate.status = updates.status;
+      if (updates.notes !== undefined) dataToUpdate.notes = updates.notes;
+      if (updates.reworkCost !== undefined) dataToUpdate.reworkCost = Number(updates.reworkCost);
+
+      updatedRecord = await (prisma as any).reworkOrder.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "Idea": {
+      const existing = await (prisma as any).idea.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`Idea ${entityId} not found`);
+
+      previousValues = {
+        title: existing.title,
+        description: existing.description,
+        status: existing.status,
+        category: existing.category,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.title) dataToUpdate.title = updates.title;
+      if (updates.description) dataToUpdate.description = updates.description;
+      if (updates.status) dataToUpdate.status = updates.status;
+      if (updates.category) dataToUpdate.category = updates.category;
+
+      updatedRecord = await (prisma as any).idea.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "SafetyIncident": {
+      const existing = await (prisma as any).safetyIncident.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`SafetyIncident ${entityId} not found`);
+
+      previousValues = {
+        title: existing.title,
+        description: existing.description,
+        severity: existing.severity,
+        status: existing.status,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.title) dataToUpdate.title = updates.title;
+      if (updates.description) dataToUpdate.description = updates.description;
+      if (updates.severity) dataToUpdate.severity = updates.severity;
+      if (updates.status) dataToUpdate.status = updates.status;
+
+      updatedRecord = await (prisma as any).safetyIncident.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "Supplier": {
+      const existing = await prisma.supplier.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`Supplier ${entityId} not found`);
+
+      previousValues = {
+        name: existing.name,
+        code: existing.code,
+        rating: existing.rating,
+        paymentTerms: existing.paymentTerms,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.name) dataToUpdate.name = updates.name;
+      if (updates.code) dataToUpdate.code = updates.code;
+      if (updates.rating !== undefined) dataToUpdate.rating = Number(updates.rating);
+      if (updates.paymentTerms !== undefined) dataToUpdate.paymentTerms = updates.paymentTerms;
+
+      updatedRecord = await prisma.supplier.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "RawMaterial": {
+      const existing = await prisma.rawMaterial.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`RawMaterial ${entityId} not found`);
+
+      previousValues = {
+        name: existing.name,
+        sku: existing.sku,
+        unitCost: existing.unitCost,
+        currentStock: existing.currentStock,
+        minStock: existing.minStock,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.name) dataToUpdate.name = updates.name;
+      if (updates.sku) dataToUpdate.sku = updates.sku;
+      if (updates.unitCost !== undefined) dataToUpdate.unitCost = Number(updates.unitCost);
+      if (updates.currentStock !== undefined) dataToUpdate.currentStock = Number(updates.currentStock);
+      if (updates.minStock !== undefined) dataToUpdate.minStock = Number(updates.minStock);
+
+      updatedRecord = await prisma.rawMaterial.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "BomLine": {
+      const existing = await prisma.bomLine.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`BomLine ${entityId} not found`);
+
+      previousValues = {
+        qtyPerUnit: existing.qtyPerUnit,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.qtyPerUnit !== undefined) dataToUpdate.qtyPerUnit = Number(updates.qtyPerUnit);
+
+      updatedRecord = await prisma.bomLine.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "Document": {
+      const existing = await prisma.document.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`Document ${entityId} not found`);
+
+      previousValues = {
+        title: existing.title,
+        version: existing.version,
+        status: existing.status,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.title) dataToUpdate.title = updates.title;
+      if (updates.version !== undefined) dataToUpdate.version = Number(updates.version);
+      if (updates.status) dataToUpdate.status = updates.status;
+
+      updatedRecord = await prisma.document.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "PMRule": {
+      const existing = await (prisma as any).pMRule.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`PMRule ${entityId} not found`);
+
+      previousValues = {
+        name: existing.name,
+        intervalDays: existing.intervalDays,
+        intervalHours: existing.intervalHours,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.name) dataToUpdate.name = updates.name;
+      if (updates.intervalDays !== undefined) dataToUpdate.intervalDays = Number(updates.intervalDays);
+      if (updates.intervalHours !== undefined) dataToUpdate.intervalHours = Number(updates.intervalHours);
+
+      updatedRecord = await (prisma as any).pMRule.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "DispatchRecord": {
+      const existing = await (prisma as any).dispatchRecord.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`DispatchRecord ${entityId} not found`);
+
+      previousValues = {
+        dispatchQty: existing.dispatchQty,
+        carrier: existing.carrier,
+        trackingNumber: existing.trackingNumber,
+        notes: existing.notes,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.dispatchQty !== undefined) dataToUpdate.dispatchQty = Number(updates.dispatchQty);
+      if (updates.carrier !== undefined) dataToUpdate.carrier = updates.carrier;
+      if (updates.trackingNumber !== undefined) dataToUpdate.trackingNumber = updates.trackingNumber;
+      if (updates.notes !== undefined) dataToUpdate.notes = updates.notes;
+
+      updatedRecord = await (prisma as any).dispatchRecord.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "Invoice": {
+      const existing = await prisma.invoice.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`Invoice ${entityId} not found`);
+
+      previousValues = {
+        paidAmount: existing.paidAmount,
+        status: existing.status,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.paidAmount !== undefined) dataToUpdate.paidAmount = Number(updates.paidAmount);
+      if (updates.status) dataToUpdate.status = updates.status;
+
+      updatedRecord = await prisma.invoice.update({
+        where: { id: entityId },
+        data: dataToUpdate,
+      });
+      break;
+    }
+
+    case "PermitToWork": {
+      const existing = await prisma.permitToWork.findUnique({
+        where: { id: entityId },
+      });
+      if (!existing) throw new Error(`PermitToWork ${entityId} not found`);
+
+      previousValues = {
+        type: existing.type,
+        status: existing.status,
+        description: existing.description,
+        location: existing.location,
+      };
+
+      const history = Array.isArray(existing.adjustmentHistory) ? (existing.adjustmentHistory as any[]) : [];
+      const newHistory = [
+        ...history,
+        {
+          editedBy: editorName,
+          editedAt: now.toISOString(),
+          previousValues,
+          newValues: updates,
+          reason: reason || "Admin Edit",
+        },
+      ];
+
+      const dataToUpdate: any = { adjustmentHistory: newHistory };
+      if (updates.type) dataToUpdate.type = updates.type;
+      if (updates.status) dataToUpdate.status = updates.status;
+      if (updates.description !== undefined) dataToUpdate.description = updates.description;
+      if (updates.location !== undefined) dataToUpdate.location = updates.location;
+
+      updatedRecord = await prisma.permitToWork.update({
         where: { id: entityId },
         data: dataToUpdate,
       });

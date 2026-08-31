@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Loader2, ArrowRight } from "lucide-react";
@@ -57,7 +59,7 @@ export default function CommandPalette() {
           setResults(data.results);
         }
       } catch (err) {
-        console.error(err);
+        logClientError(err, "CommandPalette");
       } finally {
         setLoading(false);
       }

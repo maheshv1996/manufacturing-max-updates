@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { FileSignature, Boxes, Cpu, ShieldCheck } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -75,7 +77,7 @@ export default function EcoDiffClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load ECO diff", err);
+      logClientError("Failed to load ECO diff", err, "EcoDiffClient");
     } finally {
       setLoading(false);
     }
@@ -83,6 +85,7 @@ export default function EcoDiffClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSign = async (role: string) => {
@@ -101,7 +104,7 @@ export default function EcoDiffClient() {
         await fetchData(selectedEcoId);
       }
     } catch (err) {
-      console.error("Sign error", err);
+      logClientError("Sign error", err, "EcoDiffClient");
     } finally {
       setSigningRole(null);
     }

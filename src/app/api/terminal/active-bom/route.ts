@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     }
 
     let effectiveBom = [...wo.product.bomLines];
-    let appliedRevisions: string[] = [];
+    const appliedRevisions: string[] = [];
     let effectivityPending = false;
 
     // R&D prototype projects skip strict ECO effectivity gating (rapid iteration mode)

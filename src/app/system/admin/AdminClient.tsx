@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Plus,
@@ -119,7 +121,7 @@ export default function AdminClient() {
         alert(resData.error || "Failed to reveal password");
       }
     } catch (err) {
-      console.error("Reveal password error:", err);
+      logClientError("Reveal password error:", err, "AdminClient");
     } finally {
       setRevealingLoading((prev) => ({ ...prev, [userId]: false }));
     }
@@ -173,10 +175,10 @@ export default function AdminClient() {
         const json = await res.json();
         setData(json);
       } else {
-        console.error("Failed to fetch admin data");
+        logClientError("Failed to fetch admin data", "AdminClient");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "AdminClient");
     } finally {
       setLoading(false);
     }
@@ -218,7 +220,7 @@ export default function AdminClient() {
         alert("Failed to unassign operator");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "AdminClient");
     }
   };
 

@@ -1,6 +1,11 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+const ThreeHero = dynamic(() => import("@/app/components/shared/ThreeHero"), { ssr: false });
 import { Boxes, Cpu, Radio, RefreshCw, RotateCw } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
 
@@ -61,7 +66,7 @@ export default function CellTwinClient() {
         setCellData(data.cellData || null);
       }
     } catch (err) {
-      console.error("Failed to load digital twin cell data:", err);
+      logClientError("Failed to load digital twin cell data:", err, "CellTwinClient");
     } finally {
       setLoading(false);
     }
@@ -69,6 +74,7 @@ export default function CellTwinClient() {
 
   useEffect(() => {
     fetchData(selectedMachine);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine]);
 
   useEffect(() => {
@@ -77,6 +83,7 @@ export default function CellTwinClient() {
       fetchData(selectedMachine);
     }, 2000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, selectedMachine]);
 
   return (
@@ -171,6 +178,11 @@ export default function CellTwinClient() {
         <div className="space-y-6">
           {/* Main 3D Digital Twin Visual Stage */}
           <div className="relative w-full h-[460px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-border rounded-3xl p-6 overflow-hidden select-none shadow-2xl">
+            {/* 3D Particle Ambient Canvas */}
+            <div className="absolute inset-0 opacity-30 pointer-events-none">
+              <ThreeHero dimmed />
+            </div>
+
             {/* 3D Grid Stage Ground Floor */}
             <div
               className="absolute inset-0 opacity-25"

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -79,7 +81,7 @@ export default function GrnClient() {
         setCashflow(d.cashflow || null);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "GrnClient");
     } finally {
       setLoading(false);
     }
@@ -105,7 +107,7 @@ export default function GrnClient() {
       await fetchData();
       return d;
     } catch (e) {
-      console.error(e);
+      logClientError(e, "GrnClient");
       alert("Action failed");
     } finally {
       setSaving(false);

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Truck,
@@ -74,7 +76,7 @@ export default function AgvFleetClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load AGV data:", err);
+      logClientError("Failed to load AGV data:", err, "AgvFleetClient");
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ export default function AgvFleetClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Dispatch error:", err);
+      logClientError("Dispatch error:", err, "AgvFleetClient");
     } finally {
       setDispatching(false);
     }

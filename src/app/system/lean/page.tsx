@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import { Clock, Gauge, ShieldAlert, TrendingUp, Wrench } from "lucide-react";
 import { getLeanAnalyticsData } from "@/lib/leanData";
 import LeanChartsClient from "./LeanChartsClient";
@@ -10,6 +14,14 @@ export const revalidate = 0;
 export default async function LeanAnalyticsPage(props: {
   searchParams?: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/lean");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const searchParams = await props.searchParams;
   const parsedRange = parseDateRange(searchParams || {});
 

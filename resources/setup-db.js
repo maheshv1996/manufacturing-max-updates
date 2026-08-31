@@ -11,6 +11,9 @@
  *
  * Applies schema once, then runs the compiled seed against the app DB.
  */
+if (process.env.NODE_PATH) {
+  require("module").Module._initPaths();
+}
 const { Client } = require("pg");
 
 const ADMIN_URL = process.env.ADMIN_URL;
@@ -76,12 +79,18 @@ async function main() {
   //    from the standalone bundle resolved through NODE_PATH).
   const { spawnSync } = require("child_process");
   const seedScript = require("path").join(SEED_DIR, "prisma", "seed.js");
-  const r = spawnSync(process.execPath, [seedScript], {
+  const r = spawnSync(process.execPath, [
+    "-e",
+    `if(process.env.NODE_PATH)require('module').Module._initPaths();require('${seedScript.replace(/\\/g, '\\\\')}')`
+  ], {
     env: process.env,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
     timeout: 600_000,
   });
-  if (r.status !== 0) throw new Error("seed failed with status " + r.status);
+  if (r.status !== 0) {
+    const errText = (r.stderr || r.stdout || "").toString().trim();
+    throw new Error("seed failed with status " + r.status + (errText ? ": " + errText : ""));
+  }
   console.log("[setup-db] seed complete");
 }
 

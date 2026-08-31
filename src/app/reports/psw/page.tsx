@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { FileSignature } from "lucide-react";
@@ -5,6 +8,12 @@ import { FileSignature } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function PswPickerPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "quality.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const submissions = await prisma.ppapSubmission.findMany({
     include: {
       product: { select: { sku: true, name: true } },

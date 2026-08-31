@@ -11,14 +11,17 @@ export interface OverrideData {
 
 /** Get all overrides for an entity, or all overrides in the system if no arguments */
 export async function getOverrides(entityType?: string, entityId?: string) {
-  if (entityType && entityId) {
+  const cleanType = entityType ? String(entityType).trim() : undefined;
+  const cleanId = entityId ? String(entityId).trim() : undefined;
+
+  if (cleanType && cleanId) {
     return (prisma as any).override.findMany({
-      where: { entityType, entityId },
+      where: { entityType: cleanType, entityId: cleanId },
     });
   }
-  if (entityType) {
+  if (cleanType) {
     return (prisma as any).override.findMany({
-      where: { entityType },
+      where: { entityType: cleanType },
     });
   }
   return (prisma as any).override.findMany({
@@ -28,7 +31,13 @@ export async function getOverrides(entityType?: string, entityId?: string) {
 
 /** Set or update a manual override */
 export async function setOverride(data: OverrideData) {
-  const { entityType, entityId, field, value, note, byName } = data;
+  const entityType = String(data.entityType || "").trim();
+  const entityId = String(data.entityId || "").trim();
+  const field = String(data.field || "").trim();
+  const rawNum = Number(data.value);
+  const value = Number.isFinite(rawNum) ? rawNum : 0;
+  const note = data.note ? String(data.note).trim() : null;
+  const byName = String(data.byName || "SYSTEM").trim();
 
   const existing = await (prisma as any).override.findUnique({
     where: {
@@ -41,8 +50,8 @@ export async function setOverride(data: OverrideData) {
       entityType_entityId_field: { entityType, entityId, field },
     },
     update: {
-      value: Number(value),
-      note: note || null,
+      value,
+      note,
       byName,
       at: new Date(),
     },
@@ -50,27 +59,31 @@ export async function setOverride(data: OverrideData) {
       entityType,
       entityId,
       field,
-      value: Number(value),
-      note: note || null,
+      value,
+      note,
       byName,
       at: new Date(),
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      actor: byName,
-      action: existing ? "UPDATED_OVERRIDE" : "CREATED_OVERRIDE",
-      entityType: `OVERRIDE_${entityType}`,
-      entityId: `${entityId}:${field}`,
-      details: JSON.stringify({
-        field,
-        value,
-        note,
-        previousValue: existing?.value,
-      }),
-    },
-  });
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actor: byName,
+        action: existing ? "UPDATED_OVERRIDE" : "CREATED_OVERRIDE",
+        entityType: `OVERRIDE_${entityType}`,
+        entityId: `${entityId}:${field}`,
+        details: JSON.stringify({
+          field,
+          value,
+          note,
+          previousValue: existing?.value,
+        }),
+      },
+    });
+  } catch (err) {
+    console.error("Failed to create audit log for override:", err);
+  }
 
   return override;
 }
@@ -82,9 +95,18 @@ export async function clearOverride(
   field: string,
   byName: string,
 ) {
+  const cleanType = String(entityType || "").trim();
+  const cleanId = String(entityId || "").trim();
+  const cleanField = String(field || "").trim();
+  const cleanActor = String(byName || "SYSTEM").trim();
+
   const existing = await (prisma as any).override.findUnique({
     where: {
-      entityType_entityId_field: { entityType, entityId, field },
+      entityType_entityId_field: {
+        entityType: cleanType,
+        entityId: cleanId,
+        field: cleanField,
+      },
     },
   });
 
@@ -92,19 +114,27 @@ export async function clearOverride(
 
   await (prisma as any).override.delete({
     where: {
-      entityType_entityId_field: { entityType, entityId, field },
+      entityType_entityId_field: {
+        entityType: cleanType,
+        entityId: cleanId,
+        field: cleanField,
+      },
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      actor: byName,
-      action: "CLEARED_OVERRIDE",
-      entityType: `OVERRIDE_${entityType}`,
-      entityId: `${entityId}:${field}`,
-      details: JSON.stringify({ previousValue: existing.value }),
-    },
-  });
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actor: cleanActor,
+        action: "CLEARED_OVERRIDE",
+        entityType: `OVERRIDE_${cleanType}`,
+        entityId: `${cleanId}:${cleanField}`,
+        details: JSON.stringify({ previousValue: existing.value }),
+      },
+    });
+  } catch (err) {
+    console.error("Failed to create audit log for cleared override:", err);
+  }
 
   return existing;
 }

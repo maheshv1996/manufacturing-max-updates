@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Megaphone,
@@ -144,7 +146,7 @@ export default function MarketingClient() {
         if (d.landing) setLanding(d.landing);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MarketingClient");
     } finally {
       setLoading(false);
     }
@@ -166,7 +168,7 @@ export default function MarketingClient() {
       if (!res.ok) alert(d.error || "Action failed");
       else await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MarketingClient");
       alert("Action failed");
     } finally {
       setSaving(false);
@@ -219,7 +221,7 @@ export default function MarketingClient() {
         setTimeout(() => setSavedMsg(""), 4000);
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "MarketingClient");
       alert("Save failed");
     } finally {
       setSaving(false);

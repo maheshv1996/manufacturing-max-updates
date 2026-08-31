@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Loader2,
@@ -38,7 +40,7 @@ export default function CertificationsTab() {
       const json = await res.json();
       setData(json);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "CertificationsTab");
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export default function CertificationsTab() {
         alert("Failed to issue certification");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "CertificationsTab");
     } finally {
       setSubmitting(false);
     }
@@ -76,7 +78,7 @@ export default function CertificationsTab() {
         fetchData();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "CertificationsTab");
     }
   };
 

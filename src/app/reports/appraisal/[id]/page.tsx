@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
@@ -26,6 +29,12 @@ export default async function AppraisalPrintPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ period?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "people.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const { id } = await params;
   const sp = await searchParams;
   const period = sp.period || new Date().toISOString().slice(0, 7);

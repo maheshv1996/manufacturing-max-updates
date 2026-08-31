@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet,
@@ -88,7 +90,7 @@ export default function PayrollClient() {
         setRuns(d.runs || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "PayrollClient");
     } finally {
       setLoading(false);
     }
@@ -111,7 +113,7 @@ export default function PayrollClient() {
       else await fetchData();
       return d;
     } catch (e) {
-      console.error(e);
+      logClientError(e, "PayrollClient");
       alert("Action failed");
       return {};
     } finally {

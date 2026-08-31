@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Package,
@@ -173,7 +175,7 @@ export default function PackagingStation() {
         }
       }
     } catch (err) {
-      console.error("Failed to fetch packaging data", err);
+      logClientError("Failed to fetch packaging data", err, "PackagingStation");
     } finally {
       setLoading(false);
     }
@@ -183,6 +185,7 @@ export default function PackagingStation() {
     fetchData();
     const interval = setInterval(fetchData, 4000); // Live sync every 4s
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep focus on barcode input for barcode reader gun
@@ -271,7 +274,7 @@ export default function PackagingStation() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Failed to save EAN", err);
+      logClientError("Failed to save EAN", err, "PackagingStation");
     }
   };
 
@@ -296,7 +299,7 @@ export default function PackagingStation() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Shift reset error", err);
+      logClientError("Shift reset error", err, "PackagingStation");
     }
   };
 

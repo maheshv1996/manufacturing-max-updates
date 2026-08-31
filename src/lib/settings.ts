@@ -33,145 +33,129 @@ export const DEFAULT_OEE_RULES: OEERulesSettings = {
   excludePlanned: false,
 };
 
+/** Safely parse and clamp integer values within designated business bounds */
+function parseSafeInt(
+  raw: string | undefined,
+  fallback: number,
+  min: number = -Infinity,
+  max: number = Infinity,
+): number {
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  if (isNaN(n) || !isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Safely parse and clamp floating point values within designated business bounds */
+function parseSafeFloat(
+  raw: string | undefined,
+  fallback: number,
+  min: number = -Infinity,
+  max: number = Infinity,
+): number {
+  if (!raw) return fallback;
+  const n = parseFloat(raw);
+  if (isNaN(n) || !isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Safely parse JSON setting with schema validation fallback */
+function parseSafeJson<T>(
+  raw: string | undefined,
+  fallback: T,
+  validator?: (data: unknown) => boolean,
+): T {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (validator && !validator(parsed)) return fallback;
+    return { ...fallback, ...parsed };
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getSettings() {
-  const settings = await prisma.setting.findMany();
+  const settingsList = await prisma.setting.findMany();
+  const map = new Map<string, string>();
+  for (const s of settingsList) {
+    if (s.key && s.value !== null && s.value !== undefined) {
+      map.set(s.key, s.value);
+    }
+  }
 
-  const brandingStr = settings.find((s) => s.key === "branding")?.value;
-  const oeeRulesStr = settings.find((s) => s.key === "oeeRules")?.value;
-  const graceStr = settings.find(
-    (s) => s.key === "attendance_grace_minutes",
-  )?.value;
-  const toleranceStr = settings.find((s) => s.key === "count_tolerance")?.value;
-  const laborRateStr = settings.find(
-    (s) => s.key === "laborRatePerHour",
-  )?.value;
-  const machineRateStr = settings.find(
-    (s) => s.key === "machineRatePerHour",
-  )?.value;
-  const oeeGoodStr = settings.find((s) => s.key === "oeeGoodThreshold")?.value;
-  const oeeWarnStr = settings.find(
-    (s) => s.key === "oeeWarningThreshold",
-  )?.value;
-  const planGateStr = settings.find(
-    (s) => s.key === "planGateThreshold",
-  )?.value;
-  const otLimitStr = settings.find(
-    (s) => s.key === "otStatutoryLimitHours",
-  )?.value;
-  const otThreshStr = settings.find(
-    (s) => s.key === "otDailyThresholdHours",
-  )?.value;
-  const otMultStr = settings.find((s) => s.key === "otMultiplier")?.value;
-  const oopsWinStr = settings.find(
-    (s) => s.key === "operatorOopsWindowMinutes",
-  )?.value;
-  const kioskCountStr = settings.find(
-    (s) => s.key === "kioskCountdownSeconds",
-  )?.value;
-  const fileCapStr = settings.find((s) => s.key === "maxFileUploadMb")?.value;
-  const effHighStr = settings.find((s) => s.key === "effRatingHigh")?.value;
-  const effMedStr = settings.find((s) => s.key === "effRatingMed")?.value;
-  const effLowStr = settings.find((s) => s.key === "effRatingLow")?.value;
-  const poMultStr = settings.find(
-    (s) => s.key === "suggestedPoMultiplier",
-  )?.value;
-  const minStaffingStr = settings.find(
-    (s) => s.key === "minStaffingPerShift",
-  )?.value; // P24
-  const availableHoursStr = settings.find(
-    (s) => s.key === "dailyAvailableHours",
-  )?.value;
-  const energyCostStr = settings.find(
-    (s) => s.key === "defaultEnergyCostPerKwh",
-  )?.value;
+  const plantId = map.get("plantId") || map.get("defaultPlantId") || process.env.DEFAULT_PLANT_ID || null;
 
-  const branding: BrandingSettings = brandingStr
-    ? { ...DEFAULT_BRANDING, ...JSON.parse(brandingStr) }
-    : DEFAULT_BRANDING;
-  const oeeRules: OEERulesSettings = oeeRulesStr
-    ? { ...DEFAULT_OEE_RULES, ...JSON.parse(oeeRulesStr) }
-    : DEFAULT_OEE_RULES;
-  const graceMinutes: number = graceStr ? parseInt(graceStr, 10) : 10;
-  const countTolerance: number = toleranceStr ? parseInt(toleranceStr, 10) : 0;
-  const laborRatePerHour: number = laborRateStr
-    ? parseFloat(laborRateStr)
-    : 150;
-  const machineRatePerHour: number = machineRateStr
-    ? parseFloat(machineRateStr)
-    : 300;
-  const otDailyThresholdHours: number = otThreshStr
-    ? parseFloat(otThreshStr)
-    : 9;
-  const otMultiplier: number = otMultStr ? parseFloat(otMultStr) : 2;
+  const branding = parseSafeJson<BrandingSettings>(
+    map.get("branding"),
+    DEFAULT_BRANDING,
+    (d) => typeof d === "object" && d !== null,
+  );
 
-  const oeeGoodThreshold: number = oeeGoodStr ? parseFloat(oeeGoodStr) : 85;
-  const oeeWarningThreshold: number = oeeWarnStr ? parseFloat(oeeWarnStr) : 70;
-  const planGateThreshold: number = planGateStr ? parseFloat(planGateStr) : 95;
-  const otStatutoryLimitHours: number = otLimitStr
-    ? parseFloat(otLimitStr)
-    : 50;
-  const operatorOopsWindowMinutes: number = oopsWinStr
-    ? parseInt(oopsWinStr, 10)
-    : 15;
-  const kioskCountdownSeconds: number = kioskCountStr
-    ? parseInt(kioskCountStr, 10)
-    : 30;
-  const maxFileUploadMb: number = fileCapStr ? parseInt(fileCapStr, 10) : 4;
-  const effRatingHigh: number = effHighStr ? parseFloat(effHighStr) : 95;
-  const effRatingMed: number = effMedStr ? parseFloat(effMedStr) : 80;
-  const effRatingLow: number = effLowStr ? parseFloat(effLowStr) : 65;
-  const suggestedPoMultiplier: number = poMultStr ? parseFloat(poMultStr) : 1.2;
-  const dailyAvailableHours: number = availableHoursStr
-    ? parseFloat(availableHoursStr)
-    : 16.0;
-  const minStaffingPerShift: number = minStaffingStr
-    ? parseInt(minStaffingStr, 10)
-    : 2; // P24
-  const defaultEnergyCostPerKwh: number = energyCostStr
-    ? parseFloat(energyCostStr)
-    : 8.0;
+  const oeeRules = parseSafeJson<OEERulesSettings>(
+    map.get("oeeRules"),
+    DEFAULT_OEE_RULES,
+    (d) => typeof d === "object" && d !== null,
+  );
 
-  const requireMillCertsStr = settings.find(
-    (s) => s.key === "requireMillCerts",
-  )?.value;
-  const requireMillCerts: boolean = requireMillCertsStr === "true";
+  const graceMinutes = parseSafeInt(map.get("attendance_grace_minutes"), 10, 0, 120);
+  const countTolerance = parseSafeInt(map.get("count_tolerance"), 0, 0, 100);
+  const laborRatePerHour = parseSafeFloat(map.get("laborRatePerHour"), 150, 0, 100000);
+  const machineRatePerHour = parseSafeFloat(map.get("machineRatePerHour"), 300, 0, 100000);
+  const otDailyThresholdHours = parseSafeFloat(map.get("otDailyThresholdHours"), 9, 0, 24);
+  const otMultiplier = parseSafeFloat(map.get("otMultiplier"), 2.0, 1.0, 5.0);
 
-  const clStr = settings.find((s) => s.key === "clPerYear")?.value;
-  const slStr = settings.find((s) => s.key === "slPerYear")?.value;
-  const plStr = settings.find((s) => s.key === "plPerYear")?.value;
+  const oeeGoodThreshold = parseSafeFloat(map.get("oeeGoodThreshold"), 85, 1, 100);
+  const oeeWarningThreshold = parseSafeFloat(map.get("oeeWarningThreshold"), 70, 1, 100);
+  const planGateThreshold = parseSafeFloat(map.get("planGateThreshold"), 95, 1, 100);
+  const otStatutoryLimitHours = parseSafeFloat(map.get("otStatutoryLimitHours"), 50, 0, 500);
 
-  const clPerYear: number = clStr ? parseInt(clStr, 10) : 12;
-  const slPerYear: number = slStr ? parseInt(slStr, 10) : 8;
-  const plPerYear: number = plStr ? parseInt(plStr, 10) : 12;
+  const operatorOopsWindowMinutes = parseSafeInt(map.get("operatorOopsWindowMinutes"), 15, 1, 180);
+  const kioskCountdownSeconds = parseSafeInt(map.get("kioskCountdownSeconds"), 30, 5, 300);
+  const maxFileUploadMb = parseSafeInt(map.get("maxFileUploadMb"), 4, 1, 100);
+
+  const effRatingHigh = parseSafeFloat(map.get("effRatingHigh"), 95, 1, 100);
+  const effRatingMed = parseSafeFloat(map.get("effRatingMed"), 80, 1, 100);
+  const effRatingLow = parseSafeFloat(map.get("effRatingLow"), 65, 1, 100);
+  const suggestedPoMultiplier = parseSafeFloat(map.get("suggestedPoMultiplier"), 1.2, 1.0, 10.0);
+
+  const dailyAvailableHours = parseSafeFloat(map.get("dailyAvailableHours"), 16.0, 1.0, 24.0);
+  const minStaffingPerShift = parseSafeInt(map.get("minStaffingPerShift"), 2, 1, 500);
+  const defaultEnergyCostPerKwh = parseSafeFloat(map.get("defaultEnergyCostPerKwh"), 8.0, 0.1, 1000.0);
+  const defaultGrossMarginMultiplier = parseSafeFloat(map.get("defaultGrossMarginMultiplier"), 1.35, 1.0, 10.0);
+
+  const requireMillCerts = map.get("requireMillCerts") === "true";
+
+  const clPerYear = parseSafeInt(map.get("clPerYear"), 12, 0, 365);
+  const slPerYear = parseSafeInt(map.get("slPerYear"), 8, 0, 365);
+  const plPerYear = parseSafeInt(map.get("plPerYear"), 12, 0, 365);
 
   const googleOAuthEnabled = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET,
   );
 
   // First-run onboarding + department visibility (key absent = all departments ON).
-  const activeDeptsStr = settings.find(
-    (s) => s.key === "activeDepartments",
-  )?.value;
-  const activeDepartments: string[] | null = activeDeptsStr
-    ? (() => {
-        try {
-          const parsed = JSON.parse(activeDeptsStr);
-          return Array.isArray(parsed) ? parsed.map(String) : null;
-        } catch {
-          return null;
-        }
-      })()
-    : null;
-  const onboardingComplete =
-    settings.find((s) => s.key === "onboardingComplete")?.value === "true";
-  const onboardingSkipped =
-    settings.find((s) => s.key === "onboardingSkipped")?.value === "true";
-  const companyCurrency =
-    settings.find((s) => s.key === "companyCurrency")?.value || null;
-  const fiscalYearStart =
-    settings.find((s) => s.key === "fiscalYearStart")?.value || null;
+  const activeDeptsStr = map.get("activeDepartments");
+  let activeDepartments: string[] | null = null;
+  if (activeDeptsStr) {
+    try {
+      const parsed = JSON.parse(activeDeptsStr);
+      if (Array.isArray(parsed)) {
+        activeDepartments = parsed.map(String).filter((s) => s.trim().length > 0);
+      }
+    } catch {
+      activeDepartments = null;
+    }
+  }
+
+  const onboardingComplete = map.get("onboardingComplete") === "true";
+  const onboardingSkipped = map.get("onboardingSkipped") === "true";
+  const companyCurrency = map.get("companyCurrency") || null;
+  const fiscalYearStart = map.get("fiscalYearStart") || null;
 
   return {
+    plantId,
+    defaultPlantId: plantId,
     activeDepartments,
     onboardingComplete,
     onboardingSkipped,
@@ -199,6 +183,7 @@ export async function getSettings() {
     dailyAvailableHours,
     minStaffingPerShift,
     defaultEnergyCostPerKwh,
+    defaultGrossMarginMultiplier,
     clPerYear,
     slPerYear,
     plPerYear,
@@ -211,16 +196,34 @@ export async function getBranding(): Promise<BrandingSettings> {
   const setting = await prisma.setting.findUnique({
     where: { key: "branding" },
   });
-  return setting
-    ? { ...DEFAULT_BRANDING, ...JSON.parse(setting.value) }
-    : DEFAULT_BRANDING;
+  if (!setting || !setting.value) return DEFAULT_BRANDING;
+  return parseSafeJson<BrandingSettings>(
+    setting.value,
+    DEFAULT_BRANDING,
+    (d) => typeof d === "object" && d !== null,
+  );
 }
 
 export async function getOEERules(): Promise<OEERulesSettings> {
   const setting = await prisma.setting.findUnique({
     where: { key: "oeeRules" },
   });
-  return setting
-    ? { ...DEFAULT_OEE_RULES, ...JSON.parse(setting.value) }
-    : DEFAULT_OEE_RULES;
+  if (!setting || !setting.value) return DEFAULT_OEE_RULES;
+  return parseSafeJson<OEERulesSettings>(
+    setting.value,
+    DEFAULT_OEE_RULES,
+    (d) => typeof d === "object" && d !== null,
+  );
 }
+
+export async function getPlantId(): Promise<string | null> {
+  const setting = await prisma.setting.findFirst({
+    where: { key: { in: ["plantId", "defaultPlantId"] } },
+  });
+  if (setting?.value) return setting.value;
+  if (process.env.DEFAULT_PLANT_ID) return process.env.DEFAULT_PLANT_ID;
+  const firstPlant = await prisma.plant.findFirst({ select: { id: true } });
+  return firstPlant?.id || null;
+}
+
+export const getDefaultPlantId = getPlantId;

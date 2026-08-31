@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
@@ -23,7 +25,7 @@ export default function FaiListPage() {
         setReports(data);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ export default function FaiListPage() {
               </thead>
               <tbody className="divide-y divide-white/10">
                 {reports.map((r) => (
-                  <tr key={r.id} className="hover:bg-white/5">
+                  <tr key={r.id} className="hover:bg-slate-700/40">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
                       {r.faiNumber}
                     </td>
@@ -186,7 +188,7 @@ export default function FaiListPage() {
                     required
                     value={workOrderId}
                     onChange={(e) => setWorkOrderId(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                     placeholder="e.g. WO-AERO-12345"
                   />
                 </div>
@@ -198,7 +200,7 @@ export default function FaiListPage() {
                     type="text"
                     value={serialUnitId}
                     onChange={(e) => setSerialUnitId(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
                 </div>
                 <div className="mb-6">
@@ -208,7 +210,7 @@ export default function FaiListPage() {
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   >
                     <option value="FULL">FULL</option>
                     <option value="PARTIAL">PARTIAL</option>

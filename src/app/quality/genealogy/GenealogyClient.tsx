@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Search,
@@ -59,7 +61,7 @@ export default function GenealogyClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load genealogy trace:", err);
+      logClientError("Failed to load genealogy trace:", err, "GenealogyClient");
     } finally {
       setLoading(false);
     }

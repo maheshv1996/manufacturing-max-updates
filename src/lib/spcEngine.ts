@@ -3,7 +3,7 @@
  * Implements standard AIAG SPC 2nd Edition formulas, X-bar / R charts, and Western Electric anomaly rules.
  */
 
-// Standard SPC Constants for Subgroup Sizes n = 2 to 10
+// Standard SPC Constants for Subgroup Sizes n = 2 to 15 (AIAG SPC 2nd Edition)
 export const SPC_CONSTANTS: Record<
   number,
   { A2: number; D3: number; D4: number; d2: number }
@@ -17,6 +17,11 @@ export const SPC_CONSTANTS: Record<
   8: { A2: 0.373, D3: 0.136, D4: 1.864, d2: 2.847 },
   9: { A2: 0.337, D3: 0.184, D4: 1.816, d2: 2.97 },
   10: { A2: 0.308, D3: 0.223, D4: 1.777, d2: 3.078 },
+  11: { A2: 0.285, D3: 0.256, D4: 1.744, d2: 3.173 },
+  12: { A2: 0.266, D3: 0.283, D4: 1.717, d2: 3.258 },
+  13: { A2: 0.249, D3: 0.307, D4: 1.693, d2: 3.336 },
+  14: { A2: 0.235, D3: 0.328, D4: 1.672, d2: 3.407 },
+  15: { A2: 0.223, D3: 0.347, D4: 1.653, d2: 3.472 },
 };
 
 export interface SpcSubgroup {
@@ -75,10 +80,21 @@ export function computeSpcChart(
 ): SpcChartResult | null {
   if (!subgroups || subgroups.length === 0) return null;
 
-  const n = subgroups[0].values.length;
-  const constants = SPC_CONSTANTS[n] || SPC_CONSTANTS[5];
+  // Filter valid numeric measurements for each subgroup
+  const validSubgroups = subgroups
+    .map((sg) => ({
+      ...sg,
+      values: (sg.values || []).map(Number).filter(Number.isFinite),
+    }))
+    .filter((sg) => sg.values.length >= 2);
 
-  const pointsData = subgroups.map((sg) => {
+  if (validSubgroups.length === 0) return null;
+
+  const rawN = validSubgroups[0].values.length;
+  const clampedN = Math.max(2, Math.min(15, rawN));
+  const constants = SPC_CONSTANTS[clampedN] || SPC_CONSTANTS[5];
+
+  const pointsData = validSubgroups.map((sg) => {
     const sum = sg.values.reduce((acc, v) => acc + v, 0);
     const mean = sum / sg.values.length;
     const min = Math.min(...sg.values);
@@ -106,7 +122,7 @@ export function computeSpcChart(
   const clR = averageRangeRbar;
   const lclR = constants.D3 * averageRangeRbar;
 
-  const estimatedSigma = averageRangeRbar / constants.d2;
+  const estimatedSigma = constants.d2 > 0 ? averageRangeRbar / constants.d2 : 0;
 
   // Western Electric Rule Checks
   const points = pointsData.map((p, idx) => {
@@ -165,7 +181,13 @@ export function computeSpcChart(
   });
 
   let capability: SpcChartResult["capability"];
-  if (specs && specs.usl > specs.lsl && estimatedSigma > 0) {
+  if (
+    specs &&
+    Number.isFinite(specs.usl) &&
+    Number.isFinite(specs.lsl) &&
+    specs.usl > specs.lsl &&
+    estimatedSigma > 0
+  ) {
     const cp = (specs.usl - specs.lsl) / (6 * estimatedSigma);
     const cpu = (specs.usl - grandMeanXbarBar) / (3 * estimatedSigma);
     const cpl = (grandMeanXbarBar - specs.lsl) / (3 * estimatedSigma);
@@ -190,8 +212,8 @@ export function computeSpcChart(
   }
 
   return {
-    subgroupCount: subgroups.length,
-    subgroupSize: n,
+    subgroupCount: validSubgroups.length,
+    subgroupSize: rawN,
     grandMeanXbarBar: Math.round(grandMeanXbarBar * 10000) / 10000,
     averageRangeRbar: Math.round(averageRangeRbar * 10000) / 10000,
     estimatedSigma: Math.round(estimatedSigma * 10000) / 10000,
@@ -207,6 +229,8 @@ export function computeSpcChart(
 }
 
 function normalCdf(z: number): number {
+  if (z > 6) return 1;
+  if (z < -6) return 0;
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp((-z * z) / 2);
   const p =

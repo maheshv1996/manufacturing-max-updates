@@ -1,9 +1,21 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import MarketingClient from "./MarketingClient";
 import { Megaphone } from "lucide-react";
 
 export const metadata = { title: "Marketing & Branding" };
 
-export default function MarketingPage() {
+export default async function MarketingPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/commercial/marketing");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">

@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
@@ -65,6 +66,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+    await logAudit({ actor: "system", action: "QUOTATION_UPDATED", entityType: "Quotation", details: "Quotation updated" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

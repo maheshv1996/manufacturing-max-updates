@@ -8,6 +8,7 @@ export interface OtDayRow {
   clockOut: Date;
   workedHours: number;
   otHours: number;
+  estimatedOtPay: number;
 }
 
 export interface OtOperatorSummary {
@@ -18,10 +19,25 @@ export interface OtOperatorSummary {
   totalOtHours: number;
   estimatedOtPay: number;
   aboveStatutoryLimit: boolean;
+  statutoryLimitHours: number;
 }
 
-/** Statutory monthly OT limit in hours */
-const OT_STATUTORY_LIMIT = 50;
+const round2 = (val: number): number => {
+  if (!Number.isFinite(val)) return 0;
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+};
+
+const safeNonNegative = (val: any, fallback = 0): number => {
+  const num = Number(val);
+  return Number.isFinite(num) && num >= 0 ? num : fallback;
+};
+
+// Helper to compute UTC month start and end dates safely
+function getMonthDateRange(year: number, month: number) {
+  const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  return { startDate, endDate };
+}
 
 /**
  * Compute per-day OT rows for one operator in a given month.
@@ -36,14 +52,15 @@ export async function computeOperatorOtDetail(
   threshold: number;
   multiplier: number;
   laborRate: number;
+  statutoryLimit: number;
 }> {
   const settings = await getSettings();
-  const threshold = settings.otDailyThresholdHours;
-  const multiplier = settings.otMultiplier;
-  const laborRate = settings.laborRatePerHour;
+  const threshold = safeNonNegative(settings.otDailyThresholdHours, 8.0);
+  const multiplier = safeNonNegative(settings.otMultiplier, 1.5);
+  const laborRate = safeNonNegative(settings.laborRatePerHour, 150.0);
+  const statutoryLimit = safeNonNegative((settings as any).otMonthlyStatutoryLimitHours, 50.0);
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+  const { startDate, endDate } = getMonthDateRange(year, month);
 
   const logs = await prisma.attendanceLog.findMany({
     where: {
@@ -59,20 +76,25 @@ export async function computeOperatorOtDetail(
     const clockIn = new Date(log.clockIn);
     const clockOut = new Date(log.clockOut!);
     const diffMs = clockOut.getTime() - clockIn.getTime();
-    const workedHours = Number(Math.max(0, diffMs / 3_600_000).toFixed(2));
-    const otHours = Number(Math.max(0, workedHours - threshold).toFixed(2));
+    
+    // Fix 2: Cap single shift duration at 24 hours max
+    const rawHours = Math.max(0, diffMs / 3_600_000);
+    const workedHours = round2(Math.min(24.0, rawHours));
+    const otHours = round2(Math.max(0, workedHours - threshold));
+    const estimatedOtPay = round2(otHours * laborRate * multiplier);
 
     return {
       date: clockIn.toISOString().slice(0, 10),
-      shiftName: log.shift?.name || "Shift",
+      shiftName: log.shift?.name || "Standard Shift",
       clockIn,
       clockOut,
       workedHours,
       otHours,
+      estimatedOtPay,
     };
   });
 
-  return { rows, threshold, multiplier, laborRate };
+  return { rows, threshold, multiplier, laborRate, statutoryLimit };
 }
 
 /**
@@ -87,14 +109,15 @@ export async function computeMonthlyOtSummary(
   threshold: number;
   multiplier: number;
   laborRate: number;
+  statutoryLimit: number;
 }> {
   const settings = await getSettings();
-  const threshold = settings.otDailyThresholdHours;
-  const multiplier = settings.otMultiplier;
-  const laborRate = settings.laborRatePerHour;
+  const threshold = safeNonNegative(settings.otDailyThresholdHours, 8.0);
+  const multiplier = safeNonNegative(settings.otMultiplier, 1.5);
+  const laborRate = safeNonNegative(settings.laborRatePerHour, 150.0);
+  const statutoryLimit = safeNonNegative((settings as any).otMonthlyStatutoryLimitHours, 50.0);
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+  const { startDate, endDate } = getMonthDateRange(year, month);
 
   const operators = await prisma.user.findMany({
     where: { role: { name: "Operator" } },
@@ -115,30 +138,37 @@ export async function computeMonthlyOtSummary(
     let totalWorkedHours = 0;
     let totalOtHours = 0;
 
+    // Fix 1: Compute unique calendar days present
+    const uniqueDaysPresent = new Set<string>();
+
     for (const log of opLogs) {
-      const diffMs =
-        new Date(log.clockOut!).getTime() - new Date(log.clockIn).getTime();
-      const workedHours = Number(Math.max(0, diffMs / 3_600_000).toFixed(2));
-      const otHours = Number(Math.max(0, workedHours - threshold).toFixed(2));
+      const clockIn = new Date(log.clockIn);
+      uniqueDaysPresent.add(clockIn.toISOString().slice(0, 10));
+
+      const diffMs = new Date(log.clockOut!).getTime() - clockIn.getTime();
+      const rawHours = Math.max(0, diffMs / 3_600_000);
+      const workedHours = round2(Math.min(24.0, rawHours));
+      const otHours = round2(Math.max(0, workedHours - threshold));
+
       totalWorkedHours += workedHours;
       totalOtHours += otHours;
     }
 
-    totalWorkedHours = Number(totalWorkedHours.toFixed(2));
-    totalOtHours = Number(totalOtHours.toFixed(2));
+    totalWorkedHours = round2(totalWorkedHours);
+    totalOtHours = round2(totalOtHours);
+    const estimatedOtPay = round2(totalOtHours * laborRate * multiplier);
 
     return {
       operatorId: op.id,
       operatorName: op.name,
-      presentDays: opLogs.length,
+      presentDays: uniqueDaysPresent.size,
       totalWorkedHours,
       totalOtHours,
-      estimatedOtPay: Number(
-        (totalOtHours * laborRate * multiplier).toFixed(2),
-      ),
-      aboveStatutoryLimit: totalOtHours > OT_STATUTORY_LIMIT,
+      estimatedOtPay,
+      aboveStatutoryLimit: totalOtHours > statutoryLimit,
+      statutoryLimitHours: statutoryLimit,
     };
   });
 
-  return { summaries, threshold, multiplier, laborRate };
+  return { summaries, threshold, multiplier, laborRate, statutoryLimit };
 }

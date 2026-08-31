@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintWrapper from "@/app/components/print/PrintWrapper";
 
@@ -5,6 +8,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function LeaderboardReportPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "people.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 

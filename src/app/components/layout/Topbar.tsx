@@ -1,5 +1,8 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
+import { offlineFetchWrapper } from "@/lib/offlineSync";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -17,6 +20,7 @@ import {
   LayoutGrid,
   HelpCircle,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import InstallPrompt from "@/app/components/layout/InstallPrompt";
 import OfflineSyncBadge from "@/app/components/layout/OfflineSyncBadge";
@@ -47,9 +51,6 @@ export default function Topbar({ user }: TopbarProps) {
   const [landingPage, setLandingPage] = useState<string>("/");
   const [fetchingPrefs, setFetchingPrefs] = useState(false);
 
-  if (pathname === "/login") {
-    return null;
-  }
 
   const handleLogout = async () => {
     try {
@@ -57,7 +58,7 @@ export default function Topbar({ user }: TopbarProps) {
       router.push("/login");
       router.refresh();
     } catch (err) {
-      console.error("Logout error:", err);
+      logClientError("Logout error:", err, "Topbar");
     }
   };
 
@@ -78,7 +79,7 @@ export default function Topbar({ user }: TopbarProps) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await offlineFetchWrapper("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),
@@ -106,14 +107,12 @@ export default function Topbar({ user }: TopbarProps) {
     setFetchingPrefs(true);
     try {
       const res = await fetch("/api/user/prefs");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.prefs?.landingPage) {
-          setLandingPage(data.prefs.landingPage);
-        }
+      const data = await res.json();
+      if (data.prefs?.landingPage) {
+        setLandingPage(data.prefs.landingPage);
       }
     } catch (err) {
-      console.error("Failed to load prefs in topbar", err);
+      logClientError("Failed to fetch preferences:", err, "Topbar");
     } finally {
       setFetchingPrefs(false);
     }
@@ -122,12 +121,12 @@ export default function Topbar({ user }: TopbarProps) {
   const fetchNotifications = async () => {
     try {
       const res = await fetch("/api/notifications");
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications || []);
+      const data = await res.json();
+      if (data.notifications) {
+        setNotifications(data.notifications);
       }
     } catch (err) {
-      console.error("Failed to fetch notifications:", err);
+      logClientError("Failed to fetch notifications:", err, "Topbar");
     }
   };
 
@@ -149,13 +148,13 @@ export default function Topbar({ user }: TopbarProps) {
       const currentPrefs = data.prefs || {};
       currentPrefs.landingPage = newPath;
 
-      await fetch("/api/user/prefs", {
+      await offlineFetchWrapper("/api/user/prefs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(currentPrefs),
       });
     } catch (err) {
-      console.error("Failed to update landing page", err);
+      logClientError("Failed to update landing page", err, "Topbar");
     }
   };
 
@@ -163,6 +162,7 @@ export default function Topbar({ user }: TopbarProps) {
     if (showAccountMenu && !fetchingPrefs) {
       fetchPreferences();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAccountMenu]);
 
   useEffect(() => {
@@ -170,6 +170,16 @@ export default function Topbar({ user }: TopbarProps) {
     const interval = setInterval(fetchNotifications, 60000); // Poll every minute
     return () => clearInterval(interval);
   }, []);
+
+  if (
+    pathname === "/login" ||
+    pathname === "/terminal" ||
+    pathname === "/landing" ||
+    pathname === "/" ||
+    pathname?.startsWith("/track/")
+  ) {
+    return null;
+  }
 
   return (
     <>
@@ -232,6 +242,15 @@ export default function Topbar({ user }: TopbarProps) {
           )}
           <ShiftClock />
           <InstallPrompt />
+
+          <Link
+            href="/ai/cortex"
+            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-600/20 hover:from-indigo-500/30 hover:to-purple-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all cursor-pointer shadow-xs"
+            title="Master Brain AI Cortex & 12 Autonomous Agents"
+          >
+            <Brain className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Master Brain</span>
+          </Link>
 
           <button
             onClick={() =>

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Boxes,
@@ -73,7 +75,7 @@ export default function InventoryTab() {
         setRequireMillCerts(!!s.requireMillCerts);
       }
     } catch (err) {
-      console.error("Failed to load inventory:", err);
+      logClientError("Failed to load inventory:", err, "InventoryTab");
     } finally {
       setLoading(false);
     }

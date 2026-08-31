@@ -22,10 +22,50 @@ export async function getPlantScope(): Promise<string> {
     return user.homePlantId || "ALL";
   }
 
-  const prefs = user.prefs as any as UserPreferences;
+  let prefs: UserPreferences | null = null;
+  try {
+    prefs =
+      typeof user.prefs === "string"
+        ? (JSON.parse(user.prefs) as UserPreferences)
+        : (user.prefs as unknown as UserPreferences);
+  } catch {
+    prefs = null;
+  }
+
   if (prefs && prefs.selectedPlantId && prefs.selectedPlantId !== "ALL") {
     return prefs.selectedPlantId;
   }
 
   return "ALL";
 }
+
+export async function resolvePlantId(
+  explicitPlantId?: string | null,
+): Promise<string | null> {
+  if (explicitPlantId) return explicitPlantId;
+  const scope = await getPlantScope();
+  if (scope && scope !== "ALL") return scope;
+  try {
+    const setting = await prisma.setting.findFirst({
+      where: { key: { in: ["plantId", "defaultPlantId"] } },
+    });
+    return setting?.value || process.env.DEFAULT_PLANT_ID || null;
+  } catch {
+    return process.env.DEFAULT_PLANT_ID || null;
+  }
+}
+
+export async function withPlantScope<T extends Record<string, any>>(
+  whereClause: T = {} as T,
+  field: string = "plantId",
+): Promise<T> {
+  const scope = await getPlantScope();
+  if (scope && scope !== "ALL") {
+    return {
+      ...whereClause,
+      [field]: scope,
+    };
+  }
+  return whereClause;
+}
+

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X, Zap } from "lucide-react";
@@ -24,7 +26,7 @@ export default function EcoActions({ eco }: { eco: any }) {
         alert("Failed to update status");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "EcoActions");
       alert("Error updating status");
     } finally {
       setLoading(false);
@@ -50,7 +52,7 @@ export default function EcoActions({ eco }: { eco: any }) {
         alert(err.error || "Failed to implement changes");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "EcoActions");
       alert("Error implementing changes");
     } finally {
       setLoading(false);

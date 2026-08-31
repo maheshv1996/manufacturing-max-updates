@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   FileCode2,
@@ -63,7 +65,7 @@ export default function SchemasClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load schemas:", err);
+      logClientError("Failed to load schemas:", err, "SchemasClient");
     } finally {
       setLoading(false);
     }
@@ -71,6 +73,7 @@ export default function SchemasClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeSchema =
@@ -113,7 +116,7 @@ export default function SchemasClient() {
         setValidationResult(data);
       }
     } catch (err) {
-      console.error("Validation error:", err);
+      logClientError("Validation error:", err, "SchemasClient");
     } finally {
       setValidating(false);
     }

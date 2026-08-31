@@ -16,45 +16,41 @@ export async function GET(request: Request) {
     const date = searchParams.get("date");
     const status = searchParams.get("status");
 
-    // Supervisor inbox: all sheets in a given status (optionally a day)
-    if (status) {
-      const sheets = await prisma.logsheet.findMany({
+    // If a specific machine is requested with no status filter, return that specific sheet
+    if (machineId && !status) {
+      const sheet = await prisma.logsheet.findFirst({
         where: {
-          status: status as any,
+          machineId,
+          ...(shiftId ? { shiftId } : {}),
           ...(date ? { logDate: startOfDay(new Date(date)) } : {}),
         },
         include: {
-          machine: { select: { code: true, name: true } },
+          machine: { select: { id: true, code: true, name: true, plantId: true } },
           shift: true,
-          operator: { select: { name: true } },
+          operator: { select: { id: true, name: true, email: true } },
         },
         orderBy: { logDate: "desc" },
       });
-      return NextResponse.json(sheets);
+      return NextResponse.json(sheet || null);
     }
 
-    if (!machineId) {
-      return NextResponse.json(
-        { error: "machineId is required" },
-        { status: 400 },
-      );
-    }
-
-    const sheet = await prisma.logsheet.findFirst({
+    // Otherwise return list of logsheets for verification inbox
+    const sheets = await prisma.logsheet.findMany({
       where: {
-        machineId,
-        ...(shiftId ? { shiftId } : {}),
+        ...(status && status !== "ALL" ? { status: status as any } : {}),
         ...(date ? { logDate: startOfDay(new Date(date)) } : {}),
+        ...(machineId ? { machineId } : {}),
+        ...(shiftId ? { shiftId } : {}),
       },
       include: {
-        machine: { select: { code: true, name: true } },
+        machine: { select: { id: true, code: true, name: true, plantId: true } },
         shift: true,
-        operator: { select: { name: true } },
+        operator: { select: { id: true, name: true, email: true } },
       },
       orderBy: { logDate: "desc" },
     });
 
-    return NextResponse.json(sheet || null);
+    return NextResponse.json(sheets);
   } catch (error) {
     console.error("Logsheet GET error:", error);
     return NextResponse.json(

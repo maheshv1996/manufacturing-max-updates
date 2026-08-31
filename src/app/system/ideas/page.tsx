@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Lightbulb,
@@ -53,7 +55,7 @@ export default function IdeasDashboardPage() {
       setIdeas(data.ideas || []);
       setLeaderboard(data.leaderboard || []);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }
@@ -76,7 +78,7 @@ export default function IdeasDashboardPage() {
         body: JSON.stringify({ id, action: "UPVOTE" }),
       });
     } catch (e) {
-      console.error("Upvote error:", e);
+      logClientError("Upvote error:", e, "page");
     }
   };
 
@@ -91,7 +93,7 @@ export default function IdeasDashboardPage() {
         fetchIdeasData();
       }
     } catch (e) {
-      console.error("Status change error:", e);
+      logClientError("Status change error:", e, "page");
     }
   };
 

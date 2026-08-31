@@ -25,11 +25,17 @@ const DAY = 86400000;
  * P29 — Program health: milestone risk computed from the slippage of the work
  * orders linked to each project. A project is HIGH risk when any linked WO is
  * overdue (its planned end date has passed and it isn't COMPLETED) or any open
- * milestone has slipped; MEDIUM when WOs or milestones are due within 14 days.
+ * milestone has slipped; MEDIUM when WOs or milestones are due within dueSoonDays.
  */
 export async function computeProgramHealth(
   now: Date = new Date(),
+  dueSoonDays: number = 14,
+  mediumRiskDays: number = 30,
 ): Promise<ProgramHealth[]> {
+  const safeNow = now instanceof Date && !isNaN(now.getTime()) ? now : new Date();
+  const dueSoonMs = Math.max(1, dueSoonDays) * DAY;
+  const mediumRiskMs = Math.max(1, mediumRiskDays) * DAY;
+
   const projects = await prisma.project.findMany({
     where: { status: { in: ["OPEN", "IN_PROGRESS"] } },
     include: {
@@ -44,7 +50,10 @@ export async function computeProgramHealth(
   return projects.map((p) => {
     const openWos = p.workOrders.filter((w) => w.status !== "COMPLETED");
     const overdueWos = openWos
-      .filter((w) => new Date(w.plannedEndDate) < now)
+      .filter((w) => {
+        const d = new Date(w.plannedEndDate);
+        return !isNaN(d.getTime()) && d < safeNow;
+      })
       .map((w) => ({
         woNumber: w.woNumber,
         plannedEndDate: w.plannedEndDate,
@@ -53,7 +62,7 @@ export async function computeProgramHealth(
     const dueSoonWos = openWos
       .filter((w) => {
         const d = new Date(w.plannedEndDate);
-        return d >= now && d.getTime() - now.getTime() <= 14 * DAY;
+        return !isNaN(d.getTime()) && d >= safeNow && d.getTime() - safeNow.getTime() <= dueSoonMs;
       })
       .map((w) => ({
         woNumber: w.woNumber,
@@ -67,12 +76,15 @@ export async function computeProgramHealth(
     // A milestone has slipped when linked WOs due before it are overdue
     const slippedMilestones = openMilestones
       .map((m) => {
-        const dueBeforeMilestone = openWos.filter(
-          (w) => new Date(w.plannedEndDate) <= new Date(m.dueDate),
-        );
-        const slipped = dueBeforeMilestone.filter(
-          (w) => new Date(w.plannedEndDate) < now,
-        );
+        const milestoneDate = new Date(m.dueDate);
+        const dueBeforeMilestone = openWos.filter((w) => {
+          const wd = new Date(w.plannedEndDate);
+          return !isNaN(wd.getTime()) && !isNaN(milestoneDate.getTime()) && wd <= milestoneDate;
+        });
+        const slipped = dueBeforeMilestone.filter((w) => {
+          const wd = new Date(w.plannedEndDate);
+          return wd < safeNow;
+        });
         return { m, slipped };
       })
       .filter(({ slipped }) => slipped.length > 0)
@@ -82,8 +94,9 @@ export async function computeProgramHealth(
         overdueWos: slipped.length,
       }));
 
+    const targetDate = new Date(p.targetCompletionDate);
     const targetOverdue =
-      new Date(p.targetCompletionDate) < now && openWos.length > 0;
+      !isNaN(targetDate.getTime()) && targetDate < safeNow && openWos.length > 0;
 
     let risk: ProgramRisk = "LOW";
     if (
@@ -94,10 +107,11 @@ export async function computeProgramHealth(
       risk = "HIGH";
     } else if (
       dueSoonWos.length > 0 ||
-      openMilestones.some(
-        (m) => new Date(m.dueDate).getTime() - now.getTime() <= 14 * DAY,
-      ) ||
-      new Date(p.targetCompletionDate).getTime() - now.getTime() <= 30 * DAY
+      openMilestones.some((m) => {
+        const md = new Date(m.dueDate);
+        return !isNaN(md.getTime()) && md.getTime() - safeNow.getTime() <= dueSoonMs;
+      }) ||
+      (!isNaN(targetDate.getTime()) && targetDate.getTime() - safeNow.getTime() <= mediumRiskMs)
     ) {
       risk = "MEDIUM";
     }
@@ -109,7 +123,7 @@ export async function computeProgramHealth(
           daysLeft: Math.max(
             0,
             Math.round(
-              (new Date(openMilestones[0].dueDate).getTime() - now.getTime()) /
+              (new Date(openMilestones[0].dueDate).getTime() - safeNow.getTime()) /
                 DAY,
             ),
           ),
@@ -138,17 +152,24 @@ export async function computeProgramHealth(
 export function classifyProjectRisk(
   p: any,
   now: Date = new Date(),
+  dueSoonDays: number = 14,
 ): ProgramRisk {
+  const safeNow = now instanceof Date && !isNaN(now.getTime()) ? now : new Date();
+  const dueSoonMs = Math.max(1, dueSoonDays) * DAY;
   const openWos = (p.workOrders || []).filter(
     (w: any) => w.status !== "COMPLETED",
   );
-  const hasOverdue = openWos.some((w: any) => new Date(w.plannedEndDate) < now);
+  const hasOverdue = openWos.some((w: any) => {
+    const d = new Date(w.plannedEndDate);
+    return !isNaN(d.getTime()) && d < safeNow;
+  });
   const hasDueSoon = openWos.some((w: any) => {
     const d = new Date(w.plannedEndDate);
-    return d >= now && d.getTime() - now.getTime() <= 14 * DAY;
+    return !isNaN(d.getTime()) && d >= safeNow && d.getTime() - safeNow.getTime() <= dueSoonMs;
   });
+  const targetDate = new Date(p.targetCompletionDate);
   const targetOverdue =
-    new Date(p.targetCompletionDate) < now && openWos.length > 0;
+    !isNaN(targetDate.getTime()) && targetDate < safeNow && openWos.length > 0;
   if (hasOverdue || targetOverdue) return "HIGH";
   if (hasDueSoon) return "MEDIUM";
   return "LOW";

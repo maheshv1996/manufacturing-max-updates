@@ -7,19 +7,20 @@ This playbook outlines the steps for deploying and onboarding a new customer to 
 1.  **Environment Setup**
     *   Create a new instance/tenant or isolated database for the customer.
     *   Set up environment variables: `DATABASE_URL`, `JWT_SECRET`, Razorpay keys (if applicable).
-    *   Run Prisma migrations: `npx prisma db push`.
+    *   Run Prisma migrations: `npx prisma migrate deploy` (for production/CI tracked schema deployment) or `npx prisma db push` (for rapid local prototype dev).
 2.  **Initial Admin Account**
     *   Create the first `ADMIN` user for the customer via the backend or a setup script.
 3.  **License Activation**
     *   By default, the system boots into a 60-day `PILOT` mode.
     *   To set a specific plan immediately, manually insert a `Setting` record with key `LICENSE_INFO`.
 
-## 2. Shop Floor Mapping (Admin Console)
+## 2. Shop Floor Mapping (Admin Console & Multi-Plant Configuration)
 
-1.  **Plants & Lines**
+1.  **Plants & Lines (Multi-Plant Architecture)**
     *   Log in as Admin.
-    *   Go to **Admin > Plants** and create the physical facilities.
-    *   Go to **Admin > Production Lines** and map the lines within those plants.
+    *   Go to **Admin > Plants** to create physical facilities or multi-plant campuses.
+    *   The primary plant ID is dynamically stored in the `Setting` table (`key: "plantId"` or `"defaultPlantId"`) or configured via the `DEFAULT_PLANT_ID` environment variable. No hardcoded schema IDs exist.
+    *   Go to **Admin > Production Lines** and map lines within their respective plants.
 2.  **Machines & Operators**
     *   Create Machines and assign them to lines. *Note: Machine limits are enforced based on the active subscription plan.*
     *   Create User accounts with the `OPERATOR` role.

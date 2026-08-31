@@ -33,12 +33,102 @@ export interface WorkOrderCostBreakdown {
   isLossMaker: boolean;
 }
 
+// Helpers for clean numerical rounding and safe non-negative conversions
+const round2 = (val: number): number => {
+  if (!Number.isFinite(val)) return 0;
+  return Math.round((val + Number.EPSILON) * 100) / 100;
+};
+
+const round1 = (val: number): number => {
+  if (!Number.isFinite(val)) return 0;
+  return Math.round((val + Number.EPSILON) * 10) / 10;
+};
+
+const safeNonNegative = (val: any, fallback = 0): number => {
+  const num = Number(val);
+  return Number.isFinite(num) && num > 0 ? num : fallback;
+};
+
+// Pure function to extract aggregated quantities from production logs
+function extractQuantitiesFromLogs(logs: any[]) {
+  let goodQuantity = 0;
+  let scrapQuantity = 0;
+  let reworkQuantity = 0;
+
+  for (const log of logs) {
+    goodQuantity += safeNonNegative(log.goodQuantity);
+    scrapQuantity += safeNonNegative(log.scrapQuantity);
+    reworkQuantity += safeNonNegative(log.reworkQuantity);
+  }
+
+  return { goodQuantity, scrapQuantity, reworkQuantity };
+}
+
+// Pure function to calculate actual or standard run hours from logs
+function calculateHoursFromLogs(logs: any[], targetCycleTimeSeconds: number): number {
+  let totalHours = 0;
+
+  for (const log of logs) {
+    let hrs = 0;
+    if (log.startTime && log.endTime) {
+      const start = new Date(log.startTime).getTime();
+      const end = new Date(log.endTime).getTime();
+      hrs = Math.max(0.1, (end - start) / (1000 * 60 * 60));
+    } else if (log.startTime) {
+      const start = new Date(log.startTime).getTime();
+      hrs = Math.max(0.1, (Date.now() - start) / (1000 * 60 * 60));
+      hrs = Math.min(hrs, 24); // Cap max open shift to 24h
+    } else {
+      const totalPieces = safeNonNegative(log.goodQuantity) + safeNonNegative(log.scrapQuantity);
+      hrs = (totalPieces * targetCycleTimeSeconds) / 3600;
+    }
+    totalHours += hrs;
+  }
+
+  return totalHours;
+}
+
 /**
  * Calculates complete job costing & profitability breakdown for a Work Order.
  * Accepts a work order object or work order ID.
  */
+export interface CostingContext {
+  laborRatePerHour?: number;
+  machineRatePerHour?: number;
+  avgEnergyCostPerHr?: number;
+}
+
+/**
+ * Pre-fetches costing configuration (labor rate, machine rate, energy rate)
+ * once in parallel so batch operations avoid repeated DB roundtrips.
+ */
+export async function getCostingContext(): Promise<Required<CostingContext>> {
+  const [settings, avgEnergyCostPerHrRaw] = await Promise.all([
+    prisma.setting.findMany({
+      where: {
+        key: { in: ["laborRatePerHour", "machineRatePerHour"] },
+      },
+    }),
+    getAverageEnergyCostPerMachineHour(),
+  ]);
+
+  const laborRateSetting = settings.find((s) => s.key === "laborRatePerHour")?.value;
+  const machineRateSetting = settings.find((s) => s.key === "machineRatePerHour")?.value;
+
+  return {
+    laborRatePerHour: safeNonNegative(laborRateSetting ? parseFloat(laborRateSetting) : 150.0, 150.0),
+    machineRatePerHour: safeNonNegative(machineRateSetting ? parseFloat(machineRateSetting) : 300.0, 300.0),
+    avgEnergyCostPerHr: safeNonNegative(avgEnergyCostPerHrRaw, 45.0),
+  };
+}
+
+/**
+ * Calculates complete job costing & profitability breakdown for a Work Order.
+ * Accepts a work order object or work order ID, and optional hoisted CostingContext.
+ */
 export async function calculateWorkOrderCost(
   woOrId: any,
+  context?: CostingContext,
 ): Promise<WorkOrderCostBreakdown> {
   let wo: any = woOrId;
 
@@ -60,88 +150,69 @@ export async function calculateWorkOrderCost(
     throw new Error("Work order not found for costing calculation");
   }
 
-  // Fetch labor and machine rates from Settings table (defaults 150 & 300);
-  // the average energy cost per machine hour is independent — hoisted to run
-  // in parallel instead of a second round-trip later.
-  const [settings, avgEnergyCostPerHr] = await Promise.all([
-    prisma.setting.findMany({
-      where: {
-        key: { in: ["laborRatePerHour", "machineRatePerHour"] },
-      },
-    }),
-    getAverageEnergyCostPerMachineHour(),
-  ]);
+  // 1. Use hoisted rates/energy context or fetch in parallel
+  let laborRatePerHour = context?.laborRatePerHour;
+  let machineRatePerHour = context?.machineRatePerHour;
+  let avgEnergyCostPerHr = context?.avgEnergyCostPerHr;
 
-  const laborRateSetting = settings.find(
-    (s) => s.key === "laborRatePerHour",
-  )?.value;
-  const machineRateSetting = settings.find(
-    (s) => s.key === "machineRatePerHour",
-  )?.value;
+  if (laborRatePerHour === undefined || machineRatePerHour === undefined || avgEnergyCostPerHr === undefined) {
+    const ctx = await getCostingContext();
+    laborRatePerHour = laborRatePerHour ?? ctx.laborRatePerHour;
+    machineRatePerHour = machineRatePerHour ?? ctx.machineRatePerHour;
+    avgEnergyCostPerHr = avgEnergyCostPerHr ?? ctx.avgEnergyCostPerHr;
+  }
 
-  const laborRatePerHour = laborRateSetting
-    ? parseFloat(laborRateSetting)
-    : 150.0;
-  const machineRatePerHour = machineRateSetting
-    ? parseFloat(machineRateSetting)
-    : 300.0;
-
+  // 2. Product baseline validation
   const product = wo.product || {};
-  const materialCostPerUnit = product.materialCostPerUnit ?? 0.0;
-  const sellingPricePerUnit = product.sellingPricePerUnit ?? 0.0;
-  const targetCycleTimeSeconds = product.targetCycleTimeSeconds || 60.0;
+  const materialCostPerUnit = safeNonNegative(product.materialCostPerUnit);
+  const sellingPricePerUnit = safeNonNegative(product.sellingPricePerUnit);
+  const targetCycleTimeSeconds = safeNonNegative(product.targetCycleTimeSeconds, 60.0);
+  const plannedQuantity = safeNonNegative(wo.plannedQuantity, 1);
+  const setupTimeHours = safeNonNegative(wo.setupTimeMinutes, 0) / 60.0;
 
-  let productionLogs = wo.productionLogs;
-  let inventoryTransactions = wo.inventoryTransactions;
-
+  // 3. Extract production log quantities
   let goodQuantity = 0;
   let scrapQuantity = 0;
   let reworkQuantity = 0;
+  const productionLogs = wo.productionLogs;
 
-  if (productionLogs) {
-    goodQuantity = productionLogs.reduce(
-      (sum: number, log: any) => sum + (log.goodQuantity || 0),
-      0,
-    );
-    scrapQuantity = productionLogs.reduce(
-      (sum: number, log: any) => sum + (log.scrapQuantity || 0),
-      0,
-    );
-    reworkQuantity = productionLogs.reduce(
-      (sum: number, log: any) => sum + (log.reworkQuantity || 0),
-      0,
-    );
+  if (Array.isArray(productionLogs)) {
+    const q = extractQuantitiesFromLogs(productionLogs);
+    goodQuantity = q.goodQuantity;
+    scrapQuantity = q.scrapQuantity;
+    reworkQuantity = q.reworkQuantity;
   } else {
     const agg = await prisma.productionLog.aggregate({
       _sum: { goodQuantity: true, scrapQuantity: true, reworkQuantity: true },
       where: { workOrderId: wo.id },
     });
-    goodQuantity = agg._sum.goodQuantity || 0;
-    scrapQuantity = agg._sum.scrapQuantity || 0;
-    reworkQuantity = agg._sum.reworkQuantity || 0;
+    goodQuantity = safeNonNegative(agg._sum.goodQuantity);
+    scrapQuantity = safeNonNegative(agg._sum.scrapQuantity);
+    reworkQuantity = safeNonNegative(agg._sum.reworkQuantity);
   }
 
-  // If no goodQuantity in production logs yet, fallback to planned quantity for estimation
-  const effectiveGoodQty =
-    goodQuantity > 0
-      ? goodQuantity
-      : wo.status === "COMPLETED"
-        ? wo.plannedQuantity
-        : Math.max(1, Math.round(wo.plannedQuantity * (wo.currentSeq / 4)));
+  // Determine effective quantity for completed vs in-progress work orders
+  let effectiveGoodQty = goodQuantity;
+  if (effectiveGoodQty === 0) {
+    if (wo.status === "COMPLETED") {
+      effectiveGoodQty = plannedQuantity;
+    } else {
+      // Progress estimation based on completed sequence proportion (min 1 unit)
+      const estimatedProgressRatio = Math.min(1, Math.max(0.25, (wo.currentSeq || 1) / 4.0));
+      effectiveGoodQty = Math.max(1, Math.round(plannedQuantity * estimatedProgressRatio));
+    }
+  }
 
-  // 1. Material Cost: Sum from linked OUT inventory transactions if available, otherwise goodQty * materialCostPerUnit
+  // 4. Material Cost Calculation
   let materialCost = 0;
+  const inventoryTransactions = wo.inventoryTransactions;
 
-  if (inventoryTransactions) {
-    const outTransactions = inventoryTransactions.filter(
-      (tx: any) => tx.type === "OUT",
-    );
-    if (outTransactions.length > 0) {
-      materialCost = outTransactions.reduce(
+  if (Array.isArray(inventoryTransactions)) {
+    const outTx = inventoryTransactions.filter((tx: any) => tx.type === "OUT");
+    if (outTx.length > 0) {
+      materialCost = outTx.reduce(
         (sum: number, tx: any) =>
-          sum +
-          (tx.qty || 0) *
-            (tx.unitCost ?? tx.rawMaterial?.unitCost ?? materialCostPerUnit),
+          sum + safeNonNegative(tx.qty) * safeNonNegative(tx.unitCost ?? tx.rawMaterial?.unitCost ?? materialCostPerUnit),
         0,
       );
     } else {
@@ -155,136 +226,63 @@ export async function calculateWorkOrderCost(
     if (outTx.length > 0) {
       materialCost = outTx.reduce(
         (sum: number, tx: any) =>
-          sum +
-          (tx.qty || 0) *
-            (tx.unitCost ?? tx.rawMaterial?.unitCost ?? materialCostPerUnit),
+          sum + safeNonNegative(tx.qty) * safeNonNegative(tx.unitCost ?? tx.rawMaterial?.unitCost ?? materialCostPerUnit),
         0,
       );
     } else {
       materialCost = effectiveGoodQty * materialCostPerUnit;
     }
   }
+  materialCost = round2(materialCost);
 
-  materialCost = Number(materialCost.toFixed(2));
-
-  // 2. Labor & Machine Hours calculation from Production Logs
-  let totalLogHours = 0;
-  let energyCost = 0;
-
-  if (productionLogs) {
-    for (const log of productionLogs) {
-      let hrs = 0;
-      if (log.startTime && log.endTime) {
-        const start = new Date(log.startTime).getTime();
-        const end = new Date(log.endTime).getTime();
-        hrs = Math.max(0.1, (end - start) / (1000 * 60 * 60));
-      } else if (log.startTime) {
-        const start = new Date(log.startTime).getTime();
-        const now = Date.now();
-        hrs = Math.max(0.1, (now - start) / (1000 * 60 * 60));
-        hrs = Math.min(hrs, 24);
-      } else {
-        const totalPieces = (log.goodQuantity || 0) + (log.scrapQuantity || 0);
-        hrs = (totalPieces * targetCycleTimeSeconds) / 3600;
-      }
-      totalLogHours += hrs;
-    }
+  // 5. Labor, Machine, & Energy Hours Calculation (Including Setup Time)
+  let calculatedHours = 0;
+  if (Array.isArray(productionLogs)) {
+    calculatedHours = calculateHoursFromLogs(productionLogs, targetCycleTimeSeconds);
   } else {
-    // Fetch logs to calculate hours
-    const logs = await prisma.productionLog.findMany({
+    const fetchedLogs = await prisma.productionLog.findMany({
       where: { workOrderId: wo.id },
-      select: {
-        startTime: true,
-        endTime: true,
-        goodQuantity: true,
-        scrapQuantity: true,
-      },
+      select: { startTime: true, endTime: true, goodQuantity: true, scrapQuantity: true },
     });
-    for (const log of logs) {
-      let hrs = 0;
-      if (log.startTime && log.endTime) {
-        const start = new Date(log.startTime).getTime();
-        const end = new Date(log.endTime).getTime();
-        hrs = Math.max(0.1, (end - start) / (1000 * 60 * 60));
-      } else if (log.startTime) {
-        const start = new Date(log.startTime).getTime();
-        const now = Date.now();
-        hrs = Math.max(0.1, (now - start) / (1000 * 60 * 60));
-        hrs = Math.min(hrs, 24);
-      } else {
-        const totalPieces = (log.goodQuantity || 0) + (log.scrapQuantity || 0);
-        hrs = (totalPieces * targetCycleTimeSeconds) / 3600;
-      }
-      totalLogHours += hrs;
-    }
+    calculatedHours = calculateHoursFromLogs(fetchedLogs, targetCycleTimeSeconds);
   }
 
-  energyCost = totalLogHours * avgEnergyCostPerHr;
-
-  // If logs are missing/empty (e.g. planned WO), estimate standard run hours
-  if (totalLogHours === 0) {
-    totalLogHours = (effectiveGoodQty * targetCycleTimeSeconds) / 3600;
+  // Fallback to standard planned cycle time if no logs exist
+  if (calculatedHours === 0) {
+    calculatedHours = (effectiveGoodQty * targetCycleTimeSeconds) / 3600.0;
   }
 
-  const laborHours = Number(Math.max(0.25, totalLogHours).toFixed(2));
-  const machineRunHours = Number(Math.max(0.25, totalLogHours).toFixed(2));
+  // Total operating hours = run hours + setup fixture time (min 0.25h)
+  const totalOperatingHours = Math.max(0.25, calculatedHours + setupTimeHours);
+  const laborHours = round2(totalOperatingHours);
+  const machineRunHours = round2(totalOperatingHours);
 
-  // 2. Labor Cost = laborHours * laborRatePerHour
-  const laborCost = Number((laborHours * laborRatePerHour).toFixed(2));
+  // 6. Direct Costs
+  const laborCost = round2(laborHours * laborRatePerHour);
+  const machineCost = round2(machineRunHours * machineRatePerHour);
+  const scrapLoss = round2(scrapQuantity * materialCostPerUnit + reworkQuantity * 0.5 * materialCostPerUnit);
+  const energyCost = round2(machineRunHours * avgEnergyCostPerHr);
+  const toolingCost = round2(safeNonNegative(wo.toolingCostRupees));
 
-  // 3. Machine Cost = machineRunHours * machineRatePerHour
-  const machineCost = Number((machineRunHours * machineRatePerHour).toFixed(2));
+  // 7. Total Cost & Revenue
+  const totalCost = round2(materialCost + laborCost + machineCost + scrapLoss + energyCost + toolingCost);
 
-  // 4. Scrap Loss = scrapQty * scrapCostPerUnit + (reworkQty * 0.5 * scrapCostPerUnit)
-  const scrapLoss = Number(
-    (
-      scrapQuantity * materialCostPerUnit +
-      reworkQuantity * 0.5 * materialCostPerUnit
-    ).toFixed(2),
-  );
+  const quotedPrice = safeNonNegative(wo.quotedPrice);
+  const revenue = round2(quotedPrice > 0 ? quotedPrice : effectiveGoodQty * sellingPricePerUnit);
 
-  // Energy cost if no logs
-  if (totalLogHours === 0 || energyCost === 0) {
-    energyCost = machineRunHours * avgEnergyCostPerHr;
-  }
-  energyCost = Number(energyCost.toFixed(2));
-
-  const toolingCost = Number(wo.toolingCostRupees || 0).toFixed(2);
-
-  // 5. Total Cost = sum of all cost components
-  const totalCost = Number(
-    (
-      materialCost +
-      laborCost +
-      machineCost +
-      scrapLoss +
-      energyCost +
-      Number(toolingCost)
-    ).toFixed(2),
-  );
-
-  // 6. Revenue = quotedPrice ?? goodQty * sellingPricePerUnit
-  const revenue = Number(
-    (wo.quotedPrice && wo.quotedPrice > 0
-      ? wo.quotedPrice
-      : effectiveGoodQty * sellingPricePerUnit
-    ).toFixed(2),
-  );
-
-  // 7. Profit & Margin %
-  const profit = Number((revenue - totalCost).toFixed(2));
-  const marginPercentage =
-    revenue > 0 ? Number(((profit / revenue) * 100).toFixed(1)) : 0;
+  // 8. Profit & Margin %
+  const profit = round2(revenue - totalCost);
+  const marginPercentage = revenue > 0 ? round1((profit / revenue) * 100) : 0;
 
   return {
     woId: wo.id,
-    woNumber: wo.woNumber,
+    woNumber: wo.woNumber || "WO-N/A",
     customerName: wo.customerName || "General Client",
     productName: product.name || "Product",
     goodQuantity: effectiveGoodQty,
     scrapQuantity,
     reworkQuantity,
-    quotedPrice: wo.quotedPrice || null,
+    quotedPrice: quotedPrice > 0 ? quotedPrice : null,
     materialCostPerUnit,
     sellingPricePerUnit,
     materialCost,
@@ -296,7 +294,7 @@ export async function calculateWorkOrderCost(
     machineRatePerHour,
     scrapLoss,
     energyCost,
-    toolingCost: Number(toolingCost),
+    toolingCost,
     totalCost,
     revenue,
     profit,

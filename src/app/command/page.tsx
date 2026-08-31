@@ -24,7 +24,7 @@ import PrintButton from "@/app/components/print/PrintButton";
 import { getCapacityPlan } from "@/lib/capacityEngine";
 import { startOfWeek } from "date-fns";
 
-import { calculateWorkOrderCost } from "@/lib/costingEngine";
+import { calculateWorkOrderCost, getCostingContext } from "@/lib/costingEngine";
 import {
   computeCalibrationStatus,
   computeVendorStatus,
@@ -51,56 +51,6 @@ export default async function DashboardPage(props: {
   const parsedRange = parseDateRange(searchParams || {});
   const plantId = await getPlantScope();
 
-  // ── Batch 1: analytics — all independent, run in parallel ──
-  const [
-    { machines, previousMachines },
-    { oeeTrends, downtimeByCategory },
-    leaderboardData,
-    digestData,
-    { totalOverloadedDays },
-  ] = await Promise.all([
-    getMachinesData(parsedRange, plantId),
-    getStatsData(parsedRange, plantId),
-    getLeaderboardData(parsedRange), // Need to scope this later!
-    getDigestData(getPlantLocalYesterday()),
-    getCapacityPlan(startOfWeek(new Date(), { weekStartsOn: 1 }), 7),
-  ]);
-
-  const champion = leaderboardData.operators[0];
-
-  let totalOeeSum = 0;
-  let count = 0;
-  let totalDowntimeMin = 0;
-
-  machines.forEach((m) => {
-    totalOeeSum += m.metrics?.oee || 0;
-    count++;
-    totalDowntimeMin += m.metrics?.totalDowntimeMin || 0;
-  });
-
-  let prevTotalOeeSum = 0;
-  let prevCount = 0;
-  previousMachines.forEach((m) => {
-    prevTotalOeeSum += m.metrics?.oee || 0;
-    prevCount++;
-  });
-
-  const avgOee = count > 0 ? totalOeeSum / count : 0;
-  const prevAvgOee = prevCount > 0 ? prevTotalOeeSum / prevCount : 0;
-  const oeeDelta = (avgOee - prevAvgOee).toFixed(1);
-
-  const plantStats = {
-    avgOee,
-    oeeDelta,
-    isOeeUp: avgOee >= prevAvgOee,
-    activeCount: machines.filter((m) => m.status === "RUNNING").length,
-    totalDowntime: totalDowntimeMin,
-    champion: champion
-      ? { name: champion.name, score: champion.score }
-      : undefined,
-    overloadedMachineDays: totalOverloadedDays,
-  };
-
   // Calculate Monthly Financial Performance for "This Month"
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
@@ -110,8 +60,13 @@ export default async function DashboardPage(props: {
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-  // ── Batch 2: every remaining dashboard read — independent, run in parallel ──
+  // ── Unified single roundtrip: All dashboard analytics, feeds, & counts in parallel ──
   const [
+    { machines, previousMachines },
+    { oeeTrends, downtimeByCategory },
+    leaderboardData,
+    digestData,
+    { totalOverloadedDays },
     monthWOs,
     unpaidInvoices,
     energyReadings,
@@ -132,13 +87,23 @@ export default async function DashboardPage(props: {
     openComplaints,
     sessionInfo,
     uncertifiedInBatchCount,
+    costingCtx,
   ] = await Promise.all([
+    getMachinesData(parsedRange, plantId),
+    getStatsData(parsedRange, plantId),
+    getLeaderboardData(parsedRange),
+    getDigestData(getPlantLocalYesterday()),
+    getCapacityPlan(startOfWeek(new Date(), { weekStartsOn: 1 }), 7),
     prisma.workOrder.findMany({
       where: {
         createdAt: { gte: startOfMonth },
         ...(plantId !== "ALL" ? { plantId } : {}),
       },
-      include: { product: true },
+      include: {
+        product: true,
+        productionLogs: true,
+        inventoryTransactions: { include: { rawMaterial: true } },
+      },
     }),
     (prisma as any).invoice.findMany({
       where: {
@@ -243,7 +208,43 @@ export default async function DashboardPage(props: {
     (prisma as any).inventoryTransaction.count({
       where: { type: "IN", materialCert: null },
     }),
+    getCostingContext(),
   ]);
+
+  const champion = leaderboardData.operators[0];
+
+  let totalOeeSum = 0;
+  let count = 0;
+  let totalDowntimeMin = 0;
+
+  machines.forEach((m) => {
+    totalOeeSum += m.metrics?.oee || 0;
+    count++;
+    totalDowntimeMin += m.metrics?.totalDowntimeMin || 0;
+  });
+
+  let prevTotalOeeSum = 0;
+  let prevCount = 0;
+  previousMachines.forEach((m) => {
+    prevTotalOeeSum += m.metrics?.oee || 0;
+    prevCount++;
+  });
+
+  const avgOee = count > 0 ? totalOeeSum / count : 0;
+  const prevAvgOee = prevCount > 0 ? prevTotalOeeSum / prevCount : 0;
+  const oeeDelta = (avgOee - prevAvgOee).toFixed(1);
+
+  const plantStats = {
+    avgOee,
+    oeeDelta,
+    isOeeUp: avgOee >= prevAvgOee,
+    activeCount: machines.filter((m) => m.status === "RUNNING").length,
+    totalDowntime: totalDowntimeMin,
+    champion: champion
+      ? { name: champion.name, score: champion.score }
+      : undefined,
+    overloadedMachineDays: totalOverloadedDays,
+  };
 
   const { flags: complianceFlags } = complianceResult;
   const atRiskPrograms = programHealth.filter((p: any) => p.risk !== "LOW");
@@ -269,7 +270,7 @@ export default async function DashboardPage(props: {
     .reduce((s: number, o: any) => s + o.estMinutesSaved, 0);
 
   const monthCostings = await Promise.all(
-    monthWOs.map((wo) => calculateWorkOrderCost(wo)),
+    monthWOs.map((wo) => calculateWorkOrderCost(wo, costingCtx)),
   );
   const monthRevenue = monthCostings.reduce(
     (sum, item) => sum + item.revenue,
@@ -348,7 +349,7 @@ export default async function DashboardPage(props: {
   const receivablesSummary = aging;
 
   // Payables Calculation
-  let payablesSummary = {
+  const payablesSummary = {
     totalOutstanding: 0,
   };
 

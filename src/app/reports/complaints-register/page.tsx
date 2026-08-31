@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 import PrintButton from "@/app/components/print/PrintButton";
@@ -6,6 +9,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ComplaintsRegisterReport() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "quality.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const complaints = await prisma.customerComplaint.findMany({
     orderBy: { raisedAt: "desc" },
     include: {
@@ -100,7 +109,7 @@ export default async function ComplaintsRegisterReport() {
             complaints.map((c) => (
               <tr
                 key={c.id}
-                className="border-b border-white/10 print:border-gray-200 hover:bg-white/5 print:hover:bg-white break-inside-avoid"
+                className="border-b border-white/10 print:border-gray-200 hover:bg-slate-700/40 print:hover:bg-white break-inside-avoid"
               >
                 <td className="py-3 px-4 align-top">
                   <div className="font-medium text-white print:text-gray-900">

@@ -70,7 +70,7 @@ export async function PUT(request: Request) {
       const history = log.adjustmentHistory
         ? (log.adjustmentHistory as any[])
         : [];
-      let reasonText = data.adjustmentReason
+      const reasonText = data.adjustmentReason
         ? `, Reason: ${data.adjustmentReason}`
         : "";
       history.push({
@@ -124,7 +124,7 @@ export async function PUT(request: Request) {
       ) {
         historyText += `Changed Duration from ${log.durationMinutes} to ${data.durationMinutes}. `;
       }
-      let reasonText = data.adjustmentReason
+      const reasonText = data.adjustmentReason
         ? `Reason: ${data.adjustmentReason}. `
         : "";
 
@@ -168,6 +168,8 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const headerList = await headers();
+    const actorName = headerList.get("x-user-name") || "Supervisor";
     const { logIds, type } = body;
 
     if (!logIds || !Array.isArray(logIds)) {
@@ -196,7 +198,7 @@ export async function POST(request: Request) {
     }
 
     await logAudit({
-      actor: "system",
+      actor: actorName,
       action: "RECONCILE_FINALIZED",
       entityType: type === "DOWNTIME" ? "DowntimeLog" : "ProductionLog",
       details:

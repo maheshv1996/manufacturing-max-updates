@@ -1,9 +1,21 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import TimeStudyClient from "./TimeStudyClient";
 import { Timer } from "lucide-react";
 
 export const metadata = { title: "Time Study (Industrial Engineering)" };
 
-export default function TimeStudyPage() {
+export default async function TimeStudyPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/ops/time-study");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">

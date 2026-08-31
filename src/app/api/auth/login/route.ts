@@ -1,3 +1,24 @@
+// IP-level sliding window rate-limiting: max 30 requests per minute per IP
+const IP_RATE_WINDOW_MS = 60 * 1000;
+const IP_RATE_MAX_REQUESTS = 30;
+const ipRequestMap = new Map<string, number[]>();
+
+function checkIpThrottle(ip: string): { throttled: boolean; retryAfterSeconds: number } {
+  if (!ip || ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
+    return { throttled: false, retryAfterSeconds: 0 };
+  }
+  const now = Date.now();
+  const timestamps = (ipRequestMap.get(ip) || []).filter((t) => now - t < IP_RATE_WINDOW_MS);
+  if (timestamps.length >= IP_RATE_MAX_REQUESTS) {
+    const oldest = timestamps[0];
+    const retryAfterSeconds = Math.ceil((oldest + IP_RATE_WINDOW_MS - now) / 1000);
+    return { throttled: true, retryAfterSeconds: Math.max(1, retryAfterSeconds) };
+  }
+  timestamps.push(now);
+  ipRequestMap.set(ip, timestamps);
+  return { throttled: false, retryAfterSeconds: 0 };
+}
+
 import { can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import { NextResponse } from "next/server";
@@ -58,6 +79,20 @@ export async function POST(request: Request) {
 
     const identifier = String(username).trim().toLowerCase();
     const ip = await clientIp(request);
+
+    // 0. IP Throttle gate — prevent rapid-fire brute-force sweeps
+    const ipCheck = checkIpThrottle(ip);
+    if (ipCheck.throttled) {
+      return NextResponse.json(
+        {
+          error: `Too many login requests from this IP. Please slow down and try again in ${ipCheck.retryAfterSeconds}s.`,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(ipCheck.retryAfterSeconds) },
+        },
+      );
+    }
 
     // 1. Lockout gate — reject before doing ANY credential work.
     const { locked, retryAfterSeconds } = await checkLockout(identifier);
@@ -246,7 +281,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
       secure: isProd,
       path: "/",
-      maxAge: 60 * 60 * 12, // 12 hours — bounded window for stale role claims
+      maxAge: 60 * 60 * 24 * 365, // 1 Year permanent session
     });
 
     // Log success

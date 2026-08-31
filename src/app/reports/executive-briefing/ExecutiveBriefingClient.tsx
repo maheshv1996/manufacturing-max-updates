@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Printer, RefreshCw } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -48,7 +50,7 @@ export default function ExecutiveBriefingClient() {
         setData(json);
       }
     } catch (err) {
-      console.error("Failed to load executive briefing:", err);
+      logClientError("Failed to load executive briefing:", err, "ExecutiveBriefingClient");
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import { ShieldCheck } from "lucide-react";
@@ -12,6 +16,14 @@ function certTypeLabel(t: string) {
 }
 
 export default async function MaterialCertsReport() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/reports/material-certs");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const now = new Date();
 
   const certs = await (prisma as any).materialCert.findMany({

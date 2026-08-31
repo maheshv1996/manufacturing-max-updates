@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -90,7 +92,7 @@ export default function PpapClient() {
         setPpapElements(d.ppapElements || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "PpapClient");
     } finally {
       setLoading(false);
     }
@@ -115,7 +117,7 @@ export default function PpapClient() {
         return d;
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "PpapClient");
       alert("Action failed");
     } finally {
       setSaving(false);

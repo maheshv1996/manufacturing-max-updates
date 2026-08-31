@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -12,6 +13,7 @@ export async function PATCH(
   request: Request,
   props: { params: Promise<{ id: string }> },
 ) {
+    await logAudit({ actor: "system", action: "LEAVE_STATUS_UPDATED", entityType: "LeaveRequest", details: "Leave request status updated" });
   try {
     const { id } = await props.params;
     const headersList = await headers();

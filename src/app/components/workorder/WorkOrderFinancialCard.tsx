@@ -1,5 +1,6 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { DollarSign, TrendingUp, TrendingDown, PieChart } from "lucide-react";
 import OverrideBadgeModal from "../modals/OverrideBadgeModal";
@@ -22,11 +23,12 @@ export default function WorkOrderFinancialCard({
     fetch(`/api/overrides?entityType=WO_COSTING&entityId=${wo.id}`)
       .then((r) => r.json())
       .then((d) => setOverrides(d.overrides || []))
-      .catch(console.error);
+      .catch((err) => logClientError(err, "WorkOrderFinancialCard"));
   };
 
   useEffect(() => {
     fetchOverrides();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wo.id]);
 
   const costOverride = overrides.find((o) => o.field === "totalCost");

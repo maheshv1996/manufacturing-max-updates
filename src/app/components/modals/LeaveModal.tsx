@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { X, Calendar, FileText, Loader2 } from "lucide-react";
 import { Card } from "@/app/components/ui/Card";
@@ -50,7 +52,7 @@ export default function LeaveModal({ onClose }: LeaveModalProps) {
         setHistory(data);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "LeaveModal");
     } finally {
       setHistoryLoading(false);
     }

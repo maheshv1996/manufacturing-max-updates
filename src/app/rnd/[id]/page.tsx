@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState, useCallback, use } from "react";
 import {
   ArrowLeft,
@@ -42,7 +44,7 @@ export default function RndProjectDetail({
       const data = await res.json();
       setProject(data.project);
     } catch (err) {
-      console.error(err);
+      logClientError(err, "page");
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Filter } from "lucide-react";
@@ -139,7 +141,7 @@ export default function WorkOrdersClientHeader({
       setIsModalOpen(false);
       router.refresh();
     } catch (err) {
-      console.error("Error creating work order:", err);
+      logClientError("Error creating work order:", err, "WorkOrdersClientHeader");
       setFormError(
         err instanceof Error ? err.message : "An unexpected error occurred",
       );

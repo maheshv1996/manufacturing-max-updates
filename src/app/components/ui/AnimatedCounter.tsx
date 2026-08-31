@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useInView } from "framer-motion";
+import { useInView, useReducedMotion } from "framer-motion";
 
 export function AnimatedCounter({
   to,
@@ -12,11 +12,17 @@ export function AnimatedCounter({
   duration?: number;
   formatter?: (v: number) => string;
 }) {
-  const [count, setCount] = useState(0);
+  const shouldReduceMotion = useReducedMotion();
+  const [count, setCount] = useState(shouldReduceMotion ? to : 0);
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
 
   useEffect(() => {
+    if (shouldReduceMotion) {
+      setCount(to);
+      return;
+    }
+
     if (isInView) {
       let startTime: number | null = null;
       const start = 0;
@@ -39,7 +45,7 @@ export function AnimatedCounter({
 
       requestAnimationFrame(animate);
     }
-  }, [to, duration, isInView]);
+  }, [to, duration, isInView, shouldReduceMotion]);
 
   return <span ref={ref}>{formatter(count)}</span>;
 }

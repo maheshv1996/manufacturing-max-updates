@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { Component, type ReactNode } from "react";
 
 interface Props {
@@ -24,7 +26,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.error("[ErrorBoundary] page crash caught:", error);
+    logClientError("[ErrorBoundary] page crash caught:", error, "ErrorBoundary");
   }
 
   render() {

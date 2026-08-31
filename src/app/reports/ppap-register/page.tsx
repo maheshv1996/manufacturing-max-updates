@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import { FileCheck2 } from "lucide-react";
@@ -13,6 +16,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default async function PpapRegisterPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "quality.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const now = new Date();
   const submissions = await prisma.ppapSubmission.findMany({
     include: {

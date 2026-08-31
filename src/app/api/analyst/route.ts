@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,7 @@ import { cookies } from "next/headers";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "ANALYST_QUERY", entityType: "Analyst", details: "AI Analyst report generated" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;

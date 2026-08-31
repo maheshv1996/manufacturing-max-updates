@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import AgvFleetClient from "./AgvFleetClient";
 
 export const metadata = {
@@ -9,6 +13,14 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function AgvPage() {
+export default async function AgvPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/digital-twin/agv");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return <AgvFleetClient />;
 }

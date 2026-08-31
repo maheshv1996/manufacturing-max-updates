@@ -30,6 +30,7 @@ const Counter = ({ to, duration = 1 }: { to: number; duration?: number }) => {
     };
 
     requestAnimationFrame(animate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [to, duration]); // Intentionally not including 'count' in deps to avoid loop
 
   return <span>{count}</span>;
@@ -96,6 +97,7 @@ export default function ShowroomPage() {
     }, 3000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
@@ -60,7 +62,7 @@ export default function ObjectivesClient() {
         setIsManager(m.user?.level === "MANAGER" || m.user?.isOwner === true);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ObjectivesClient");
     } finally {
       setLoading(false);
     }

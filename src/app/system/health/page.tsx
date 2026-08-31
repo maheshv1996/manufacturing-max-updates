@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import PageHeader from "@/app/components/shared/PageHeader";
 import UpdateCard from "@/app/components/shared/UpdateCard";
 import { collectHealth } from "@/lib/serverHealth";
@@ -57,6 +61,14 @@ function Stat({
 }
 
 export default async function SystemHealthPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/health");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const health = await collectHealth();
   const port = process.env.PORT || "3000";
   const primaryIp = health.lanIps[0] || "127.0.0.1";

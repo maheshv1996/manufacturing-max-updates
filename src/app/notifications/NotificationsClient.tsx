@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Bell,
@@ -34,7 +36,7 @@ export default function NotificationsClient() {
         setItems(d.notifications || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "NotificationsClient");
     } finally {
       setLoading(false);
     }
@@ -55,7 +57,7 @@ export default function NotificationsClient() {
       });
       await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "NotificationsClient");
     } finally {
       setBusy(false);
     }

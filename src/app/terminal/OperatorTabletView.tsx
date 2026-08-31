@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -33,6 +35,7 @@ import {
   LogOut,
   Camera,
   Home,
+  Shuffle,
 } from "lucide-react";
 import InstallPrompt from "@/app/components/layout/InstallPrompt";
 
@@ -236,7 +239,7 @@ export default function OperatorTabletView() {
             setPrototypeMode(data.prototypeMode);
           }
         })
-        .catch((err) => console.error(err));
+        .catch((err) => logClientError(err, "OperatorTabletView"));
 
       const rUrl = `/api/terminal/active-routing?workOrderId=${activeWorkOrder.id}${serialQuery}`;
       fetch(rUrl)
@@ -257,7 +260,7 @@ export default function OperatorTabletView() {
             setPrototypeMode(data.prototypeMode);
           }
         })
-        .catch((err) => console.error(err));
+        .catch((err) => logClientError(err, "OperatorTabletView"));
 
       const bUrl = `/api/terminal/active-bom?workOrderId=${activeWorkOrder.id}${serialQuery}`;
       fetch(bUrl)
@@ -273,7 +276,7 @@ export default function OperatorTabletView() {
             setPrototypeMode(data.prototypeMode);
           }
         })
-        .catch((err) => console.error(err));
+        .catch((err) => logClientError(err, "OperatorTabletView"));
     } else {
       setActiveWoDocuments([]);
       setActiveRoutingSteps([]);
@@ -396,6 +399,7 @@ export default function OperatorTabletView() {
       );
       return () => clearInterval(poll);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSetupDone, machineId, operatorId]);
 
   const fetchInitData = async () => {
@@ -416,7 +420,7 @@ export default function OperatorTabletView() {
         setSelectedReasonId(data.downtimeReasons[0].id);
       }
     } catch (err) {
-      console.error("Failed to fetch init data:", err);
+      logClientError("Failed to fetch init data:", err, "OperatorTabletView");
     } finally {
       setLoading(false);
     }
@@ -453,7 +457,7 @@ export default function OperatorTabletView() {
         setSelectedPlannedWoId(data.plannedWorkOrders[0].id);
       }
     } catch (err) {
-      console.error("Failed to fetch live state:", err);
+      logClientError("Failed to fetch live state:", err, "OperatorTabletView");
     }
   };
 
@@ -596,7 +600,7 @@ export default function OperatorTabletView() {
         }
       }
     } catch (e) {
-      console.error("Check pending count error:", e);
+      logClientError("Check pending count error:", e, "OperatorTabletView");
     }
 
     setIsSetupDone(true);
@@ -678,13 +682,15 @@ export default function OperatorTabletView() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await offlineFetchWrapper("/api/auth/logout", { method: "POST" });
     } catch (err) {
-      console.error("Logout error:", err);
+      logClientError("Logout error:", err, "OperatorTabletView");
     }
     localStorage.removeItem("operator_id");
     localStorage.removeItem("operator_machine_id");
-    window.location.href = "/";
+    // Hard reload to clear terminal session state
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/");
   };
 
   // Helper action call
@@ -718,7 +724,7 @@ export default function OperatorTabletView() {
         await fetchLiveState(machineId, operatorId);
       }
     } catch (err) {
-      console.error("Action error:", err);
+      logClientError("Action error:", err, "OperatorTabletView");
       alert("Failed to perform action");
     } finally {
       setActionLoading(false);
@@ -2178,6 +2184,63 @@ export default function OperatorTabletView() {
 
       {/* BIG ACTION BUTTONS GRID (Min height 64px, touch optimized) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Machine Mode State Switcher: SETUP / RUN / CHANGEOVER */}
+        {activeWorkOrder && (
+          <div className="col-span-full bg-slate-900/90 border border-slate-700/80 p-4 rounded-3xl flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Operating Mode:
+              </span>
+              <span className="px-3 py-1 rounded-xl text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono">
+                {activeWorkOrder.status}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() =>
+                  performOperatorAction({
+                    action: "SETUP",
+                    workOrderId: activeWorkOrder.id,
+                    machineId,
+                  })
+                }
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-2xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+              >
+                <Wrench className="w-4 h-4" />
+                SETUP
+              </button>
+              <button
+                onClick={() =>
+                  performOperatorAction({
+                    action: "RUN",
+                    workOrderId: activeWorkOrder.id,
+                    machineId,
+                  })
+                }
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+              >
+                <Play className="w-4 h-4" />
+                RUN
+              </button>
+              <button
+                onClick={() =>
+                  performOperatorAction({
+                    action: "CHANGEOVER",
+                    workOrderId: activeWorkOrder.id,
+                    machineId,
+                  })
+                }
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+              >
+                <Shuffle className="w-4 h-4" />
+                CHANGEOVER
+              </button>
+            </div>
+          </div>
+        )}
         {/* 1. START JOB */}
         {!activeWorkOrder && plannedWorkOrders.length > 0 && (
           <button
@@ -3612,7 +3675,7 @@ export default function OperatorTabletView() {
                   value={maintDescInput}
                   onChange={(e) => setMaintDescInput(e.target.value)}
                   placeholder="Describe the fault or maintenance required…"
-                  className="w-full bg-slate-800 border-2 border-slate-700 text-white text-base rounded-2xl px-4 py-3 focus:outline-none focus:border-orange-500 resize-none placeholder:text-slate-500"
+                  className="w-full bg-slate-800 border-2 border-slate-700 text-white text-base rounded-2xl px-4 py-3 focus:outline-none focus:border-orange-500 resize-none placeholder:text-slate-400"
                 />
               </div>
             </div>

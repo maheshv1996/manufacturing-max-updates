@@ -1,9 +1,11 @@
+import { logAudit } from "@/lib/audit";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { editSourceRecord } from "@/lib/sourceRecordEdit";
 
 export async function POST(request: Request) {
+    await logAudit({ actor: "system", action: "SOURCE_RECORD_EDITED", entityType: "SourceRecord", details: "Edited source record" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

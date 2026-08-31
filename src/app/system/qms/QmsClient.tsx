@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   ClipboardCheck,
@@ -119,7 +121,7 @@ export default function QmsClient() {
         setNcrs(d.ncrs || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "QmsClient");
     } finally {
       setLoading(false);
     }
@@ -141,7 +143,7 @@ export default function QmsClient() {
       if (!res.ok) alert(d.error || "Action failed");
       else await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "QmsClient");
       alert("Action failed");
     } finally {
       setSaving(false);

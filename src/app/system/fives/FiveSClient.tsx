@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   ClipboardCheck,
@@ -74,7 +76,7 @@ export default function FiveSClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to fetch 5S data:", err);
+      logClientError("Failed to fetch 5S data:", err, "FiveSClient");
     } finally {
       setLoading(false);
     }

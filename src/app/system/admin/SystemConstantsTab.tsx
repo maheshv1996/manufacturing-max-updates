@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Loader2, Save, Sliders, CheckCircle2 } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -47,7 +49,7 @@ export default function SystemConstantsTab() {
           ...data,
         }));
       })
-      .catch((err) => console.error("Failed to load settings:", err))
+      .catch((err) => logClientError(err, "SystemConstantsTab"))
       .finally(() => setLoading(false));
   }, []);
 

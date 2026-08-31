@@ -1,5 +1,8 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
+/* eslint-disable @next/next/no-img-element -- document fileUrl is dynamic blob/PDF endpoint, not optimizable via next/image */
+
 import { useEffect } from "react";
 import { X, FileText, Download, ShieldCheck, Info } from "lucide-react";
 import { offlineFetchWrapper } from "@/lib/offlineSync";
@@ -48,7 +51,7 @@ export default function DrawingLightboxModal({
           }),
         });
       } catch (err) {
-        console.error("Failed to log drawing view audit:", err);
+        logClientError("Failed to log drawing view audit:", err, "DrawingLightboxModal");
       }
     };
     logView();

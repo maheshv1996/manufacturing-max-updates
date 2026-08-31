@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   FolderTree,
@@ -86,7 +88,7 @@ export default function BomTreeClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load BOM tree", err);
+      logClientError("Failed to load BOM tree", err, "BomTreeClient");
     } finally {
       setLoading(false);
     }
@@ -94,6 +96,7 @@ export default function BomTreeClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddBomLine = async (e: React.FormEvent) => {
@@ -122,7 +125,7 @@ export default function BomTreeClient() {
         alert(errData.error || "Failed to add BOM line");
       }
     } catch (err) {
-      console.error("Add BOM error", err);
+      logClientError("Add BOM error", err, "BomTreeClient");
     } finally {
       setSaving(false);
     }

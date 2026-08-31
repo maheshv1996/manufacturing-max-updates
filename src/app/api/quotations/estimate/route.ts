@@ -1,9 +1,11 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { calculateQuotationEstimate } from "@/lib/estimatingEngine";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "QUOTATION_ESTIMATED", entityType: "Quotation", details: "Quotation cost estimation generated" });
   try {
     const body = await req.json();
     const { lines, quotedPrice } = body;

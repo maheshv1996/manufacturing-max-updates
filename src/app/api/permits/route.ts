@@ -22,8 +22,7 @@ export async function autoExpirePermits() {
     data: { status: "EXPIRED", voidedAt: now, voidedBy: "SYSTEM_AUTO" },
   });
   if (expired.count > 0) {
-    console.log(`[permits] auto-expired ${expired.count} permit(s)`);
-  }
+      }
   return expired.count;
 }
 

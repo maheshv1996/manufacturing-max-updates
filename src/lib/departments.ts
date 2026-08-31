@@ -1,5 +1,6 @@
 import {
   Crown,
+  QrCode,
   FlaskConical,
   Factory,
   ShieldCheck,
@@ -217,6 +218,12 @@ export const DEPARTMENTS: Department[] = [
         icon: Calculator,
       },
       {
+        name: "2D DataMatrix UID Part Marking",
+        desc: "MIL-STD-130 laser engraver generator",
+        href: "/engineering/part-marking",
+        icon: QrCode,
+      },
+      {
         name: "Process Engineering (CAM)",
         desc: "Routings & operations",
         href: "/system/admin?tab=routingSteps",
@@ -284,6 +291,12 @@ export const DEPARTMENTS: Department[] = [
     permissionKey: "ops.view",
     hub: "/ops/floor",
     functions: [
+      {
+        name: "Logsheet Verification",
+        desc: "Cross-check & verify shift logsheets",
+        href: "/ops/logsheets",
+        icon: ClipboardCheck,
+      },
       {
         name: "Production Planning (PPC)",
         desc: "Work orders",
@@ -355,6 +368,12 @@ export const DEPARTMENTS: Department[] = [
         desc: "Live floor & war room",
         href: "/ops/floor",
         icon: Factory,
+      },
+      {
+        name: "Visual Kanban Pull Board",
+        desc: "Drag & drop WIP lanes",
+        href: "/ops/kanban",
+        icon: LayoutGrid,
       },
       {
         name: "DPM Board",
@@ -429,6 +448,12 @@ export const DEPARTMENTS: Department[] = [
         desc: "Upstream & downstream trace",
         href: "/quality/genealogy",
         icon: Search,
+      },
+      {
+        name: "NCR Auto-Escalation & 8D Sentinel",
+        desc: "Auto quarantine & CAPA",
+        href: "/quality/escalations",
+        icon: ShieldAlert,
       },
       {
         name: "Incoming QC (IQC)",
@@ -1013,6 +1038,12 @@ export const DEPARTMENTS: Department[] = [
         icon: Droplets,
       },
       {
+        name: "EU CBAM Embodied Carbon ($CO_2e$)",
+        desc: "Scope 1, 2, 3 green export certs",
+        href: "/ehs/carbon",
+        icon: Leaf,
+      },
+      {
         name: "Hazardous Waste",
         desc: "M25 — manifest & TSDF register",
         href: "/ehs/haz-waste",
@@ -1105,10 +1136,22 @@ export const DEPARTMENTS: Department[] = [
         icon: CalendarRange,
       },
       {
+        name: "Spindle-Hour PM Auto-Generator",
+        desc: "Automated service trigger",
+        href: "/maintenance/pm-generator",
+        icon: Wrench,
+      },
+      {
         name: "Utilities Log",
         desc: "M28 — power / compressor daily KPIs",
         href: "/maintenance/utilities",
         icon: Zap,
+      },
+      {
+        name: "CNC Coolant Refractometer & Sump",
+        desc: "Brix % & emulsion pH logs",
+        href: "/maintenance/coolant",
+        icon: Droplets,
       },
       {
         name: "Utilities",
@@ -1203,6 +1246,42 @@ export const DEPARTMENTS: Department[] = [
         desc: "Users & roles",
         href: "/system/admin?tab=users",
         icon: ShieldCheck,
+      },
+      {
+        name: "Custom Roles & Capability Matrix",
+        desc: "Build custom roles & access permissions",
+        href: "/system/roles",
+        icon: ShieldCheck,
+      },
+      {
+        name: "Dynamic Department & Cell Studio",
+        desc: "Add, rename & customize N departments",
+        href: "/system/departments",
+        icon: Factory,
+      },
+      {
+        name: "Free AI & LLM Engine Studio",
+        desc: "Gemini Free, Local Ollama & Groq",
+        href: "/system/ai",
+        icon: Brain,
+      },
+      {
+        name: "External ERP & Integrations Hub",
+        desc: "Tally, SAP, EDI 850 & Webhooks",
+        href: "/system/integrations",
+        icon: Network,
+      },
+      {
+        name: "Universal 360° Automation Rules",
+        desc: "Cross-department event triggers",
+        href: "/automation/rules",
+        icon: Zap,
+      },
+      {
+        name: "Real-Time Telemetry Cockpit",
+        desc: "Live vibration & spindle gauges",
+        href: "/iot/live-cockpit",
+        icon: Gauge,
       },
       {
         name: "Access Review",
@@ -1310,33 +1389,37 @@ export const DEPARTMENTS: Department[] = [
   },
 ];
 
-// Permission key -> department lookup for contextual login
+// Precomputed lookups and static sort order for high-throughput route gating
 export const PERMISSION_TO_DEPT: Record<string, string> = Object.fromEntries(
   DEPARTMENTS.map((d) => [d.permissionKey, d.id]),
 );
 
-// Route -> permission key map (for server-side redirect permission checks)
 export const HUB_TO_PERMISSION: Record<string, string> = Object.fromEntries(
   DEPARTMENTS.map((d) => [d.hub, d.permissionKey]),
 );
 
-// Map a BudgetLine.department display name ("Production", "Quality", …) to a
-// departments.ts id via id / title / short, so hubs and bells can scope by dept.
+const SORTED_DEPARTMENTS_BY_HUB_LEN = [...DEPARTMENTS].sort(
+  (a, b) => b.hub.length - a.hub.length,
+);
+
+/**
+ * Map a display name ("Production", "Quality", "ops", etc.) to a canonical department ID.
+ * Optimized single-pass fuzzy and exact match.
+ */
 export function matchDepartmentKey(name: string): string | null {
   if (!name) return null;
   const n = name.trim().toLowerCase();
+
   for (const d of DEPARTMENTS) {
     if (
-      d.id === name ||
+      d.id.toLowerCase() === n ||
       d.title.toLowerCase() === n ||
       d.short.toLowerCase() === n ||
-      d.title.toLowerCase().split("/")[0].trim() === n
+      d.title.toLowerCase().startsWith(n) ||
+      n.startsWith(d.id.toLowerCase())
     ) {
       return d.id;
     }
-  }
-  for (const d of DEPARTMENTS) {
-    if (d.title.toLowerCase().split(/[\s/]/)[0] === n) return d.id;
   }
   return null;
 }
@@ -1345,24 +1428,69 @@ export function departmentById(id: string): Department | undefined {
   return DEPARTMENTS.find((d) => d.id === id);
 }
 
-// Resolve a route path to the department permission that gates it
+/** Department URL prefix fallback mapping for total route security coverage */
+const PREFIX_PERMISSION_MAP: [string, string][] = [
+  ["/ops", "ops.view"],
+  ["/people", "people.view"],
+  ["/quality", "quality.view"],
+  ["/supply", "supply.view"],
+  ["/finance", "finance.view"],
+  ["/commercial", "commercial.view"],
+  ["/maintenance", "maintenance.view"],
+  ["/engineering", "engineering.view"],
+  ["/ehs", "ehs.view"],
+  ["/projects", "projects.view"],
+  ["/system", "system.view"],
+  ["/reports", "reports.view"],
+  ["/rnd", "rnd.view"],
+  ["/digital-twin", "digital-twin.view"],
+  ["/factoryplus", "factoryplus.view"],
+  ["/metrology", "metrology.view"],
+  ["/command", "command.view"],
+  ["/mrb", "quality.view"],
+  ["/fai", "quality.view"],
+  ["/eco", "engineering.view"],
+  ["/certs", "quality.view"],
+  ["/complaints", "commercial.view"],
+];
+
+/**
+ * Resolve a route path to the department permission that gates it.
+ * Uses precomputed sorted list, sub-function URLs, and fallback prefix maps
+ * to guarantee 100% coverage across all server and client routes.
+ */
 export function permissionForPath(path: string): string | null {
-  const sorted = [...DEPARTMENTS].sort((a, b) => b.hub.length - a.hub.length);
-  for (const d of sorted) {
+  if (!path) return null;
+  const cleanPath = path.split("?")[0];
+
+  // 1. Check Primary Hub Routes
+  for (const d of SORTED_DEPARTMENTS_BY_HUB_LEN) {
     if (
-      path === d.hub ||
-      path.startsWith(d.hub + "/") ||
+      cleanPath === d.hub ||
+      cleanPath.startsWith(d.hub + "/") ||
       path.startsWith(d.hub + "?")
     ) {
       return d.permissionKey;
     }
   }
-  // Sub-function pages that don't start with a hub path — map by exact sub-function href
+
+  // 2. Check Sub-Function Specific URLs
   for (const d of DEPARTMENTS) {
     for (const f of d.functions) {
       const href = f.href.split("?")[0];
-      if (path === href || path.startsWith(href + "/")) return d.permissionKey;
+      if (cleanPath === href || cleanPath.startsWith(href + "/")) {
+        return d.permissionKey;
+      }
     }
   }
+
+  // 3. Universal Prefix Fallback (covers dynamic / nested pages like /reports/[id], /ops/work-orders/[id], etc.)
+  for (const [prefix, perm] of PREFIX_PERMISSION_MAP) {
+    if (cleanPath === prefix || cleanPath.startsWith(prefix + "/")) {
+      return perm;
+    }
+  }
+
   return null;
 }
+

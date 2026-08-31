@@ -629,7 +629,7 @@ export default function AccessReviewClient() {
                 value={certNotes}
                 onChange={(e) => setCertNotes(e.target.value)}
                 rows={2}
-                className="w-full rounded-xl bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                className="w-full rounded-xl bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                 placeholder="e.g. Access verified against org chart"
               />
             </div>
@@ -726,7 +726,7 @@ export default function AccessReviewClient() {
                   setDrillForm({ ...drillForm, notes: e.target.value })
                 }
                 rows={2}
-                className="w-full rounded-xl bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                className="w-full rounded-xl bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
                 placeholder="Rows verified, counts matched…"
               />
             </div>

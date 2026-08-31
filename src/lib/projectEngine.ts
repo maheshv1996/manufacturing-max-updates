@@ -52,7 +52,7 @@ export interface ProjectData {
 export interface BottleneckWarning {
   id: string;
   type:
-    "STATION_OVERLOAD" | "WORK_ORDER_HOLD" | "TARGET_DATE_RISK" | "LONG_SETUP";
+    | "STATION_OVERLOAD" | "WORK_ORDER_HOLD" | "TARGET_DATE_RISK" | "LONG_SETUP";
   severity: "HIGH" | "CRITICAL" | "WARNING";
   title: string;
   message: string;
@@ -70,7 +70,7 @@ export interface MachineLoadSummary {
   totalRunHours: number;
   totalLoadHours: number;
   activeOpCount: number;
-  utilizationPct: number; // relative to an 8-hour shift capacity standard (480 mins)
+  utilizationPct: number; // relative to shift capacity standard
   isOverloaded: boolean;
 }
 
@@ -115,6 +115,7 @@ export function calculateMachineLoadHours(
   workOrders: WorkOrderData[] = [],
   shiftHours: number = 8.0,
 ): Record<string, MachineLoadSummary> {
+  const safeShiftHours = Math.max(1.0, shiftHours || 8.0);
   const loadMap: Record<string, MachineLoadSummary> = {};
 
   for (const wo of workOrders) {
@@ -160,8 +161,8 @@ export function calculateMachineLoadHours(
     item.totalSetupHours = Math.round(item.totalSetupHours * 10) / 10;
     item.totalRunHours = Math.round(item.totalRunHours * 10) / 10;
     item.totalLoadHours = Math.round(item.totalLoadHours * 10) / 10;
-    item.utilizationPct = Math.round((item.totalLoadHours / shiftHours) * 100);
-    item.isOverloaded = item.totalLoadHours > shiftHours;
+    item.utilizationPct = Math.round((item.totalLoadHours / safeShiftHours) * 100);
+    item.isOverloaded = item.totalLoadHours > safeShiftHours;
   }
 
   return loadMap;
@@ -179,12 +180,15 @@ export function analyzeProjectBottlenecks(
     workOrders?: WorkOrderData[];
   },
   machineLoads?: Record<string, MachineLoadSummary>,
+  options: { setupThresholdMin?: number; shiftHours?: number } = {},
 ): BottleneckWarning[] {
   const warnings: BottleneckWarning[] = [];
   const wos = project.workOrders || [];
-  const loads = machineLoads || calculateMachineLoadHours(wos);
+  const shiftHours = options.shiftHours || 8.0;
+  const setupThresholdMin = options.setupThresholdMin || 45;
+  const loads = machineLoads || calculateMachineLoadHours(wos, shiftHours);
 
-  // 1. Check Station Overloads (> 8 hrs or overloaded flag)
+  // 1. Check Station Overloads
   for (const key of Object.keys(loads)) {
     const load = loads[key];
     if (load.isOverloaded || load.utilizationPct > 100) {
@@ -217,35 +221,37 @@ export function analyzeProjectBottlenecks(
   // 3. Check Target Completion Date Risk
   if (project.targetCompletionDate && project.status !== "COMPLETED") {
     const targetDate = new Date(project.targetCompletionDate);
-    const now = new Date();
-    const diffDays =
-      (targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    const completionPct = calculateProjectCompletionPercentage(wos);
+    if (!isNaN(targetDate.getTime())) {
+      const now = new Date();
+      const diffDays =
+        (targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      const completionPct = calculateProjectCompletionPercentage(wos);
 
-    if (diffDays < 0 && completionPct < 100) {
-      warnings.push({
-        id: `date-past-${project.id}`,
-        type: "TARGET_DATE_RISK",
-        severity: "CRITICAL",
-        title: "Target Completion Overdue",
-        message: `Project target date was ${targetDate.toLocaleDateString()}, but progress is at ${completionPct}%.`,
-      });
-    } else if (diffDays <= 3 && completionPct < 75) {
-      warnings.push({
-        id: `date-risk-${project.id}`,
-        type: "TARGET_DATE_RISK",
-        severity: "HIGH",
-        title: "Target Date Schedule Risk",
-        message: `Only ${Math.ceil(diffDays)} day(s) remaining until target completion date with ${completionPct}% complete.`,
-      });
+      if (diffDays < 0 && completionPct < 100) {
+        warnings.push({
+          id: `date-past-${project.id}`,
+          type: "TARGET_DATE_RISK",
+          severity: "CRITICAL",
+          title: "Target Completion Overdue",
+          message: `Project target date was ${targetDate.toLocaleDateString()}, but progress is at ${completionPct}%.`,
+        });
+      } else if (diffDays <= 3 && completionPct < 75) {
+        warnings.push({
+          id: `date-risk-${project.id}`,
+          type: "TARGET_DATE_RISK",
+          severity: "HIGH",
+          title: "Target Date Schedule Risk",
+          message: `Only ${Math.ceil(diffDays)} day(s) remaining until target completion date with ${completionPct}% complete.`,
+        });
+      }
     }
   }
 
-  // 4. Check for Long Setup Times (> 30 mins)
+  // 4. Check for Long Setup Times
   for (const wo of wos) {
     const steps = wo.product?.routingSteps || [];
     for (const step of steps) {
-      if ((step.setupTimeMin ?? 0) >= 45) {
+      if ((step.setupTimeMin ?? 0) >= setupThresholdMin) {
         warnings.push({
           id: `setup-${wo.id}-${step.seq}`,
           type: "LONG_SETUP",

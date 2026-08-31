@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Loader2,
@@ -96,7 +98,7 @@ export default function DynamicRegister({
         setRows(json.rows || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "DynamicRegister");
     } finally {
       setLoading(false);
     }
@@ -160,7 +162,7 @@ export default function DynamicRegister({
         await fetchRows();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "DynamicRegister");
       alert("Save failed");
     } finally {
       setSaving(false);
@@ -183,7 +185,7 @@ export default function DynamicRegister({
         await fetchRows();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "DynamicRegister");
       alert("Delete failed");
     } finally {
       setSaving(false);

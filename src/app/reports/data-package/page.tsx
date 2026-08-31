@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, PackageCheck } from "lucide-react";
@@ -6,6 +9,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function DataPackageSelectPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const workOrders = await prisma.workOrder.findMany({
     include: {
       product: true,

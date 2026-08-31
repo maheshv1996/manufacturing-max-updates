@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   FolderTree,
@@ -69,7 +71,7 @@ export default function UnsExplorerClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to fetch UNS data:", err);
+      logClientError("Failed to fetch UNS data:", err, "UnsExplorerClient");
     } finally {
       setLoading(false);
     }
@@ -77,6 +79,7 @@ export default function UnsExplorerClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Real-time polling when live mode is active
@@ -86,6 +89,7 @@ export default function UnsExplorerClient() {
       fetchData();
     }, 2500);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, selectedTopic]);
 
   const toggleExpand = (key: string) => {

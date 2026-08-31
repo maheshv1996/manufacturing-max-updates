@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import PageHeader from "@/app/components/shared/PageHeader";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
@@ -7,6 +10,12 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export default async function MachinesPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "system.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const machines = await prisma.machine.findMany({
     where: { isActive: true },
     orderBy: { code: "asc" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Card, CardContent } from "./Card";
 import { cn } from "@/lib/designTokens";
 
@@ -67,6 +67,7 @@ export function KpiCard({
   tone = "blue",
   premium = true,
 }: KpiCardProps) {
+  const shouldReduceMotion = useReducedMotion();
   const t = toneMap[tone] || toneMap.blue;
 
   return (
@@ -85,9 +86,9 @@ export function KpiCard({
           </h3>
           {icon && (
             <motion.div
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              initial={shouldReduceMotion ? false : { scale: 0.9 }}
+              animate={shouldReduceMotion ? false : { scale: 1 }}
+              transition={shouldReduceMotion ? undefined : { type: "spring", stiffness: 300, damping: 20 }}
               className={cn(
                 "p-2.5 rounded-xl shrink-0 backdrop-blur-sm border border-white/10",
                 "bg-gradient-to-br",
@@ -101,9 +102,9 @@ export function KpiCard({
         </div>
         <div className="flex items-baseline gap-2 flex-wrap">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+            animate={shouldReduceMotion ? false : { opacity: 1, y: 0 }}
+            transition={shouldReduceMotion ? undefined : { duration: 0.4, delay: 0.1 }}
             className={cn(
               "text-3xl sm:text-4xl font-black tabular-nums",
               t.text,
@@ -113,9 +114,9 @@ export function KpiCard({
           </motion.div>
           {trend && (
             <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, x: -10 }}
+              animate={shouldReduceMotion ? false : { opacity: 1, x: 0 }}
+              transition={shouldReduceMotion ? undefined : { duration: 0.4, delay: 0.15 }}
               className={cn(
                 "text-xs font-semibold flex items-center gap-1",
                 trend.isNeutral

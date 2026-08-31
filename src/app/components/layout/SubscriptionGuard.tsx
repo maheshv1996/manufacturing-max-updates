@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -34,7 +36,7 @@ export default function SubscriptionGuard({
           setStatus(data.paymentStatus);
         }
       } catch (err) {
-        console.error("Failed to check subscription status", err);
+        logClientError("Failed to check subscription status", err, "SubscriptionGuard");
       } finally {
         setLoading(false);
       }

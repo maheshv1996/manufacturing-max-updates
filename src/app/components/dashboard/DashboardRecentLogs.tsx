@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState } from "react";
 import { Clock, Package, StopCircle } from "lucide-react";
 
@@ -28,7 +30,7 @@ export default function DashboardRecentLogs() {
       const data = await res.json();
       setLogs(data.logs || []);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "DashboardRecentLogs");
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Search,
@@ -64,7 +66,7 @@ export default function DirectoryClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load directory data:", err);
+      logClientError("Failed to load directory data:", err, "DirectoryClient");
     } finally {
       setLoading(false);
     }

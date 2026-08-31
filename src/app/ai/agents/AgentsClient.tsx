@@ -14,6 +14,13 @@ import {
   Terminal,
   Layers,
   Sparkles,
+  TrendingUp,
+  DollarSign,
+  HeartPulse,
+  Users,
+  Gauge,
+  Truck,
+  Filter,
 } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
 import { soundFx } from "@/lib/soundFx";
@@ -23,6 +30,7 @@ interface Agent {
   id: string;
   name: string;
   role: string;
+  department?: string;
   description: string;
   status: string;
   avatarIcon: string;
@@ -58,6 +66,14 @@ const ICON_MAP: Record<string, any> = {
   Boxes,
   ShieldCheck,
   Zap,
+  Layers,
+  TrendingUp,
+  DollarSign,
+  HeartPulse,
+  Users,
+  Gauge,
+  Terminal,
+  Truck,
 };
 
 export default function AgentsClient({
@@ -67,6 +83,7 @@ export default function AgentsClient({
 }) {
   const [agents] = useState<Agent[]>(initialAgents);
   const [selectedAgent, setSelectedAgent] = useState<Agent>(initialAgents[0]);
+  const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [customGoal, setCustomGoal] = useState<string>("");
   const [running, setRunning] = useState<boolean>(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(-1);
@@ -130,9 +147,42 @@ export default function AgentsClient({
         badge={{ label: "Autonomous Swarm Active", tone: "cyan" }}
       />
 
+      {/* Department Filter Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <span className="text-xs text-text-3 font-mono font-bold flex items-center gap-1.5 mr-2">
+          <Filter className="w-3.5 h-3.5" /> Filter:
+        </span>
+        {["ALL", "Production", "Quality", "Supply Chain", "Maintenance", "Engineering", "Finance", "Sales & Engineering", "EHS & Safety", "HR & People", "Metrology & Tooling", "EHS & Utilities"].map((dept) => {
+          const isCurrent = selectedDept === dept;
+          const count = dept === "ALL" ? agents.length : agents.filter(a => a.department === dept).length;
+          if (dept !== "ALL" && count === 0) return null;
+          return (
+            <button
+              key={dept}
+              onClick={() => {
+                setSelectedDept(dept);
+                soundFx.playClick();
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                isCurrent
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                  : "bg-surface-2 text-text-3 hover:text-text-1 border border-border/60 hover:bg-surface-3"
+              }`}
+            >
+              <span>{dept === "ALL" ? "All 12 Agents" : dept}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isCurrent ? "bg-cyan-500/30 text-cyan-200" : "bg-surface-3 text-text-3"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Agents Selection Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {agents.map((agent) => {
+        {agents
+          .filter(a => selectedDept === "ALL" || a.department === selectedDept)
+          .map((agent) => {
           const Icon = ICON_MAP[agent.avatarIcon] || Bot;
           const isSelected = selectedAgent.id === agent.id;
 

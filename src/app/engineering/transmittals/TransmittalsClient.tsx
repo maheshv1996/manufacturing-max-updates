@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Loader2,
@@ -34,7 +36,7 @@ export default function TransmittalsClient() {
         setIsManager(m.user?.level === "MANAGER" || m.user?.isOwner === true);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "TransmittalsClient");
     } finally {
       setLoading(false);
     }

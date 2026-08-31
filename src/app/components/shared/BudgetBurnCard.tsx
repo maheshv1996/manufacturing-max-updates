@@ -37,6 +37,7 @@ export default function BudgetBurnCard() {
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dept?.id]);
 
   useEffect(() => {

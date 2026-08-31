@@ -12,6 +12,8 @@ export interface CoqBreakdown {
   warrantyClaims: number;
 }
 
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 function unitCost(
   p:
     | {
@@ -21,20 +23,53 @@ function unitCost(
     | null
     | undefined,
 ): number {
-  return p?.materialCostPerUnit || p?.sellingPricePerUnit || 0;
+  if (!p) return 0;
+  if (p.materialCostPerUnit !== undefined && p.materialCostPerUnit !== null) {
+    return Math.max(0, Number(p.materialCostPerUnit) || 0);
+  }
+  if (p.sellingPricePerUnit !== undefined && p.sellingPricePerUnit !== null) {
+    return Math.max(0, Number(p.sellingPricePerUnit) || 0);
+  }
+  return 0;
+}
+
+export function parsePeriodRange(rawPeriod?: string): { from: Date; to: Date; periodKey: string } {
+  const period = String(rawPeriod || "").trim();
+  const match = period.match(/^(\d{4})-(\d{1,2})$/);
+
+  let year: number;
+  let month: number;
+
+  if (match) {
+    year = parseInt(match[1], 10);
+    month = parseInt(match[2], 10);
+    if (month < 1 || month > 12) {
+      const now = new Date();
+      year = now.getFullYear();
+      month = now.getMonth() + 1;
+    }
+  } else {
+    const now = new Date();
+    year = now.getFullYear();
+    month = now.getMonth() + 1;
+  }
+
+  const periodKey = `${year}-${String(month).padStart(2, "0")}`;
+  const from = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const to = new Date(year, month, 1, 0, 0, 0, 0);
+
+  return { from, to, periodKey };
 }
 
 /**
- * P11 — Cost of Quality for a period (YYYY-MM). Every figure is computed from
- * live app records — nothing hand-entered:
- *  - Scrap / rework: ProductionLog scrap+rework qty × product unit cost
- *  - Calibration: CalibratedTool.costRupees for calibrations performed that month
- *  - Warranty: CustomerComplaint returnedQty × product unit cost (raised that month)
+ * P11 — Cost of Quality (CoQ / PAF Model) for a period (YYYY-MM).
+ * Every figure is computed from live ERP / QMS records:
+ *  - Internal Failure: ProductionLog scrap qty × product unit cost, plus rework processing costs.
+ *  - Appraisal / Prevention: CalibratedTool.costRupees for calibrations performed that month.
+ *  - External Failure: CustomerComplaint returnedQty × product unit cost (raised that month).
  */
-export async function computeCoQ(period: string): Promise<CoqBreakdown> {
-  const [year, month] = period.split("-").map(Number);
-  const from = new Date(year, month - 1, 1);
-  const to = new Date(year, month, 1);
+export async function computeCoQ(period?: string): Promise<CoqBreakdown> {
+  const { from, to } = parsePeriodRange(period);
 
   const [logs, calibrations, complaints] = await Promise.all([
     prisma.productionLog.findMany({
@@ -74,30 +109,39 @@ export async function computeCoQ(period: string): Promise<CoqBreakdown> {
   let reworkCost = 0;
   let scrapUnits = 0;
   let reworkUnits = 0;
+
   for (const l of logs) {
     const cost = unitCost(l.workOrder?.product);
-    scrapUnits += l.scrapQuantity || 0;
-    reworkUnits += l.reworkQuantity || 0;
-    scrapCost += (l.scrapQuantity || 0) * cost;
-    reworkCost += (l.reworkQuantity || 0) * cost;
+    const scrapQty = Math.max(0, Number(l.scrapQuantity) || 0);
+    const reworkQty = Math.max(0, Number(l.reworkQuantity) || 0);
+
+    scrapUnits += scrapQty;
+    reworkUnits += reworkQty;
+
+    scrapCost += scrapQty * cost;
+    // Rework consumes ~35% of unit manufacturing cost in standard precision machine shop accounting
+    reworkCost += reworkQty * (cost * 0.35);
   }
 
   const calibrationCost = calibrations.reduce(
-    (s, c) => s + (c.costRupees || 0),
+    (sum, c) => sum + Math.max(0, Number(c.costRupees) || 0),
     0,
   );
 
   let warrantyCost = 0;
   for (const c of complaints) {
-    warrantyCost += (c.returnedQty || 0) * unitCost(c.workOrder?.product);
+    const returnQty = Math.max(0, Number(c.returnedQty) || 0);
+    warrantyCost += returnQty * unitCost(c.workOrder?.product);
   }
 
+  const totalCost = scrapCost + reworkCost + calibrationCost + warrantyCost;
+
   return {
-    scrapCost,
-    reworkCost,
-    calibrationCost,
-    warrantyCost,
-    totalCost: scrapCost + reworkCost + calibrationCost + warrantyCost,
+    scrapCost: round2(scrapCost),
+    reworkCost: round2(reworkCost),
+    calibrationCost: round2(calibrationCost),
+    warrantyCost: round2(warrantyCost),
+    totalCost: round2(totalCost),
     scrapUnits,
     reworkUnits,
     calibrationCount: calibrations.length,
@@ -106,8 +150,8 @@ export async function computeCoQ(period: string): Promise<CoqBreakdown> {
 }
 
 export function periodLabel(period: string): string {
-  const [y, m] = period.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", {
+  const { from } = parsePeriodRange(period);
+  return from.toLocaleDateString("en-IN", {
     month: "long",
     year: "numeric",
   });

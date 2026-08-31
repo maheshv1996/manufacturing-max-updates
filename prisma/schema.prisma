@@ -139,8 +139,8 @@ model Plant {
 model ProductionLine {
   id        String    @id @default(cuid())
   name      String
-  plantId   String
-  plant     Plant     @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  plantId   String?
+  plant     Plant?    @relation(fields: [plantId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   isActive  Boolean   @default(true)
@@ -157,8 +157,8 @@ model Machine {
   code                  String               @unique
   lineId                String
   line                  ProductionLine       @relation(fields: [lineId], references: [id], onDelete: Cascade)
-  plantId               String               @default("cmsk25u7m000090odnjljb9rk")
-  plant                 Plant                @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  plantId               String?
+  plant                 Plant?               @relation(fields: [plantId], references: [id], onDelete: Cascade)
   idealCycleTimeSeconds Float                @default(60.0)
   status                String               @default("RUNNING") // Manual override status
   currentState          MachineState         @default(OFF) // IoT status
@@ -187,7 +187,7 @@ model Machine {
   fixtures              Fixture[]
   pmRules               PMRule[]
   maintenanceTools      MaintenanceTool[]
-  routingSteps          RoutingStep[]
+    routingSteps          RoutingStep[]
   telemetryLogs         TelemetryLog[]
   ipccRuns              IpccChecklistRun[]
   capacityWindows       CapacityWindow[] // P18 — S&OP windows (outsource / maintenance)
@@ -207,6 +207,7 @@ model TelemetryLog {
 
   @@index([machineId])
   @@index([at])
+  @@index([machineId, at])
 }
 
 model Operation {
@@ -554,8 +555,8 @@ model WorkOrder {
   trackingMode          TrackingMode           @default(BATCH)
   productId             String
   product               Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
-  plantId               String                 @default("cmsk25u7m000090odnjljb9rk")
-  plant                 Plant                  @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  plantId               String?
+  plant                 Plant?                 @relation(fields: [plantId], references: [id], onDelete: Cascade)
   plannedQuantity       Int
   status                WorkOrderStatus        @default(PLANNED)
   plannedStartDate      DateTime
@@ -600,7 +601,7 @@ model WorkOrder {
   materialIssueSlips    MaterialIssueSlip[] // P16
   materialCostTotal     Float                 @default(0) // P16 — job costing: RM issued × unit cost
   packedQuantity        Int                   @default(0)
-  eanCode               String?
+    eanCode               String?
   packagingScanLogs     PackagingScanLog[]
   subcontractChallans   SubcontractChallan[]
 
@@ -610,6 +611,7 @@ model WorkOrder {
   @@index([trackingToken])
   @@index([priority])
   @@index([plannedStartDate])
+  @@index([priority, plannedStartDate])
   @@index([status, plannedStartDate])
 }
 
@@ -871,6 +873,7 @@ model AuditLog {
   @@index([action])
   @@index([entityType])
   @@index([action, at])
+  @@index([action, entityType, at])
 }
 
 // P18 — S&OP Lite: decisions (OT / outsource / extra shift) auto-create HR OT requests or capacity windows
@@ -1316,8 +1319,8 @@ model RawMaterial {
   minStock          Float                  @default(0.0)
   unitCost          Float                  @default(0.0)
   materialClass     String?                @default("C") // M6 IQC AQL — A/B/C sampling class (looked up in AqlPlan)
-  plantId           String                 @default("cmsk25u7m000090odnjljb9rk")
-  plant             Plant                  @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  plantId               String?
+  plant             Plant?                 @relation(fields: [plantId], references: [id], onDelete: Cascade)
   supplierId        String?
   supplier          Supplier?              @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   createdAt         DateTime               @default(now())
@@ -1349,8 +1352,8 @@ model InventoryTransaction {
   type              String // IN | OUT | ADJUST
   qty               Float
   unitCost          Float?
-  plantId           String        @default("cmsk25u7m000090odnjljb9rk")
-  plant             Plant         @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  plantId               String?
+  plant             Plant?        @relation(fields: [plantId], references: [id], onDelete: Cascade)
   batchNo           String?
   reference         String? // e.g. "PO-102" or "WO-2026-003"
   workOrderId       String?
@@ -1559,6 +1562,7 @@ model BomLine {
   @@unique([productId, rawMaterialId])
   @@index([productId])
   @@index([rawMaterialId])
+  @@index([createdAt])
 }
 
 enum DocumentStatus {
@@ -1587,6 +1591,7 @@ model Document {
   @@index([productId])
   @@index([operationId])
   @@index([status])
+  @@index([uploadedAt])
 }
 
 enum MaintenanceJobType {

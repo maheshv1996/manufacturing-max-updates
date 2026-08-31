@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileSignature, Loader2, Eye, Lock } from "lucide-react";
@@ -27,7 +29,7 @@ export default function WorkOrderDataPackageCard({ wo }: { wo: any }) {
         alert(data.error || "Failed to generate");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "WorkOrderDataPackageCard");
       alert("Error generating data package");
     } finally {
       setIsGenerating(false);
@@ -51,7 +53,7 @@ export default function WorkOrderDataPackageCard({ wo }: { wo: any }) {
         alert(data.error || "Failed to release");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "WorkOrderDataPackageCard");
       alert("Error releasing data package");
     } finally {
       setIsReleasing(false);

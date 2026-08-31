@@ -1,9 +1,21 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import RecruitmentClient from "./RecruitmentClient";
 import { UserPlus } from "lucide-react";
 
 export const metadata = { title: "Recruitment & Onboarding" };
 
-export default function RecruitmentPage() {
+export default async function RecruitmentPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/people/recruitment");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">

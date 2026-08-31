@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import DispatchDigestButton from "./DispatchDigestButton";
@@ -13,6 +16,12 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function ComplianceDigestReport() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "system.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const now = new Date();
   const { flags, criticalCount, warningCount } = await getComplianceFlags(now);
 

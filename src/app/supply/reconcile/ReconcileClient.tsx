@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   CheckCircle2,
@@ -100,7 +102,7 @@ export default function ReconcileClient({
       setAchievementPct(pct);
       setTargetMissed(pct < 95);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ReconcileClient");
     } finally {
       setLoading(false);
     }
@@ -140,7 +142,7 @@ export default function ReconcileClient({
         alert(err.error || "Failed to resolve dispute");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ReconcileClient");
       alert("Error resolving dispute");
     }
   };
@@ -161,7 +163,7 @@ export default function ReconcileClient({
   const handleSaveEdit = async () => {
     if (!editingLog) return;
 
-    let data: any = { adjustmentReason };
+    const data: any = { adjustmentReason };
     if (editingLog.type === "PRODUCTION") {
       data.goodQuantity = parseInt(goodQty, 10) || 0;
       data.scrapQuantity = parseInt(scrapQty, 10) || 0;
@@ -189,7 +191,7 @@ export default function ReconcileClient({
         alert(err.error || "Failed to update log");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ReconcileClient");
       alert("Error updating log");
     }
   };

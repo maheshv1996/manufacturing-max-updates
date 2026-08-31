@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import DirectoryClient from "./DirectoryClient";
 
 export const metadata = {
@@ -8,6 +12,14 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function DirectoryPage() {
+export default async function DirectoryPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/factoryplus/directory");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return <DirectoryClient />;
 }

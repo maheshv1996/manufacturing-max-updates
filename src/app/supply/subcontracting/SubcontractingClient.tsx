@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Truck,
@@ -127,7 +129,7 @@ export default function SubcontractingClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load subcontracting data", err);
+      logClientError("Failed to load subcontracting data", err, "SubcontractingClient");
     } finally {
       setLoading(false);
     }
@@ -170,7 +172,7 @@ export default function SubcontractingClient() {
         alert(err.error || "Failed to create challan");
       }
     } catch (err) {
-      console.error("Create challan error", err);
+      logClientError("Create challan error", err, "SubcontractingClient");
     } finally {
       setSubmitting(false);
     }
@@ -203,7 +205,7 @@ export default function SubcontractingClient() {
         alert(err.error || "Failed to record inward receipt");
       }
     } catch (err) {
-      console.error("Inward error", err);
+      logClientError("Inward error", err, "SubcontractingClient");
     } finally {
       setSubmitting(false);
     }

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable prefer-const -- interval uses let for deferred assignment in tick closure */
 
 import { useEffect, useState } from "react";
 

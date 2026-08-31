@@ -9,6 +9,7 @@ export interface DigestData {
   oeeDelta: number;
   totalGood: number;
   totalScrap: number;
+  totalRework?: number;
   totalDowntimeMin: number;
   topDowntimeReason: string | null;
   bestMachine: { name: string; oee: number } | null;
@@ -17,83 +18,124 @@ export interface DigestData {
   attentionNeeded: string[];
 }
 
-export async function getDigestData(targetDate: Date): Promise<DigestData> {
-  const start = startOfDay(targetDate);
-  const end = endOfDay(targetDate);
+function formatReasonCategory(cat?: string | null): string | null {
+  if (!cat) return null;
+  const s = String(cat).trim();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
 
-  const prevStart = startOfDay(subDays(targetDate, 1));
-  const prevEnd = endOfDay(subDays(targetDate, 1));
+/**
+ * Computes daily factory executive briefing digest.
+ * Calculates true shopfloor OEE across all machine centers for target date vs previous day.
+ */
+export async function getDigestData(
+  targetDate: Date = new Date(),
+  plantId?: string,
+): Promise<DigestData> {
+  const safeDate = targetDate instanceof Date && !isNaN(targetDate.getTime()) ? targetDate : new Date();
 
-  // Resolve OEE rules first: getDailyStats (below) reads `oeeRules` from this scope,
-  // so it must be bound before the parallel batch that calls getDailyStats runs.
-  const oeeRules = await getOEERules();
+  const start = startOfDay(safeDate);
+  const end = endOfDay(safeDate);
 
-  // All independent queries fire in parallel
-  const [plant, openWorkOrders, currentStats, prevStats] = await Promise.all([
-    prisma.plant.findFirst(),
+  const prevStart = startOfDay(subDays(safeDate, 1));
+  const prevEnd = endOfDay(subDays(safeDate, 1));
+
+  const isAll = !plantId || plantId === "ALL";
+  const plantWhere = isAll ? {} : { plantId };
+  const machinePlantWhere = isAll ? { isActive: true } : { plantId, isActive: true };
+
+  // Fetch OEE rules and Plant Name in parallel
+  const [oeeRules, plant, openWorkOrders] = await Promise.all([
+    getOEERules().catch(() => ({ excludePlanned: true, plannedCategories: ["MAINTENANCE", "SETUP"] })),
+    isAll ? prisma.plant.findFirst() : prisma.plant.findUnique({ where: { id: plantId } }),
     prisma.workOrder.count({
       where: {
         status: { in: ["PLANNED", "IN_PROGRESS"] },
+        ...plantWhere,
       },
     }),
-    getDailyStats(start, end),
-    getDailyStats(prevStart, prevEnd),
   ]);
 
-  const plantName = plant?.name || "Manufacturing Plant";
+  const plantName = plant?.name || (isAll ? "All Plants Facility" : "Manufacturing Plant");
 
-  // Helper to get aggregated daily stats
-  async function getDailyStats(from: Date, to: Date) {
-    const [pLogs, dLogs] = await Promise.all([
+  // Helper to fetch and calculate real OEE per daily period
+  async function computeDailyMetrics(from: Date, to: Date) {
+    const [machines, pLogs, dLogs] = await Promise.all([
+      prisma.machine.findMany({
+        where: machinePlantWhere,
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          idealCycleTimeSeconds: true,
+          oeeTarget: true,
+        },
+      }),
       prisma.productionLog.findMany({
-        where: { startTime: { gte: from, lte: to } },
-        include: { machine: true },
+        where: {
+          startTime: { gte: from, lte: to },
+          machine: machinePlantWhere,
+        },
       }),
       prisma.downtimeLog.findMany({
-        where: { startTime: { gte: from, lte: to } },
-        include: { machine: true, reason: true },
+        where: {
+          startTime: { gte: from, lte: to },
+          machine: machinePlantWhere,
+        },
+        include: { reason: true },
       }),
     ]);
 
     let totalGood = 0;
     let totalScrap = 0;
     let totalRework = 0;
+    let totalDowntimeMin = 0;
 
-    // Group by machine
-    const machineStats = new Map<
+    const reasonCounts = new Map<string, number>();
+
+    // Machine aggregation map
+    const machineMap = new Map<
       string,
       {
-        machine: any;
+        machine: (typeof machines)[0];
         good: number;
         scrap: number;
+        rework: number;
         totalDowntimeMin: number;
         plannedDowntimeMin: number;
         unplannedDowntimeMin: number;
       }
     >();
 
-    pLogs.forEach((log) => {
-      totalGood += log.goodQuantity;
-      totalScrap += log.scrapQuantity;
-      totalRework += log.reworkQuantity;
-
-      if (!machineStats.has(log.machineId)) {
-        machineStats.set(log.machineId, {
-          machine: log.machine,
-          good: 0,
-          scrap: 0,
-          totalDowntimeMin: 0,
-          plannedDowntimeMin: 0,
-          unplannedDowntimeMin: 0,
-        });
-      }
-      const s = machineStats.get(log.machineId)!;
-      s.good += log.goodQuantity;
-      s.scrap += log.scrapQuantity;
+    // Initialize map for all active machines
+    machines.forEach((m) => {
+      machineMap.set(m.id, {
+        machine: m,
+        good: 0,
+        scrap: 0,
+        rework: 0,
+        totalDowntimeMin: 0,
+        plannedDowntimeMin: 0,
+        unplannedDowntimeMin: 0,
+      });
     });
 
-    let totalDowntimeMin = 0;
-    const reasonCounts = new Map<string, number>();
+    pLogs.forEach((log) => {
+      const g = log.goodQuantity || 0;
+      const s = log.scrapQuantity || 0;
+      const r = log.reworkQuantity || 0;
+
+      totalGood += g;
+      totalScrap += s;
+      totalRework += r;
+
+      const entry = machineMap.get(log.machineId);
+      if (entry) {
+        entry.good += g;
+        entry.scrap += s;
+        entry.rework += r;
+      }
+    });
 
     dLogs.forEach((log) => {
       const duration = log.durationMinutes || 0;
@@ -106,25 +148,15 @@ export async function getDigestData(targetDate: Date): Promise<DigestData> {
         );
       }
 
-      if (!machineStats.has(log.machineId)) {
-        machineStats.set(log.machineId, {
-          machine: log.machine,
-          good: 0,
-          scrap: 0,
-          totalDowntimeMin: 0,
-          plannedDowntimeMin: 0,
-          unplannedDowntimeMin: 0,
-        });
-      }
-      const s = machineStats.get(log.machineId)!;
-      s.totalDowntimeMin += duration;
-      if (
-        log.reason?.category &&
-        oeeRules.plannedCategories.includes(log.reason.category)
-      ) {
-        s.plannedDowntimeMin += duration;
-      } else {
-        s.unplannedDowntimeMin += duration;
+      const entry = machineMap.get(log.machineId);
+      if (entry) {
+        entry.totalDowntimeMin += duration;
+        const isPlanned = oeeRules.plannedCategories.includes(log.reason?.category || "");
+        if (isPlanned) {
+          entry.plannedDowntimeMin += duration;
+        } else {
+          entry.unplannedDowntimeMin += duration;
+        }
       }
     });
 
@@ -138,25 +170,37 @@ export async function getDigestData(targetDate: Date): Promise<DigestData> {
       }
     });
 
-    // Calculate OEE for each machine
-    const machineList = Array.from(machineStats.values()).map((s) => {
-      const total = s.good + s.scrap;
-      // Simplistic OEE for digest purposes (same approach as leaderboard)
-      const avail = 0.9 + Math.random() * 0.05;
-      const qual = total > 0 ? s.good / total : 0.95;
-      const perf = 0.85 + Math.random() * 0.1;
-      const oee = avail * perf * qual * 100;
+    // 24-hour shift minutes (1440 min)
+    const shiftMinutes = 1440;
+
+    // Calculate Real Mathematical OEE for each machine
+    const machineList = Array.from(machineMap.values()).map((entry) => {
+      const plannedTime = oeeRules.excludePlanned
+        ? Math.max(1, shiftMinutes - entry.plannedDowntimeMin)
+        : shiftMinutes;
+
+      const operatingMin = Math.max(0, plannedTime - entry.unplannedDowntimeMin);
+      const availability = plannedTime > 0 ? Math.min(1, operatingMin / plannedTime) : 0;
+
+      const totalParts = entry.good + entry.scrap + entry.rework;
+      const quality = totalParts > 0 ? Math.min(1, entry.good / totalParts) : 1.0;
+
+      const cycleSecs = Math.max(0.1, Number(entry.machine.idealCycleTimeSeconds) || 60);
+      const idealRunRatePerMin = 60 / cycleSecs;
+      const theoreticalMax = operatingMin * idealRunRatePerMin;
+
+      const performance = theoreticalMax > 0 ? Math.min(1, Math.max(0, totalParts / theoreticalMax)) : (totalParts > 0 ? 0.85 : 0);
+      const oee = Math.round(availability * performance * quality * 10000) / 100;
 
       return {
-        ...s,
+        ...entry,
         oee,
       };
     });
 
-    // Plant overall OEE (average of machines)
     const plantOee =
       machineList.length > 0
-        ? machineList.reduce((acc, m) => acc + m.oee, 0) / machineList.length
+        ? Math.round((machineList.reduce((acc, m) => acc + m.oee, 0) / machineList.length) * 10) / 10
         : 0;
 
     return {
@@ -164,18 +208,20 @@ export async function getDigestData(targetDate: Date): Promise<DigestData> {
       totalScrap,
       totalRework,
       totalDowntimeMin,
-      topReason: topReason
-        ? (topReason as string).charAt(0).toUpperCase() +
-          (topReason as string).slice(1).toLowerCase()
-        : null,
+      topReason: formatReasonCategory(topReason),
       machineList,
       plantOee,
     };
   }
 
+  const [currentStats, prevStats] = await Promise.all([
+    computeDailyMetrics(start, end),
+    computeDailyMetrics(prevStart, prevEnd),
+  ]);
+
   // Best and worst machines
-  let bestMachine = null;
-  let worstMachine = null;
+  let bestMachine: { name: string; oee: number } | null = null;
+  let worstMachine: { name: string; oee: number } | null = null;
 
   if (currentStats.machineList.length > 0) {
     const sorted = [...currentStats.machineList].sort((a, b) => b.oee - a.oee);
@@ -190,22 +236,21 @@ export async function getDigestData(targetDate: Date): Promise<DigestData> {
   const attentionNeeded: string[] = [];
   currentStats.machineList.forEach((m) => {
     const target = m.machine.oeeTarget ?? 85.0;
-    if (m.oee < target) {
-      if (!attentionNeeded.includes(m.machine.name))
+    if (m.oee < target || m.totalDowntimeMin > 60) {
+      if (!attentionNeeded.includes(m.machine.name)) {
         attentionNeeded.push(m.machine.name);
-    } else if (m.totalDowntimeMin > 60) {
-      if (!attentionNeeded.includes(m.machine.name))
-        attentionNeeded.push(m.machine.name);
+      }
     }
   });
 
   return {
-    date: targetDate,
+    date: safeDate,
     plantName,
     oee: currentStats.plantOee,
-    oeeDelta: currentStats.plantOee - prevStats.plantOee,
+    oeeDelta: Math.round((currentStats.plantOee - prevStats.plantOee) * 10) / 10,
     totalGood: currentStats.totalGood,
     totalScrap: currentStats.totalScrap,
+    totalRework: currentStats.totalRework,
     totalDowntimeMin: currentStats.totalDowntimeMin,
     topDowntimeReason: currentStats.topReason,
     bestMachine,

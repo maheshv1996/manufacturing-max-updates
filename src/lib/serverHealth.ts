@@ -43,7 +43,7 @@ export function lastBackup(): {
     const dir = process.env.BACKUP_DIR;
     if (!dir || !existsSync(dir)) return null;
     const files = readdirSync(dir)
-      .filter((f) => /\.(dump|backup|db|sqlite)$/i.test(f))
+      .filter((f) => /\.(dump|backup|bak|db|sqlite|tar|tar\.gz|tgz|sql|sql\.gz)$/i.test(f))
       .map((f) => {
         const p = join(dir, f);
         return {

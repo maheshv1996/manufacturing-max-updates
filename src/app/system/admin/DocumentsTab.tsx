@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   FileText,
@@ -93,7 +95,7 @@ export default function DocumentsTab() {
         setOperations(adminData.operations || []);
       }
     } catch (err) {
-      console.error("Failed to load documents data:", err);
+      logClientError("Failed to load documents data:", err, "DocumentsTab");
       setError("Failed to connect to server.");
     } finally {
       setLoading(false);

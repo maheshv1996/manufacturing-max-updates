@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import SpecKitClient from "./SpecKitClient";
 
 export const metadata = {
@@ -93,6 +97,14 @@ async function getSpecData() {
 }
 
 export default async function SpecKitPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/speckit");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const data = await getSpecData();
   return <SpecKitClient initialData={data} />;
 }

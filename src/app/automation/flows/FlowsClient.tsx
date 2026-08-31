@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Workflow,
@@ -73,7 +75,7 @@ export default function FlowsClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to fetch flows", err);
+      logClientError("Failed to fetch flows", err, "FlowsClient");
     } finally {
       setLoading(false);
     }
@@ -81,6 +83,7 @@ export default function FlowsClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeFlow = flows.find((f) => f.id === selectedFlowId) || flows[0];
@@ -100,7 +103,7 @@ export default function FlowsClient() {
         setTimeout(() => setDeployMessage(null), 3000);
       }
     } catch (err) {
-      console.error("Deploy error", err);
+      logClientError("Deploy error", err, "FlowsClient");
     } finally {
       setDeploying(false);
     }
@@ -123,7 +126,7 @@ export default function FlowsClient() {
         setTestResult(data);
       }
     } catch (err) {
-      console.error("Test error", err);
+      logClientError("Test error", err, "FlowsClient");
     } finally {
       setTimeout(() => setIsSimulating(false), 2000);
     }

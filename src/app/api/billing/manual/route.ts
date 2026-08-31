@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { cookies } from "next/headers";
@@ -6,6 +7,7 @@ import { getDerivedLicenseStatus, updateLicense } from "@/lib/licenseEngine";
 import { addDays } from "date-fns";
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "MANUAL_INVOICE_GENERATED", entityType: "BillingInvoice", details: "Manual billing invoice created" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;

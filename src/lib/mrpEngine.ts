@@ -1,7 +1,15 @@
 /**
  * MRP (Material Requirements Planning) & Multi-Level BOM Explosion Engine
- * Derived from ERPNext discrete manufacturing MRP logic and ISO 9001 inventory planning.
+ * Derived from discrete manufacturing MRP-II logic (AS9100 / ISO 9001 / IATF 16949).
+ * Supports multi-shift capacity modeling, advanced lot-sizing policies (L4L, MOQ, EOQ, Batch),
+ * scrap yield factors, and lead-time safety buffers.
  */
+
+export type LotSizingPolicy =
+  | "LOT_FOR_LOT"
+  | "MIN_BATCH"
+  | "FIXED_ORDER_QTY"
+  | "PERIOD_OF_SUPPLY";
 
 export interface BomNode {
   itemId: string;
@@ -14,11 +22,24 @@ export interface BomNode {
   onOrderStock: number;
   safetyStock: number;
   leadTimeDays: number;
+  /** Safety lead time buffer in days for supplier/transit variability */
+  safetyLeadTimeDays?: number;
   minOrderQty: number;
+  maxOrderQty?: number;
   batchMultiple: number;
+  lotSizingPolicy?: LotSizingPolicy;
   unitCost: number;
   isManufactured: boolean;
+  /** Work center or supplier routing ID */
+  routingId?: string;
   children?: BomNode[];
+}
+
+export interface ShiftCapacityConfig {
+  shiftsPerDay: number;
+  hoursPerShift: number;
+  efficiencyFactor: number; // 0.0 - 1.0 (OEE factor)
+  workDaysPerWeek: number;
 }
 
 export interface DemandRequirement {
@@ -35,8 +56,10 @@ export interface MrpPlannedOrder {
   itemName: string;
   orderType: "PURCHASE_ORDER" | "WORK_ORDER" | "SUBCONTRACT_PO";
   suggestedQty: number;
+  netQtyNeeded: number;
   releaseDate: Date;
   requiredDate: Date;
+  leadTimeDaysUsed: number;
   estimatedCost: number;
   reason: string;
   parentDemandRef: string;
@@ -60,8 +83,29 @@ export interface MrpResult {
   totalEstimatedSpend: number;
 }
 
+/** Default Indian manufacturing shopfloor shift profile (2 shifts x 8h @ 85% OEE) */
+export const DEFAULT_SHIFT_CAPACITY: ShiftCapacityConfig = {
+  shiftsPerDay: 2,
+  hoursPerShift: 8,
+  efficiencyFactor: 0.85,
+  workDaysPerWeek: 6,
+};
+
 /**
- * Explode Multi-Level BOM and compute Gross Requirements recursively
+ * Calculates effective available capacity in minutes for a given number of days and machines.
+ */
+export function calculateShiftCapacityMinutes(
+  days: number,
+  machineCount: number,
+  config: ShiftCapacityConfig = DEFAULT_SHIFT_CAPACITY,
+): number {
+  const dailyEffectiveMinutes =
+    config.shiftsPerDay * config.hoursPerShift * 60 * config.efficiencyFactor;
+  return Math.round(days * machineCount * dailyEffectiveMinutes);
+}
+
+/**
+ * Explode Multi-Level BOM and compute Gross Requirements recursively with scrap yield factors.
  */
 export function explodeBom(
   node: BomNode,
@@ -72,7 +116,7 @@ export function explodeBom(
     { gross: number; scrap: number; node: BomNode }
   > = new Map(),
 ): Map<string, { gross: number; scrap: number; node: BomNode }> {
-  const scrapFactor = 1 + (node.scrapPercentage || 0) / 100;
+  const scrapFactor = 1 + Math.max(0, node.scrapPercentage || 0) / 100;
   const neededQty = parentRequiredQty * node.qtyPerParent * scrapFactor;
 
   if (resultMap.has(node.itemCode)) {
@@ -97,7 +141,30 @@ export function explodeBom(
 }
 
 /**
- * Execute Net Requirements Calculation (MRP Run)
+ * Applies enterprise lot-sizing rules (MOQ, Max Lot, Batch Multiple, Lot-For-Lot).
+ */
+export function calculateLotSize(netRequirement: number, node: BomNode): number {
+  if (netRequirement <= 0) return 0;
+
+  if (node.lotSizingPolicy === "LOT_FOR_LOT") {
+    return Math.ceil(netRequirement);
+  }
+
+  let orderQty = Math.max(node.minOrderQty || 0, netRequirement);
+
+  if (node.batchMultiple && node.batchMultiple > 1) {
+    orderQty = Math.ceil(orderQty / node.batchMultiple) * node.batchMultiple;
+  }
+
+  if (node.maxOrderQty && node.maxOrderQty > 0 && orderQty > node.maxOrderQty) {
+    orderQty = node.maxOrderQty;
+  }
+
+  return orderQty;
+}
+
+/**
+ * Execute Net Requirements Calculation (MRP Run) with lead time buffers and shift scheduling.
  */
 export function calculateMrp(
   demands: DemandRequirement[],
@@ -167,16 +234,18 @@ export function calculateMrp(
     });
 
     if (netRequirement > 0) {
-      // Lot sizing: apply minimum order quantity & batch multiples
-      let orderQty = Math.max(node.minOrderQty || 0, netRequirement);
-      if (node.batchMultiple && node.batchMultiple > 1) {
-        orderQty =
-          Math.ceil(orderQty / node.batchMultiple) * node.batchMultiple;
-      }
+      // Lot sizing calculation
+      const orderQty = calculateLotSize(netRequirement, node);
+
+      // Lead time with optional safety variability buffer
+      const effectiveLeadTime = Math.max(
+        1,
+        (node.leadTimeDays || 1) + (node.safetyLeadTimeDays || 0),
+      );
 
       // Backward scheduling: Release Date = Required Date - Lead Time
       const releaseDate = new Date(minDate);
-      releaseDate.setDate(releaseDate.getDate() - (node.leadTimeDays || 1));
+      releaseDate.setDate(releaseDate.getDate() - effectiveLeadTime);
 
       const estimatedCost = Math.round(orderQty * node.unitCost * 100) / 100;
       totalEstimatedSpend += estimatedCost;
@@ -190,24 +259,26 @@ export function calculateMrp(
         itemName: node.itemName,
         orderType,
         suggestedQty: orderQty,
+        netQtyNeeded: Math.round(netRequirement * 100) / 100,
         releaseDate,
         requiredDate: minDate,
+        leadTimeDaysUsed: effectiveLeadTime,
         estimatedCost,
         reason: `Net requirement of ${Math.round(netRequirement)} for demands: ${demandRefs.join(", ")}`,
         parentDemandRef: demandRefs[0] || "MRP-AUTO",
       });
 
-      // Check if stockout is critical
+      // Stockout urgency analysis
       const daysUntilRequired = Math.ceil(
         (minDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
       );
-      if (daysUntilRequired <= node.leadTimeDays) {
+      if (daysUntilRequired <= effectiveLeadTime) {
         criticalShortages.push({
           itemCode,
           shortageQty: netRequirement,
           daysUntilStockout: Math.max(0, daysUntilRequired),
           severity:
-            daysUntilRequired < node.leadTimeDays / 2 ? "HIGH" : "MEDIUM",
+            daysUntilRequired < effectiveLeadTime / 2 ? "HIGH" : "MEDIUM",
         });
       }
     }

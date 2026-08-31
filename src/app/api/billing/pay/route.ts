@@ -1,9 +1,11 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { getDerivedLicenseStatus } from "@/lib/licenseEngine";
 
 export async function POST() {
+    await logAudit({ actor: "system", action: "SUBSCRIPTION_PAYMENT_PROCESSED", entityType: "Subscription", details: "Subscription payment recorded" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, X, Clock, CheckCircle2, XCircle, Wallet } from "lucide-react";
 
@@ -29,7 +31,7 @@ export default function OvertimeClient() {
         setIsManager(m.user?.level === "MANAGER" || m.user?.isOwner === true);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "OvertimeClient");
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -13,6 +17,14 @@ export const maxDuration = 60;
 export const revalidate = 0;
 
 export default async function InventoryValuationReportPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/reports/inventory-valuation");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const materials = await (prisma as any).rawMaterial.findMany({
     orderBy: { name: "asc" },
   });

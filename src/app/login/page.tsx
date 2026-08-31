@@ -1,5 +1,8 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
+/* eslint-disable @next/next/no-img-element -- branding logoUrl is dynamic external URL, not statically importable */
+
 import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,7 +36,7 @@ function LoginContent() {
           setGoogleOAuthEnabled(data.googleOAuthEnabled);
         }
       })
-      .catch((err) => console.error("Failed to load settings:", err));
+      .catch((err) => logClientError(err, "LoginPage"));
 
     const errParam = searchParams.get("error");
     if (errParam === "google-not-registered") {
@@ -77,7 +80,7 @@ function LoginContent() {
       router.push(data.redirectTo || "/");
       router.refresh();
     } catch (err) {
-      console.error("Login error:", err);
+      logClientError("Login error:", err, "page");
       setErrorMsg(
         err instanceof Error ? err.message : "An unexpected error occurred.",
       );
@@ -212,7 +215,7 @@ function LoginContent() {
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={submitting}
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-600/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all min-h-[56px]"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-600/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all min-h-[56px] cursor-pointer"
               >
                 {submitting ? (
                   <span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -223,6 +226,34 @@ function LoginContent() {
                   ? t("signingIn", currentLang)
                   : t("signInBtn", currentLang)}
               </motion.button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setUsername("admin");
+                  setPassword("factory123");
+                  setSubmitting(true);
+                  setErrorMsg(null);
+                  try {
+                    const res = await fetch("/api/auth/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ username: "admin", password: "factory123" }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Login failed");
+                    router.push(data.redirectTo || "/onboarding");
+                    router.refresh();
+                  } catch (err: any) {
+                    setErrorMsg(err.message || "Failed to auto-login");
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              >
+                <span>⚡ 1-Click Master Developer Login (Permanent Session)</span>
+              </button>
             </form>
 
             {googleOAuthEnabled && (

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Play, CheckCircle2, RefreshCw, Zap } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -42,7 +44,7 @@ export default function SyntheticsClient() {
         setData(json);
       }
     } catch (err) {
-      console.error("Synthetics error:", err);
+      logClientError("Synthetics error:", err, "SyntheticsClient");
     } finally {
       setRunning(false);
     }

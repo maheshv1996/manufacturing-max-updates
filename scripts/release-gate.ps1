@@ -58,6 +58,10 @@ Write-Host "=== MANUFACTURING MAX RELEASE GATE (v$version) ===" -ForegroundColor
 
 Push-Location $root
 
+# 0. Verify module & model counts against MEMORY.md
+Step "0/6 Module counts verification"
+Run-Check "node scripts/verify-counts.mjs" { node (Join-Path $root "scripts/verify-counts.mjs") 2>&1 | Out-Host }
+
 # 1. Typecheck
 Step "1/6 Typecheck"
 Run-Check "npx tsc --noEmit" { npx tsc --noEmit 2>&1 | Out-Host }

@@ -5,7 +5,6 @@ export const WORKSPACE_PERMISSIONS = {
   commercial: { view: "commercial.view", edit: "commercial.edit" },
   people: { view: "people.view", edit: "people.edit" },
   system: { view: "system.view", edit: "system.edit" },
-  // Department-level keys (gateway + hubs)
   quality: { view: "quality.view", edit: "quality.edit" },
   metrology: { view: "metrology.view", edit: "metrology.edit" },
   engineering: { view: "engineering.view", edit: "engineering.edit" },
@@ -26,79 +25,109 @@ export const SPECIAL_PERMISSIONS = {
   AUDIT_VIEW: "audit.view",
 };
 
-// Manager approval keys — one per department (`<dept>.approve`). Approve and
-// override actions require BOTH level MANAGER and the matching dept.approve key.
-export const APPROVE_PERMISSIONS: Record<string, string> = {
-  ops: "ops.approve",
-  supply: "supply.approve",
-  commercial: "commercial.approve",
-  people: "people.approve",
-  system: "system.approve",
-  quality: "quality.approve",
-  metrology: "metrology.approve",
-  engineering: "engineering.approve",
-  finance: "finance.approve",
-  ehs: "ehs.approve",
-  maintenance: "maintenance.approve",
-  projects: "projects.approve",
-  exec: "exec.approve",
-};
-
+// Standardized dynamic department approval key generator
 export function departmentApproveKey(deptId: string): string {
-  return APPROVE_PERMISSIONS[deptId] || `${deptId}.approve`;
+  const sanitized = String(deptId || "").trim().toLowerCase();
+  return `${sanitized}.approve`;
 }
 
 export const ALL_PERMISSIONS = [
   ...Object.values(WORKSPACE_PERMISSIONS).flatMap((ws) => [ws.view, ws.edit]),
-  ...Object.values(APPROVE_PERMISSIONS),
+  ...Object.keys(WORKSPACE_PERMISSIONS).map(departmentApproveKey),
   ...Object.values(SPECIAL_PERMISSIONS),
 ];
 
 export type PermissionKey = string;
 
-// Helpers
-export function userPermissions(user: any): string[] {
-  if (!user) return [];
-  // The JWT token / user object will contain the permissions array
-  if (Array.isArray(user.permissions)) {
-    return user.permissions;
+// Helper to safely parse permissions array from various formats (Array, JSON, CSV)
+export function parsePermissions(raw: any): string[] {
+  if (Array.isArray(raw)) return raw.map(String).map((s) => s.trim()).filter(Boolean);
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.map(String).map((s) => s.trim()).filter(Boolean);
+      } catch {}
+    }
+    return trimmed.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
   }
   return [];
 }
 
+export function userPermissions(user: any): string[] {
+  if (!user) return [];
+  if (user.isOwner || user.level === "OWNER") {
+    return ["*", ...ALL_PERMISSIONS];
+  }
+  return parsePermissions(user.permissions);
+}
+
+/**
+ * Checks if a user has permission for a specific key.
+ * Enforces negative permissions ("!key"), wildcards ("*"), and role hierarchy.
+ */
 export function can(user: any, key: PermissionKey): boolean {
   if (!user) return false;
-  // Owner always can do anything, or if they have the specific permission.
-  // Wait, does Owner inherently have all permissions? The prompt says "Owner account cannot be deleted... isOwner sees everyone".
-  // Let's assume Owner explicitly has Administrator role which has ALL permissions, but we can also hardcode a bypass.
-  if (user.isOwner) return true;
-  return userPermissions(user).includes(key);
+
+  const perms = userPermissions(user);
+
+  // 1. Explicit negative / deny permission rule takes highest priority
+  if (perms.includes(`!${key}`) || perms.includes("!*")) {
+    return false;
+  }
+
+  // 2. Wildcard or Owner privilege
+  if (perms.includes("*") || user.isOwner || user.level === "OWNER") {
+    return true;
+  }
+
+  // 3. Domain wildcard support (e.g., "ops.*" grants "ops.view", "ops.edit", "ops.approve")
+  const domain = key.split(".")[0];
+  if (domain && perms.includes(`${domain}.*`)) {
+    return true;
+  }
+
+  // 4. Direct key match
+  if (perms.includes(key)) {
+    return true;
+  }
+
+  // 5. Role level inheritance: MANAGER gets view/edit on their assigned role/department
+  if (user.level === "MANAGER") {
+    if (key.endsWith(".view") || key.endsWith(".edit")) {
+      const userDept = (user.roleName || "").toLowerCase();
+      if (userDept && key.startsWith(userDept)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function canAny(user: any, keys: PermissionKey[]): boolean {
   if (!user) return false;
-  if (user.isOwner) return true;
-  const userPerms = userPermissions(user);
-  return keys.some((key) => userPerms.includes(key));
+  return keys.some((key) => can(user, key));
 }
 
 export function canAll(user: any, keys: PermissionKey[]): boolean {
   if (!user) return false;
-  if (user.isOwner) return true;
-  const userPerms = userPermissions(user);
-  return keys.every((key) => userPerms.includes(key));
+  return keys.every((key) => can(user, key));
 }
 
 export function getUserFromHeaders(headersList: Headers) {
+  const rawPerms = headersList.get("x-user-permissions") || "";
+  const isOwner = headersList.get("x-user-is-owner") === "true";
+  const level = headersList.get("x-user-level") || (isOwner ? "OWNER" : "WORKER");
+
   return {
     id: headersList.get("x-user-id") || "",
     name: headersList.get("x-user-name") || "",
     roleId: headersList.get("x-user-role-id") || "",
     roleName: headersList.get("x-user-role-name") || "",
-    isOwner: headersList.get("x-user-is-owner") === "true",
-    level: headersList.get("x-user-level") || "WORKER",
-    permissions: (headersList.get("x-user-permissions") || "")
-      .split(",")
-      .filter(Boolean),
+    isOwner,
+    level,
+    permissions: parsePermissions(rawPerms),
   };
 }

@@ -17,15 +17,24 @@ export async function loadSampleDataIfEmpty(): Promise<{
 
   const counts: Record<string, number> = {};
 
-  // 1. Plant (fixed id so schema defaults like Machine.plantId resolve).
-  const plant = await prisma.plant.create({
-    data: {
-      id: "cmsk25u7m000090odnjljb9rk",
+  // 1. Plant (dynamically provisioned with defaultPlantId setting).
+    const plant = await prisma.plant.create({
+      data: {
       name: "Manufacturing Complex 1",
       address: "100 Industrial Parkway, MIDC Industrial Area",
     },
   });
   counts.plant = 1;
+  await prisma.setting.upsert({
+    where: { key: "plantId" },
+    update: { value: plant.id },
+    create: { key: "plantId", value: plant.id },
+  });
+  await prisma.setting.upsert({
+    where: { key: "defaultPlantId" },
+    update: { value: plant.id },
+    create: { key: "defaultPlantId", value: plant.id },
+  });
 
   const line = await prisma.productionLine.create({
     data: { name: "Machining & Assembly Line A", plantId: plant.id },
@@ -47,6 +56,7 @@ export async function loadSampleDataIfEmpty(): Promise<{
       data: {
         ...m,
         lineId: line.id,
+        plantId: plant.id,
         status: "RUNNING",
         currentState: "RUNNING",
         iotEnabled: true,

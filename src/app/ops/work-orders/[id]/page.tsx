@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -86,6 +89,12 @@ export default async function WorkOrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const { id } = await params;
 
   const [wo, suppliers, downtimeReasons] = await Promise.all([

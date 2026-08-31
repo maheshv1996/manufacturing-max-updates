@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import {
   Mic,
@@ -68,7 +70,7 @@ export default function VoiceTerminalClient() {
         speakText(data.spokenResponse);
       }
     } catch (err) {
-      console.error("Voice error:", err);
+      logClientError("Voice error:", err, "VoiceTerminalClient");
     } finally {
       setProcessing(false);
       setIsListening(false);

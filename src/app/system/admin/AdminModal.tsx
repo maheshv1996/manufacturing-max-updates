@@ -41,7 +41,7 @@ export default function AdminModal({
       setFormData(initialData);
     } else {
       // Set defaults based on entity
-      let defaults: any = { isActive: true };
+      const defaults: any = { isActive: true };
       if (entity === "users") {
         defaults.role = "OPERATOR";
         defaults.level = "WORKER";

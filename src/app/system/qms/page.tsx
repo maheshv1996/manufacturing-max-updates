@@ -1,9 +1,21 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import QmsClient from "./QmsClient";
 import { ClipboardCheck } from "lucide-react";
 
 export const metadata = { title: "QMS Internal Audits" };
 
-export default function QmsPage() {
+export default async function QmsPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/qms");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">

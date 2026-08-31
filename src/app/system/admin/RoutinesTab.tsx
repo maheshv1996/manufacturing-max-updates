@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   ArrowUp,
@@ -68,7 +70,7 @@ export default function RoutinesTab() {
         setSteps(json.steps || []);
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "RoutinesTab");
     } finally {
       setLoading(false);
     }
@@ -104,7 +106,7 @@ export default function RoutinesTab() {
         }),
       });
     } catch (err) {
-      console.error("Failed to reorder steps:", err);
+      logClientError("Failed to reorder steps:", err, "RoutinesTab");
       fetchSteps(activeRole);
     }
   };
@@ -122,7 +124,7 @@ export default function RoutinesTab() {
         fetchSteps(activeRole);
       }
     } catch (err) {
-      console.error("Failed to delete step:", err);
+      logClientError("Failed to delete step:", err, "RoutinesTab");
     }
   };
 
@@ -172,7 +174,7 @@ export default function RoutinesTab() {
         alert("Failed to save routine step");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "RoutinesTab");
     } finally {
       setSaving(false);
     }

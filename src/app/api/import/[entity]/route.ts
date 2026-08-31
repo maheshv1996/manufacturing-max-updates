@@ -31,6 +31,17 @@ const STORE_FIELDS: Record<string, string[]> = {
     "sellingPricePerUnit",
     "isActive",
   ],
+  rawMaterials: [
+    "sku",
+    "name",
+    "unit",
+    "costPerUnit",
+    "safetyStock",
+    "currentStock",
+    "reorderPoint",
+    "reorderQuantity",
+    "isActive",
+  ],
   customers: [
     "name",
     "code",
@@ -64,6 +75,11 @@ const NUMERIC_FIELDS = new Set([
   "targetCycleTimeSeconds",
   "materialCostPerUnit",
   "sellingPricePerUnit",
+  "costPerUnit",
+  "safetyStock",
+  "currentStock",
+  "reorderPoint",
+  "reorderQuantity",
   "rating",
   "leadTimeDays",
   "qtyPerUnit",
@@ -153,7 +169,7 @@ async function validateRow(
 
   // Duplicate detection (in-file + against the database) on the natural key.
   let key = "";
-  if (entity.key === "products") key = cell(row, "sku").toLowerCase();
+  if (entity.key === "products" || entity.key === "rawMaterials") key = cell(row, "sku").toLowerCase();
   else if (entity.key === "customers" || entity.key === "suppliers")
     key = cell(row, "name").toLowerCase();
   else if (entity.key === "boms")
@@ -206,6 +222,15 @@ async function buildContext(entityKey: string, rows: Row[]) {
     const skus = rows.map((r) => cell(r, "sku")).filter(Boolean);
     if (skus.length) {
       const found = await prisma.product.findMany({
+        where: { sku: { in: skus } },
+        select: { sku: true },
+      });
+      for (const f of found) ctx.existingKeys.add(f.sku.toLowerCase());
+    }
+  } else if (entityKey === "rawMaterials") {
+    const skus = rows.map((r) => cell(r, "sku")).filter(Boolean);
+    if (skus.length) {
+      const found = await prisma.rawMaterial.findMany({
         where: { sku: { in: skus } },
         select: { sku: true },
       });
@@ -281,6 +306,13 @@ export async function GET(
       const existing: string[] = [];
       if (key === "products" || key === "boms") {
         const rows = await prisma.product.findMany({
+          select: { sku: true },
+          orderBy: { sku: "asc" },
+          take: 2000,
+        });
+        existing.push(...rows.map((r) => r.sku));
+      } else if (key === "rawMaterials") {
+        const rows = await prisma.rawMaterial.findMany({
           select: { sku: true },
           orderBy: { sku: "asc" },
           take: 2000,
@@ -367,6 +399,13 @@ export async function POST(
         if (key === "products") {
           const data = coerceStored("products", row) as any;
           await prisma.product.upsert({
+            where: { sku: data.sku as string },
+            update: data,
+            create: data,
+          });
+        } else if (key === "rawMaterials") {
+          const data = coerceStored("rawMaterials", row) as any;
+          await prisma.rawMaterial.upsert({
             where: { sku: data.sku as string },
             update: data,
             create: data,

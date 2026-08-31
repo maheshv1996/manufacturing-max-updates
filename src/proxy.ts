@@ -4,24 +4,21 @@ import { jwtVerify } from "jose";
 import { permissionForPath } from "@/lib/departments";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { getSecretKey } from "@/lib/auth";
 
 // Next 16 proxies always run on the Node.js runtime, so the proxy can query
 // the DB directly to re-check sessionEpoch — this is what makes session
 // rotation (role/permission change) real: revoked or re-roled users lose
 // access immediately, not at token expiry.
 
-const getSecretKey = () => {
-  const secret = process.env.SESSION_SECRET;
-  if (!secret) throw new Error("SESSION_SECRET env var is not set");
-  return new TextEncoder().encode(secret);
-};
-
 // Routes fully bypassed regardless of auth state
 const PUBLIC_PREFIXES = [
+  "/onboarding",
   "/login",
   "/landing",
   "/terminal",
   "/track",
+  "/api/setup",
   "/api/auth/login",
   "/api/auth/me",
   "/api/auth/logout",
@@ -59,7 +56,11 @@ const PUBLIC_PREFIXES = [
 const GATEWAY_PATH = "/";
 
 export async function proxy(request: NextRequest) {
-  const isAuthEnabled = process.env.AUTH_ENABLED === "true";
+  // Fail-closed in production: auth cannot be bypassed in production builds
+  const isAuthEnabled =
+    process.env.NODE_ENV === "production"
+      ? true
+      : process.env.AUTH_ENABLED !== "false";
 
   if (!isAuthEnabled) {
     return NextResponse.next();
@@ -74,7 +75,7 @@ export async function proxy(request: NextRequest) {
     PUBLIC_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
     ) ||
-    pathname.includes(".")
+    /\.(js|css|svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|eot|map|txt|webmanifest)$/i.test(pathname)
   ) {
     const sessionCookie = request.cookies.get("app_session")?.value;
     if (sessionCookie) {

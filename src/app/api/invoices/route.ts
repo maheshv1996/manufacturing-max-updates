@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateInvoiceNumber, calculateTax } from "@/lib/invoicingEngine";
@@ -47,6 +48,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "INVOICE_CREATED", entityType: "Invoice", details: "Invoice created" });
   try {
     const body = await req.json();
     const {

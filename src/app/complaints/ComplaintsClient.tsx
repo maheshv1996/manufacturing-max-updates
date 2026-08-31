@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import {
@@ -36,7 +38,7 @@ export default function ComplaintsClient({ canEdit }: ComplaintsClientProps) {
         setComplaints(Array.isArray(data) ? data : data.complaints || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ComplaintsClient");
     } finally {
       setLoading(false);
     }
@@ -257,6 +259,7 @@ function ComplaintDetailDrawer({
 
   useEffect(() => {
     fetchDetail();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complaintId]);
 
   const fetchDetail = async () => {
@@ -271,7 +274,7 @@ function ComplaintDetailDrawer({
         setDisposition(data.disposition || "");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ComplaintsClient");
     } finally {
       setLoading(false);
     }
@@ -296,7 +299,7 @@ function ComplaintDetailDrawer({
       });
       if (res.ok) onUpdated();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ComplaintsClient");
     } finally {
       setSubmitting(false);
     }
@@ -498,7 +501,7 @@ function NewComplaintModal({
       });
       if (res.ok) onCreated();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "ComplaintsClient");
     } finally {
       setLoading(false);
     }

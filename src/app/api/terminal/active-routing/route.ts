@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     }
 
     let effectiveRouting = [...wo.product.routingSteps];
-    let appliedRevisions: string[] = [];
+    const appliedRevisions: string[] = [];
     let effectivityPending = false;
 
     // R&D prototype projects skip strict ECO effectivity gating (rapid iteration mode)

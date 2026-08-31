@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- preview of uploaded branding logo (dynamic URL, unoptimized) */
+
 import { useState, useEffect } from "react";
 import { Loader2, Upload, Save } from "lucide-react";
 

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus, Pencil, Trash2, X } from "lucide-react";
 
@@ -44,7 +46,7 @@ export default function SupplierScorecardsClient() {
         setSuppliers(d.suppliers || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "SupplierScorecardsClient");
     } finally {
       setLoading(false);
     }
@@ -66,7 +68,7 @@ export default function SupplierScorecardsClient() {
       if (!res.ok) alert(d.error || "Action failed");
       else await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "SupplierScorecardsClient");
       alert("Action failed");
     } finally {
       setSaving(false);

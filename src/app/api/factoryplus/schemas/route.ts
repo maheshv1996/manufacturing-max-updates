@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "FACTORYPLUS_SCHEMA_SAVED", entityType: "FactoryPlusSchema", details: "Factory+ schema registered" });
   try {
     const body = await req.json();
     const { schemaUuid, payload } = body;

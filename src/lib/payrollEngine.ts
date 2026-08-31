@@ -35,6 +35,8 @@ export interface MonthlyPayrollSummary {
   };
 }
 
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 /**
  * Calculate monthly payroll metrics for all operators.
  */
@@ -44,59 +46,78 @@ export async function computeMonthlyPayroll(
   plantId: string = "ALL",
 ): Promise<MonthlyPayrollSummary> {
   const settings = await getSettings();
-  const threshold = settings.otDailyThresholdHours;
-  const multiplier = settings.otMultiplier;
-  const laborRate = settings.laborRatePerHour;
-  const statutoryLimit = settings.otStatutoryLimitHours;
+  const threshold = Math.max(0, Number(settings.otDailyThresholdHours) || 8);
+  const multiplier = Math.max(1, Number(settings.otMultiplier) || 2.0);
+  const laborRate = Math.max(0, Number(settings.laborRatePerHour) || 150);
+  const statutoryLimit = Math.max(0, Number(settings.otStatutoryLimitHours) || 50);
 
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   const operators = await prisma.user.findMany({
     where: {
-      role: { name: "Operator" },
+      OR: [
+        { role: { name: { equals: "Operator", mode: "insensitive" } } },
+        { level: "WORKER" },
+      ],
       ...(plantId !== "ALL" ? { homePlantId: plantId } : {}),
     },
     orderBy: { name: "asc" },
   });
 
+  const operatorIds = operators.map((o) => o.id);
+
   const logs = await prisma.attendanceLog.findMany({
     where: {
       clockIn: { gte: startDate, lte: endDate },
       clockOut: { not: null },
-      user: { role: { name: "Operator" } },
+      userId: { in: operatorIds },
     },
     include: { user: true },
   });
 
   const rows: PayrollRow[] = operators.map((op) => {
     const opLogs = logs.filter((l) => l.userId === op.id);
-    const presentDays = opLogs.length;
-    const lateDays = opLogs.filter((l) => l.status === "LATE").length;
+
+    // Count distinct calendar days present
+    const distinctDays = new Set(
+      opLogs
+        .map((l) => {
+          const d = l.clockIn instanceof Date ? l.clockIn : new Date(l.clockIn);
+          return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+        })
+        .filter(Boolean),
+    );
+    const presentDays = distinctDays.size;
+    const lateDays = opLogs.filter((l) => String(l.status).toUpperCase() === "LATE").length;
 
     let workedHours = 0;
     let otHours = 0;
     let regularHours = 0;
 
     for (const log of opLogs) {
-      const diffMs =
-        new Date(log.clockOut!).getTime() - new Date(log.clockIn).getTime();
-      const logWorked = Number(Math.max(0, diffMs / 3_600_000).toFixed(2));
-      const logOt = Number(Math.max(0, logWorked - threshold).toFixed(2));
-      const logReg = Number(Math.min(logWorked, threshold).toFixed(2));
+      if (!log.clockIn || !log.clockOut) continue;
+      const cin = new Date(log.clockIn).getTime();
+      const cout = new Date(log.clockOut).getTime();
+      if (isNaN(cin) || isNaN(cout)) continue;
+
+      const diffMs = Math.max(0, cout - cin);
+      const logWorked = round2(diffMs / 3_600_000);
+      const logOt = round2(Math.max(0, logWorked - threshold));
+      const logReg = round2(Math.min(logWorked, threshold));
 
       workedHours += logWorked;
       otHours += logOt;
       regularHours += logReg;
     }
 
-    workedHours = Number(workedHours.toFixed(2));
-    otHours = Number(otHours.toFixed(2));
-    regularHours = Number(regularHours.toFixed(2));
+    workedHours = round2(workedHours);
+    otHours = round2(otHours);
+    regularHours = round2(regularHours);
 
-    const regularPay = Number((regularHours * laborRate).toFixed(2));
-    const otPay = Number((otHours * laborRate * multiplier).toFixed(2));
-    const grossPay = Number((regularPay + otPay).toFixed(2));
+    const regularPay = round2(regularHours * laborRate);
+    const otPay = round2(otHours * laborRate * multiplier);
+    const grossPay = round2(regularPay + otPay);
     const aboveStatutoryLimit = otHours > statutoryLimit;
 
     return {
@@ -138,12 +159,12 @@ export async function computeMonthlyPayroll(
     },
   );
 
-  totals.workedHours = Number(totals.workedHours.toFixed(2));
-  totals.otHours = Number(totals.otHours.toFixed(2));
-  totals.regularHours = Number(totals.regularHours.toFixed(2));
-  totals.regularPay = Number(totals.regularPay.toFixed(2));
-  totals.otPay = Number(totals.otPay.toFixed(2));
-  totals.grossPay = Number(totals.grossPay.toFixed(2));
+  totals.workedHours = round2(totals.workedHours);
+  totals.otHours = round2(totals.otHours);
+  totals.regularHours = round2(totals.regularHours);
+  totals.regularPay = round2(totals.regularPay);
+  totals.otPay = round2(totals.otPay);
+  totals.grossPay = round2(totals.grossPay);
 
   return {
     year,

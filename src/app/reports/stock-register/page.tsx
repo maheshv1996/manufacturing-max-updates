@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import Link from "next/link";
 import { ArrowLeft, Boxes, Filter } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +16,14 @@ export default async function StockRegisterReportPage({
 }: {
   searchParams: Promise<{ materialId?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/reports/stock-register");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const { materialId } = await searchParams;
 
   const rawMaterials = await (prisma as any).rawMaterial.findMany({

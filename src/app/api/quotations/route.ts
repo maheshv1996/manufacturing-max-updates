@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
@@ -33,6 +34,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "QUOTATION_CREATED", entityType: "Quotation", details: "Quotation created" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

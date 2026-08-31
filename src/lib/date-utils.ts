@@ -1,5 +1,28 @@
+import {
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  startOfQuarter,
+  startOfYear,
+  subDays,
+  subMonths,
+  subQuarters,
+  subYears,
+  isValid,
+} from "date-fns";
+
 export type DateRangePreset =
-  "today" | "7d" | "30d" | "90d" | "180d" | "365d" | "custom";
+  | "today"
+  | "yesterday"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "180d"
+  | "365d"
+  | "mtd"
+  | "qtd"
+  | "ytd"
+  | "custom";
 
 export interface DateRange {
   from: Date;
@@ -12,76 +35,168 @@ export interface ParsedDateRange {
   preset: DateRangePreset;
 }
 
-export function parseDateRange(searchParams: {
+export interface DateRangeOptions {
   range?: string;
-  from?: string;
-  to?: string;
-}): ParsedDateRange {
-  const now = new Date();
+  from?: string | Date;
+  to?: string | Date;
+  /** Optional custom reference point (defaults to new Date()) */
+  referenceDate?: Date;
+}
 
-  let current: DateRange;
-  let previous: DateRange;
-  let preset: DateRangePreset = "30d";
+/**
+ * Universal Date Range Parser for Factory Analytics & Dashboards.
+ * Robust against timezone anomalies, invalid search param strings, intraday timestamps,
+ * and inverted custom date ranges.
+ */
+export function parseDateRange(searchParams: DateRangeOptions): ParsedDateRange {
+  const now = searchParams.referenceDate && isValid(searchParams.referenceDate)
+    ? new Date(searchParams.referenceDate)
+    : new Date();
 
-  if (searchParams.range) {
-    preset = searchParams.range as DateRangePreset;
-    let days = 30;
+  // 1. Custom Date Range Handling
+  if (searchParams.from || searchParams.to) {
+    const rawFrom = searchParams.from ? new Date(searchParams.from) : undefined;
+    const rawTo = searchParams.to ? new Date(searchParams.to) : undefined;
 
-    switch (preset) {
-      case "today":
-        days = 1;
-        break;
-      case "7d":
-        days = 7;
-        break;
-      case "30d":
-        days = 30;
-        break;
-      case "90d":
-        days = 90;
-        break;
-      case "180d":
-        days = 180;
-        break;
-      case "365d":
-        days = 365;
-        break;
-      default:
-        days = 30;
-        preset = "30d";
-        break; // Fallback
+    const validFrom = rawFrom && isValid(rawFrom) ? rawFrom : undefined;
+    const validTo = rawTo && isValid(rawTo) ? rawTo : undefined;
+
+    if (validFrom || validTo) {
+      let from = validFrom || startOfDay(validTo || now);
+      let to = validTo || endOfDay(validFrom || now);
+
+      // Universal inverted date protection
+      if (from.getTime() > to.getTime()) {
+        const temp = from;
+        from = to;
+        to = temp;
+      }
+
+      // Check if both dates are date-only (00:00:00 to 00:00:00)
+      const isDateOnlyFrom = from.getHours() === 0 && from.getMinutes() === 0 && from.getSeconds() === 0 && from.getMilliseconds() === 0;
+      const isDateOnlyTo = to.getHours() === 0 && to.getMinutes() === 0 && to.getSeconds() === 0 && to.getMilliseconds() === 0;
+
+      if (isDateOnlyFrom) {
+        from = startOfDay(from);
+      }
+      if (isDateOnlyTo || to.getTime() === from.getTime()) {
+        to = endOfDay(to);
+      }
+
+      const diffMs = to.getTime() - from.getTime();
+      const durationMs = Math.max(1000 * 60, diffMs > 0 ? diffMs : 1000 * 60 * 60 * 24);
+
+      const previous: DateRange = {
+        from: new Date(from.getTime() - durationMs),
+        to: new Date(from.getTime()),
+      };
+
+      return {
+        current: { from, to },
+        previous,
+        preset: "custom",
+      };
     }
-
-    const from = new Date(now);
-    from.setDate(from.getDate() - days);
-    current = { from, to: now };
-
-    const previousFrom = new Date(from);
-    previousFrom.setDate(previousFrom.getDate() - days);
-    previous = { from: previousFrom, to: from };
-  } else if (searchParams.from && searchParams.to) {
-    preset = "custom";
-    current = {
-      from: new Date(searchParams.from),
-      to: new Date(searchParams.to),
-    };
-
-    // Calculate duration to define previous period
-    const durationMs = current.to.getTime() - current.from.getTime();
-    previous = {
-      from: new Date(current.from.getTime() - durationMs),
-      to: current.from,
-    };
-  } else {
-    // Default to 30 days
-    const from = new Date(now);
-    from.setDate(from.getDate() - 30);
-    current = { from, to: now };
-
-    const previousFrom = new Date(from);
-    previousFrom.setDate(previousFrom.getDate() - 30);
-    previous = { from: previousFrom, to: from };
   }
 
-  return { current, previous, preset };
+  // 2. Preset Range Handling
+  const presetKey = String(searchParams.range || "30d").toLowerCase() as DateRangePreset;
+
+  switch (presetKey) {
+    case "today": {
+      const from = startOfDay(now);
+      const to = now;
+      const yesterdayFrom = startOfDay(subDays(now, 1));
+      const yesterdayTo = endOfDay(subDays(now, 1));
+      return {
+        current: { from, to },
+        previous: { from: yesterdayFrom, to: yesterdayTo },
+        preset: "today",
+      };
+    }
+
+    case "yesterday": {
+      const from = startOfDay(subDays(now, 1));
+      const to = endOfDay(subDays(now, 1));
+      const prevFrom = startOfDay(subDays(now, 2));
+      const prevTo = endOfDay(subDays(now, 2));
+      return {
+        current: { from, to },
+        previous: { from: prevFrom, to: prevTo },
+        preset: "yesterday",
+      };
+    }
+
+    case "mtd": {
+      const from = startOfMonth(now);
+      const to = now;
+      const prevFrom = startOfMonth(subMonths(now, 1));
+      const prevTo = endOfDay(subDays(from, 1));
+      return {
+        current: { from, to },
+        previous: { from: prevFrom, to: prevTo },
+        preset: "mtd",
+      };
+    }
+
+    case "qtd": {
+      const from = startOfQuarter(now);
+      const to = now;
+      const prevFrom = startOfQuarter(subQuarters(now, 1));
+      const prevTo = endOfDay(subDays(from, 1));
+      return {
+        current: { from, to },
+        previous: { from: prevFrom, to: prevTo },
+        preset: "qtd",
+      };
+    }
+
+    case "ytd": {
+      const from = startOfYear(now);
+      const to = now;
+      const prevFrom = startOfYear(subYears(now, 1));
+      const prevTo = endOfDay(subDays(from, 1));
+      return {
+        current: { from, to },
+        previous: { from: prevFrom, to: prevTo },
+        preset: "ytd",
+      };
+    }
+
+    case "7d":
+    case "30d":
+    case "90d":
+    case "180d":
+    case "365d":
+    default: {
+      const dayMap: Record<string, number> = {
+        "7d": 7,
+        "30d": 30,
+        "90d": 90,
+        "180d": 180,
+        "365d": 365,
+      };
+      const days = dayMap[presetKey] || 30;
+      const activePreset: DateRangePreset = dayMap[presetKey] ? (presetKey as DateRangePreset) : "30d";
+
+      const from = startOfDay(subDays(now, days));
+      const to = now;
+      const prevFrom = startOfDay(subDays(from, days));
+      const prevTo = from;
+
+      return {
+        current: { from, to },
+        previous: { from: prevFrom, to: prevTo },
+        preset: activePreset,
+      };
+    }
+  }
+}
+
+/**
+ * Checks if a given timestamp falls within a DateRange.
+ */
+export function isWithinDateRange(date: Date | string | number, range: DateRange): boolean {
+  const t = new Date(date).getTime();
+  return !isNaN(t) && t >= range.from.getTime() && t <= range.to.getTime();
 }

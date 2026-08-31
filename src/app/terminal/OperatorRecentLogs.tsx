@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState } from "react";
 import { Clock, Edit2, Package, StopCircle, X } from "lucide-react";
 import { offlineFetchWrapper } from "@/lib/offlineSync";
@@ -45,7 +47,7 @@ export default function OperatorRecentLogs({
       const data = await res.json();
       setLogs(data.logs || []);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "OperatorRecentLogs");
     } finally {
       setLoading(false);
     }
@@ -55,6 +57,7 @@ export default function OperatorRecentLogs({
     fetchLogs();
     const interval = setInterval(fetchLogs, 15000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operatorId]);
 
   const canEdit = (log: RecentLog) => {
@@ -106,7 +109,7 @@ export default function OperatorRecentLogs({
         alert(err.error || "Failed to update log");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "OperatorRecentLogs");
       alert("Error updating log");
     }
   };

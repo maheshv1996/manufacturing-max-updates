@@ -39,14 +39,18 @@ export const kpiMeta = (t: string) =>
   };
 
 function monthRange(period: string): { start: Date; end: Date } {
-  const [y, m] = period.split("-").map(Number);
+  const parts = (period || "").split("-").map(Number);
+  const now = new Date();
+  const y = parts[0] && Number.isFinite(parts[0]) ? parts[0] : now.getFullYear();
+  const m = parts[1] && Number.isFinite(parts[1]) ? parts[1] : now.getMonth() + 1;
   const start = new Date(Date.UTC(y, m - 1, 1));
   const end = new Date(Date.UTC(y, m, 1));
   return { start, end };
 }
 
 export function currentPeriod(now: Date = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const safeNow = now instanceof Date && !isNaN(now.getTime()) ? now : new Date();
+  return `${safeNow.getFullYear()}-${String(safeNow.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export type ObjectiveActual = {
@@ -87,6 +91,7 @@ export async function computeActual(
         dispatched.forEach((d) => {
           total++;
           if (
+            d.workOrder &&
             d.workOrder.promisedDispatchDate &&
             d.dispatchedAt <= d.workOrder.promisedDispatchDate
           )
@@ -142,9 +147,11 @@ export async function computeActual(
           return { value: null, detail: "No breakdown events in period" };
         let operatingMs = 0;
         prodLogs.forEach((l) => {
-          const s = l.startTime.getTime();
-          const e = (l.endTime as Date).getTime();
-          if (e > s) operatingMs += e - s;
+          if (l.startTime && l.endTime) {
+            const s = l.startTime.getTime();
+            const e = (l.endTime as Date).getTime();
+            if (e > s) operatingMs += e - s;
+          }
         });
         const operatingHours = operatingMs / 3_600_000;
         if (operatingHours <= 0)

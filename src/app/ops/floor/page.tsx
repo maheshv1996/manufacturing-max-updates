@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import PageHeader from "@/app/components/shared/PageHeader";
 import WarRoomClient from "./WarRoomClient";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +9,12 @@ export const maxDuration = 60; // Performance optimization step 8
 export const dynamic = "force-dynamic";
 
 export default async function FloorHub() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   // Fetch machines with current assignments
   const machines = await prisma.machine.findMany({
     include: {

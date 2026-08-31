@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const lower = transcript.toLowerCase();
     let spokenResponse = "";
     let actionExecuted = "";
-    let status = "SUCCESS";
+    const status = "SUCCESS";
 
     if (
       lower.includes("clock") ||

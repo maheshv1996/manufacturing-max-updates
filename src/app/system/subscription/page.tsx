@@ -1,3 +1,5 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySessionToken } from "@/lib/auth";
 import { cookies } from "next/headers";
@@ -8,6 +10,12 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function BillingPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "system.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const cookieStore = await cookies();
   const tokenStr = cookieStore.get("app_session")?.value;
   if (!tokenStr) redirect("/login");

@@ -12,7 +12,7 @@ export async function requireManagerLevel(user: {
   isOwner?: boolean;
   level?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  if (user.isOwner) return { ok: true };
+  if (user.isOwner || user.level === "OWNER") return { ok: true };
   if (!user.id) return { ok: false, error: "Unauthorized" };
 
   let level = user.level;
@@ -20,10 +20,11 @@ export async function requireManagerLevel(user: {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { level: true, isActive: true },
+      select: { level: true, isActive: true, isOwner: true },
     });
     if (!dbUser || !dbUser.isActive)
       return { ok: false, error: "Unauthorized" };
+    if (dbUser.isOwner) return { ok: true };
     level = dbUser.level;
   } catch {
     // DB hiccup — fall back to the JWT claim so an infra blip never hard-blocks.
@@ -40,7 +41,13 @@ export async function requireManagerLevel(user: {
 }
 
 export function extractReason(body: any): string {
-  const reason = body?.reason ?? body?.note ?? body?.notes;
+  const reason =
+    body?.reason ??
+    body?.note ??
+    body?.notes ??
+    body?.justification ??
+    body?.comments ??
+    body?.comment;
   return typeof reason === "string" ? reason.trim() : "";
 }
 

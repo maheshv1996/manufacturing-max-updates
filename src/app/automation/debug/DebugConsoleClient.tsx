@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Terminal,
@@ -55,7 +57,7 @@ export default function DebugConsoleClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load debug events:", err);
+      logClientError("Failed to load debug events:", err, "DebugConsoleClient");
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState, useCallback, use } from "react";
 import {
   ArrowLeft,
@@ -44,7 +46,7 @@ export default function CampaignDetail({
       const data = await res.json();
       setCampaign(data.campaign);
     } catch (err) {
-      console.error(err);
+      logClientError(err, "page");
     } finally {
       setLoading(false);
     }

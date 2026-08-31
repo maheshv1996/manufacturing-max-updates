@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintWrapper from "@/app/components/print/PrintWrapper";
 
@@ -9,6 +12,12 @@ export default async function MachineHistoryReportPage({
 }: {
   searchParams: Promise<{ machineId?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const resolvedParams = await searchParams;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

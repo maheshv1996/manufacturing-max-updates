@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import PrintWrapper from "@/app/components/print/PrintWrapper";
 import {
@@ -37,7 +39,7 @@ export default function PayrollReportClient({
         setSummary(data);
       }
     } catch (err) {
-      console.error("Failed to fetch payroll summary:", err);
+      logClientError("Failed to fetch payroll summary:", err, "PayrollReportClient");
     } finally {
       setLoading(false);
     }

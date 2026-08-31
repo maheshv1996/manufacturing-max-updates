@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import Link from "next/link";
 import { ArrowLeft, ShoppingBag, Filter } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +16,14 @@ export default async function PORegisterReportPage({
 }: {
   searchParams: Promise<{ supplierId?: string; status?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/reports/po-register");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const { supplierId, status } = await searchParams;
 
   const suppliers = await (prisma as any).supplier.findMany({

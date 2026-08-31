@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- dynamic branding logoUrl (external/upload) must use <img> */
+
 import { can } from "@/lib/permissions";
 import { DEPARTMENTS } from "@/lib/departments";
 import { cn } from "@/lib/designTokens";
@@ -51,7 +53,8 @@ export default function Sidebar({
     pathname === "/login" ||
     pathname === "/terminal" ||
     pathname === "/landing" ||
-    pathname === "/"
+    pathname === "/" ||
+    pathname?.startsWith("/track/")
   ) {
     return null;
   }

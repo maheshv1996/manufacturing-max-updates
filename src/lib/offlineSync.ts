@@ -235,7 +235,7 @@ export async function updateQueueItem(item: QueueItem): Promise<void> {
 // sets this flag so the queue never burns retries against a dead server
 // and drains immediately when it comes back.
 let serverOnline = true;
-let serverListeners = new Set<(online: boolean) => void>();
+const serverListeners = new Set<(online: boolean) => void>();
 
 export function setServerOnline(online: boolean) {
   const changed = serverOnline !== online;

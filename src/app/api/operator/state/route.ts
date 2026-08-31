@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { startOfWeek, format } from "date-fns";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,20 +18,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const machine = await prisma.machine.findUnique({
-      where: { id: machineId },
-      include: {
-        line: { include: { plant: true } },
-      },
-    });
+    const now = new Date();
+    const ws = startOfWeek(now, { weekStartsOn: 1 });
 
-    if (!machine) {
-      return NextResponse.json({ error: "Machine not found" }, { status: 404 });
-    }
-
-    // All downstream queries are independent of each other — fire them in
-    // parallel instead of a 12-query serial waterfall.
+    // Single parallel batch with strict select projection narrowing
     const [
+      machine,
+      latestTelemetry,
       openDowntime,
       inProgressWos,
       plannedWorkOrders,
@@ -41,38 +35,96 @@ export async function GET(request: Request) {
       overrides,
       todayAttendanceLog,
       certification,
-      myRoster,
-      stationInProgress,
+      roster,
     ] = await Promise.all([
+      prisma.machine.findUnique({
+        where: { id: machineId },
+        include: {
+          line: { include: { plant: true } },
+        },
+      }),
+      prisma.telemetryLog.findFirst({
+        where: { machineId },
+        orderBy: { at: "desc" },
+        select: { id: true, state: true, cycleCount: true, at: true },
+      }),
       prisma.downtimeLog.findFirst({
         where: { machineId, endTime: null },
-        include: { reason: true },
+        select: {
+          id: true,
+          machineId: true,
+          startTime: true,
+          endTime: true,
+          reasonId: true,
+          notes: true,
+          status: true,
+          reason: { select: { id: true, code: true, description: true, category: true } },
+        },
         orderBy: { startTime: "desc" },
       }),
       prisma.workOrder.findMany({
         where: { status: "IN_PROGRESS" },
-        include: {
-          project: true,
+        select: {
+          id: true,
+          woNumber: true,
+          currentSeq: true,
+          plannedQuantity: true,
+          status: true,
+          trackingMode: true,
           product: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
               routingSteps: {
-                include: { machine: true, operation: true },
+                select: {
+                  id: true,
+                  seq: true,
+                  stationName: true,
+                  machineId: true,
+                  operation: { select: { id: true, name: true, code: true } },
+                  machine: { select: { id: true, name: true, code: true } },
+                },
                 orderBy: { seq: "asc" },
               },
-              fixtures: true,
+              fixtures: { select: { id: true, code: true, name: true, location: true } },
             },
           },
           productionLogs: { select: { goodQuantity: true } },
+          movementLogs: {
+            select: { quantity: true, at: true },
+            orderBy: { at: "desc" },
+            take: 1,
+          },
         },
         orderBy: { updatedAt: "desc" },
       }),
       prisma.workOrder.findMany({
         where: { status: "PLANNED" },
-        include: {
+        take: 25,
+        select: {
+          id: true,
+          woNumber: true,
+          currentSeq: true,
+          plannedQuantity: true,
+          status: true,
+          trackingMode: true,
+          plannedStartDate: true,
+          plannedEndDate: true,
           product: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
               routingSteps: {
-                include: { machine: true, operation: true },
+                select: {
+                  id: true,
+                  seq: true,
+                  stationName: true,
+                  machineId: true,
+                  operation: { select: { id: true, name: true, code: true } },
+                  machine: { select: { id: true, name: true, code: true } },
+                },
                 orderBy: { seq: "asc" },
               },
             },
@@ -80,19 +132,31 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.shift.findMany(),
+      prisma.shift.findMany({
+        select: { id: true, name: true, startTime: true, endTime: true },
+      }),
       prisma.assignment.findMany({
         where: { machineId, status: "ACTIVE" },
-        include: { operator: true, shift: true },
+        select: {
+          id: true,
+          machineId: true,
+          status: true,
+          shiftId: true,
+          operator: { select: { id: true, name: true, employeeNumber: true, username: true } },
+          shift: { select: { id: true, name: true, startTime: true, endTime: true } },
+        },
       }),
-      prisma.maintenanceTool.findMany({ where: { machineId } }),
+      prisma.maintenanceTool.findMany({
+        where: { machineId },
+        select: { id: true, code: true, name: true, machineId: true, lifeStatus: true, ratedLifeUnits: true, usedUnits: true },
+      }),
       operatorId
         ? prisma.certification.findMany({
             where: {
               userId: operatorId,
               isActive: true,
-              validFrom: { lte: new Date() },
-              OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+              validFrom: { lte: now },
+              OR: [{ validUntil: null }, { validUntil: { gte: now } }],
             },
             select: { machineId: true },
           })
@@ -106,83 +170,54 @@ export async function GET(request: Request) {
       operatorId
         ? prisma.attendanceLog.findFirst({
             where: { userId: operatorId, clockOut: null },
+            select: { id: true, userId: true, clockIn: true, status: true, shiftId: true },
             orderBy: { clockIn: "desc" },
           })
         : Promise.resolve(null),
       operatorId
         ? prisma.certification.findUnique({
             where: { userId_machineId: { userId: operatorId, machineId } },
+            select: { id: true, userId: true, machineId: true, isActive: true, validUntil: true },
           })
         : Promise.resolve(null),
       operatorId
-        ? (async () => {
-            const { startOfWeek, format } = await import("date-fns");
-            const ws = startOfWeek(new Date(), { weekStartsOn: 1 });
-            const roster = await prisma.shiftRoster.findUnique({
-              where: { weekStart: ws },
-              include: {
-                entries: {
-                  include: {
-                    shift: {
-                      select: {
-                        id: true,
-                        name: true,
-                        startTime: true,
-                        endTime: true,
-                      },
+        ? prisma.shiftRoster.findUnique({
+            where: { weekStart: ws },
+            include: {
+              entries: {
+                include: {
+                  shift: {
+                    select: {
+                      id: true,
+                      name: true,
+                      startTime: true,
+                      endTime: true,
                     },
                   },
                 },
               },
-            });
-            return (roster?.entries || [])
-              .filter((e) => e.userId === operatorId)
-              .map((e) => ({
-                date: new Date(e.date).toISOString(),
-                day: format(new Date(e.date), "EEE dd MMM"),
-                shift: e.shift,
-              }))
-              .sort((a, b) => a.date.localeCompare(b.date));
-          })()
-        : Promise.resolve([]),
-      machine.stationName
-        ? prisma.workOrder.findMany({
-            where: { status: "IN_PROGRESS" },
-            include: {
-              product: {
-                include: {
-                  routingSteps: {
-                    include: { operation: true },
-                    orderBy: { seq: "asc" },
-                  },
-                },
-              },
-              movementLogs: { orderBy: { at: "desc" }, take: 1 },
             },
           })
-        : Promise.resolve([]),
+        : Promise.resolve(null),
     ]);
 
-    // Active WO for THIS machine: an IN_PROGRESS WO whose CURRENT routing step
-    // is routed here. Routing defines position — the seed's 365 days of
-    // production logs all link to one WO across every machine, so any
-    // log-based matching made every terminal show the same job (and the P8
-    // My Queue panel was unreachable). A machine with no WO routed to it has
-    // no active job, and its planned-WO queue is what the operator sees.
+    if (!machine) {
+      return NextResponse.json({ error: "Machine not found" }, { status: 404 });
+    }
+
+    // Active WO for THIS machine: an IN_PROGRESS WO whose CURRENT routing step is routed here
     const activeWorkOrder =
-      inProgressWos.find((wo) => {
+      inProgressWos.find((wo: any) => {
         const step = wo.product.routingSteps.find(
-          (s) => s.seq === (wo.currentSeq || 1),
+          (s: any) => s.seq === (wo.currentSeq || 1),
         );
         return step?.machineId === machineId;
       }) || null;
 
-    // P8 — Planned Work Orders available to start. Each carries its current
-    // routing step machine so the terminal can build a skill-based My Queue
-    // (only WOs whose op machine matches the operator's valid certifications).
-    const plannedWithSkill = plannedWorkOrders.map((wo) => {
+    // Planned Work Orders available to start
+    const plannedWithSkill = plannedWorkOrders.map((wo: any) => {
       const currentStep = wo.product.routingSteps.find(
-        (s) => s.seq === (wo.currentSeq || 1),
+        (s: any) => s.seq === (wo.currentSeq || 1),
       );
       return {
         ...wo,
@@ -193,33 +228,43 @@ export async function GET(request: Request) {
       };
     });
 
-    const skillMachineIds = certs.map((c) => c.machineId);
-    const overrideWorkOrderIds = overrides.map((o) => o.workOrderId);
+    const skillMachineIds = certs.map((c: any) => c.machineId);
+    const overrideWorkOrderIds = overrides.map((o: any) => o.workOrderId);
 
     // Current shift matching
-    const nowStr = new Date().toTimeString().slice(0, 5); // "HH:MM"
+    const nowStr = now.toTimeString().slice(0, 5); // "HH:MM"
     const currentShift =
       shifts.find((s) => nowStr >= s.startTime && nowStr <= s.endTime) ||
       shifts[0] ||
       null;
 
+    // Process Roster
+    const myRoster = (roster?.entries || [])
+      .filter((e) => e.userId === operatorId)
+      .map((e) => ({
+        date: new Date(e.date).toISOString(),
+        day: format(new Date(e.date), "EEE dd MMM"),
+        shift: e.shift,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
     // Incoming queue: WOs whose next routing step's stationName matches this machine's stationName
     const incomingQueue = machine.stationName
-      ? stationInProgress
-          .filter((wo) => {
+      ? inProgressWos
+          .filter((wo: any) => {
             const nextStep = wo.product.routingSteps.find(
-              (s) => s.seq === wo.currentSeq + 1,
+              (s: any) => s.seq === wo.currentSeq + 1,
             );
             return nextStep?.stationName === machine.stationName;
           })
-          .map((wo) => {
+          .map((wo: any) => {
             const currentStep = wo.product.routingSteps.find(
-              (s) => s.seq === wo.currentSeq,
+              (s: any) => s.seq === wo.currentSeq,
             );
             const nextStep = wo.product.routingSteps.find(
-              (s) => s.seq === wo.currentSeq + 1,
+              (s: any) => s.seq === wo.currentSeq + 1,
             );
-            const lastMovement = wo.movementLogs[0];
+            const lastMovement = wo.movementLogs?.[0];
             return {
               id: wo.id,
               woNumber: wo.woNumber,
@@ -233,6 +278,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       machine,
+      latestTelemetry,
       openDowntime,
       activeWorkOrder,
       plannedWorkOrders: plannedWithSkill,

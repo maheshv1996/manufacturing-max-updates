@@ -1,5 +1,6 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Calendar,
@@ -41,7 +42,7 @@ export default function AttendanceClient() {
         fetchAttendanceData(selectedOperatorId, selectedMonth);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "AttendanceClient");
     } finally {
       setApproving(null);
     }
@@ -51,7 +52,7 @@ export default function AttendanceClient() {
     fetch("/api/overrides?entityType=OPERATOR_EFFICIENCY")
       .then((r) => r.json())
       .then((d) => setOverrides(d.overrides || []))
-      .catch(console.error);
+      .catch((err) => logClientError(err, "AttendanceClient"));
   };
 
   const fetchAttendanceData = async (opId: string, monthStr: string) => {
@@ -68,7 +69,7 @@ export default function AttendanceClient() {
         }
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "AttendanceClient");
     } finally {
       setLoading(false);
     }
@@ -90,7 +91,7 @@ export default function AttendanceClient() {
           setOtData(json);
         }
       } catch (err) {
-        console.error("OT fetch error:", err);
+        logClientError("OT fetch error:", err, "AttendanceClient");
       } finally {
         setOtLoading(false);
       }

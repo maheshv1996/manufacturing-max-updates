@@ -13,12 +13,16 @@ export interface ScheduleRow {
 
 /** "YYYY-MM" of a date (local). */
 export function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const safeDate = d instanceof Date && !isNaN(d.getTime()) ? d : new Date();
+  return `${safeDate.getFullYear()}-${String(safeDate.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function monthsBetween(a: string, b: string): number {
-  const [ay, am] = a.split("-").map(Number);
-  const [by, bm] = b.split("-").map(Number);
+  const [ay, am] = String(a || "").split("-").map(Number);
+  const [by, bm] = String(b || "").split("-").map(Number);
+  if (!Number.isFinite(ay) || !Number.isFinite(am) || !Number.isFinite(by) || !Number.isFinite(bm)) {
+    return 0;
+  }
   return (by - ay) * 12 + (bm - am);
 }
 
@@ -29,7 +33,8 @@ function wdvMonthlyRate(
 ): number {
   if (usefulLifeMonths <= 0 || cost <= 0) return 0;
   const lifeYears = usefulLifeMonths / 12;
-  const annualRate = 1 - Math.pow(Math.max(0, salvage) / cost, 1 / lifeYears);
+  const safeSalvage = Math.min(cost, Math.max(0, salvage));
+  const annualRate = 1 - Math.pow(safeSalvage / cost, 1 / lifeYears);
   return Math.max(0, annualRate) / 12;
 }
 
@@ -80,11 +85,17 @@ export function generateSchedule(
   upToPeriod: string,
 ): ScheduleRow[] {
   const startMonth = monthKey(asset.purchaseDate);
-  if (monthsBetween(startMonth, upToPeriod) < 0) return [];
+  const totalMonths = monthsBetween(startMonth, upToPeriod);
+  if (totalMonths < 0) return [];
+
   let acc = 0;
   const rows: ScheduleRow[] = [];
   let cursor = startMonth;
-  for (;;) {
+  let iterations = 0;
+  const maxIterations = Math.min(600, totalMonths + 1); // Safety limit of 50 years
+
+  while (iterations < maxIterations) {
+    iterations++;
     const amount = monthDepreciation(asset, cursor, acc);
     acc += amount;
     rows.push({
@@ -102,8 +113,11 @@ export function generateSchedule(
 
 /** Label for display, e.g. "2026-08" → "Aug 2026". */
 export function periodLabel(period: string): string {
-  const [y, m] = period.split("-").map(Number);
-  return new Date(Date.UTC(y, (m || 1) - 1, 1)).toLocaleDateString("en-IN", {
+  const [y, m] = String(period || "").split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return period || "—";
+  }
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-IN", {
     month: "short",
     year: "numeric",
     timeZone: "UTC",

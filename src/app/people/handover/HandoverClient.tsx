@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Save,
@@ -88,17 +90,19 @@ export default function HandoverClient({
         setTargetMissed(Boolean(data.targetMissed));
       }
     } catch (e) {
-      console.error("Failed to fetch plan vs actual metrics:", e);
+      logClientError("Failed to fetch plan vs actual metrics:", e, "HandoverClient");
     }
   };
 
   useEffect(() => {
     fetchPlanVsActual();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, machineId]);
 
   // Fetch History
   useEffect(() => {
     fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterShift, filterMachine]);
 
   const fetchHistory = async () => {
@@ -114,7 +118,7 @@ export default function HandoverClient({
         setHandovers(data);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "HandoverClient");
     } finally {
       setIsLoadingHistory(false);
     }
@@ -138,7 +142,7 @@ export default function HandoverClient({
         setTargetMissed(Boolean(data.targetMissed));
       }
     } catch (e) {
-      console.error("Autofill failed", e);
+      logClientError("Autofill failed", e, "HandoverClient");
     } finally {
       setIsAutofilling(false);
     }
@@ -187,7 +191,7 @@ export default function HandoverClient({
         alert(err.error || "Failed to save handover.");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "HandoverClient");
       alert("Failed to save handover.");
     } finally {
       setIsSubmitting(false);
@@ -214,7 +218,7 @@ export default function HandoverClient({
         window.alert(d.error || "Ack failed");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "HandoverClient");
     } finally {
       setAckId(null);
     }

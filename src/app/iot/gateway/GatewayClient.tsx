@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Server,
@@ -55,7 +57,7 @@ export default function GatewayClient() {
         setMachines(data.machines || []);
       }
     } catch (err) {
-      console.error("Failed to load gateway data:", err);
+      logClientError("Failed to load gateway data:", err, "GatewayClient");
     } finally {
       setLoading(false);
     }
@@ -87,7 +89,7 @@ export default function GatewayClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Injection error:", err);
+      logClientError("Injection error:", err, "GatewayClient");
     } finally {
       setInjecting(false);
     }

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   ShieldAlert,
@@ -70,7 +72,7 @@ export default function SafetyDashboardPage() {
       setOpenCapas(data.openCapas || 0);
       setCriticalCount(data.criticalCount || 0);
     } catch (e) {
-      console.error("Fetch safety data error:", e);
+      logClientError("Fetch safety data error:", e, "page");
     } finally {
       setLoading(false);
     }

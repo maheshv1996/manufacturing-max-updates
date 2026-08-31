@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Activity,
@@ -54,7 +56,7 @@ export default function TelemetryClient() {
         setAnomalies(data.anomalies || []);
       }
     } catch (err) {
-      console.error("Failed to load telemetry:", err);
+      logClientError("Failed to load telemetry:", err, "TelemetryClient");
     } finally {
       setLoading(false);
     }
@@ -62,6 +64,7 @@ export default function TelemetryClient() {
 
   useEffect(() => {
     fetchData(selectedMachine);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine]);
 
   // Live polling every 1.5s
@@ -71,6 +74,7 @@ export default function TelemetryClient() {
       fetchData(selectedMachine);
     }, 1500);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive, selectedMachine]);
 
   // Simple SVG polyline sparkline generator

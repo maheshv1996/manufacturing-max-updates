@@ -1,5 +1,11 @@
+"use client";
+
+
+import { logClientError } from "@/lib/clientLogger";
+import { offlineFetchWrapper } from "@/lib/offlineSync";
+/* eslint-disable @next/next/no-img-element -- dynamic branding logo URL requires <img> (external/uploaded, not statically optimizable) */
+
 import { can } from "@/lib/permissions";
-("use client");
 
 import { useState } from "react";
 import Link from "next/link";
@@ -128,7 +134,7 @@ export default function Navbar({
       router.push("/login");
       router.refresh();
     } catch (err) {
-      console.error("Logout error:", err);
+      logClientError("Logout error:", err, "Navbar");
     }
   };
 
@@ -149,7 +155,7 @@ export default function Navbar({
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await offlineFetchWrapper("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),
@@ -188,7 +194,7 @@ export default function Navbar({
           }
         }
       } catch (err) {
-        console.error("Failed to load prefs in navbar", err);
+        logClientError("Failed to load prefs in navbar", err, "Navbar");
       }
     }
   };
@@ -201,13 +207,13 @@ export default function Navbar({
       const currentPrefs = data.prefs || {};
       currentPrefs.landingPage = newPath;
 
-      await fetch("/api/user/prefs", {
+      await offlineFetchWrapper("/api/user/prefs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(currentPrefs),
       });
     } catch (err) {
-      console.error("Failed to update landing page", err);
+      logClientError("Failed to update landing page", err, "Navbar");
     }
   };
 

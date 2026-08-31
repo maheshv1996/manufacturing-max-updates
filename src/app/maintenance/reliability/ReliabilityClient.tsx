@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Wrench, CheckCircle2, Plus, Calendar, X } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -107,7 +109,7 @@ export default function ReliabilityClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load reliability data:", err);
+      logClientError("Failed to load reliability data:", err, "ReliabilityClient");
     } finally {
       setLoading(false);
     }
@@ -146,7 +148,7 @@ export default function ReliabilityClient() {
         alert(err.error || "Failed to log maintenance request");
       }
     } catch (err) {
-      console.error("Create job error", err);
+      logClientError("Create job error", err, "ReliabilityClient");
     } finally {
       setSubmitting(false);
     }
@@ -171,7 +173,7 @@ export default function ReliabilityClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Update job error", err);
+      logClientError("Update job error", err, "ReliabilityClient");
     }
   };
 

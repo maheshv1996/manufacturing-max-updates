@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable prefer-const -- animation timers use let for deferred assignment pattern */
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -29,8 +30,8 @@ export default function ScrambleText({
       return;
     }
 
-    let timeout: NodeJS.Timeout;
-    let interval: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout>;
+    let interval: ReturnType<typeof setInterval>;
 
     const startScrambling = () => {
       setIsScrambling(true);

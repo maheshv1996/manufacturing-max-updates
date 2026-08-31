@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -11,6 +14,12 @@ interface PageProps {
 }
 
 export default async function KaizenDetailPage({ params }: PageProps) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "system.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const { id } = await params;
 
   const project = await prisma.improvementProject.findUnique({

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   ShoppingBag,
@@ -58,7 +60,7 @@ export default function PurchasingTab({
         setData(resData);
       }
     } catch (e) {
-      console.error("Error fetching purchasing data:", e);
+      logClientError("Error fetching purchasing data:", e, "PurchasingTab");
     } finally {
       setLoading(false);
     }
@@ -147,7 +149,7 @@ export default function PurchasingTab({
         alert(err.error || "Failed to create Purchase Order");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "PurchasingTab");
       alert("Error creating PO");
     } finally {
       setSubmittingPO(false);
@@ -186,7 +188,7 @@ export default function PurchasingTab({
         alert(err.error || "Failed to receive PO stock");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "PurchasingTab");
       alert("Error receiving PO");
     } finally {
       setSubmittingReceive(false);
@@ -214,7 +216,7 @@ export default function PurchasingTab({
         alert(err.error || "Failed to cancel PO");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "PurchasingTab");
     }
   };
 

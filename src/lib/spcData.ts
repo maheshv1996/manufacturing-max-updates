@@ -1,4 +1,5 @@
 // Server-side SPC statistical calculations
+import { SPC_CONSTANTS } from "./spcEngine";
 
 export interface SpcMeasurement {
   id: string;
@@ -73,16 +74,13 @@ export interface SpcStats {
   measurements: SpcMeasurement[];
 }
 
-// ── Constants for n=5 subgroups ──
-const A2 = 0.577;
-const D4 = 2.114;
-// const D3 = 0; // LCL for R chart is always 0 for n=5
-
 function mean(vals: number[]): number {
+  if (vals.length === 0) return 0;
   return vals.reduce((s, v) => s + v, 0) / vals.length;
 }
 
 function sampleStdDev(vals: number[], mu?: number): number {
+  if (vals.length <= 1) return 0;
   const m = mu ?? mean(vals);
   const variance =
     vals.reduce((s, v) => s + (v - m) ** 2, 0) / (vals.length - 1);
@@ -91,13 +89,18 @@ function sampleStdDev(vals: number[], mu?: number): number {
 
 export function computeSpcStats(
   measurements: SpcMeasurement[],
-  pChartInput: { date: string; good: number; scrap: number }[],
+  pChartInput: { date: string; good: number; scrap: number }[] = [],
+  subgroupSize: number = 5,
 ): SpcStats {
-  if (measurements.length === 0) {
-    throw new Error("No measurements");
+  if (!measurements || measurements.length === 0) {
+    throw new Error("No measurements provided for SPC computation");
   }
 
-  const vals = measurements.map((m) => m.value);
+  const vals = measurements.map((m) => Number(m.value)).filter(Number.isFinite);
+  if (vals.length === 0) {
+    throw new Error("No valid numeric measurements for SPC computation");
+  }
+
   const lsl = measurements[0].lsl;
   const usl = measurements[0].usl;
   const target = measurements[0].target;
@@ -105,9 +108,9 @@ export function computeSpcStats(
   // ── Capability ──
   const mu = mean(vals);
   const sigma = sampleStdDev(vals, mu);
-  const cp = (usl - lsl) / (6 * sigma);
-  const cpkUpper = (usl - mu) / (3 * sigma);
-  const cpkLower = (mu - lsl) / (3 * sigma);
+  const cp = sigma > 0 && usl > lsl ? (usl - lsl) / (6 * sigma) : 0;
+  const cpkUpper = sigma > 0 ? (usl - mu) / (3 * sigma) : 0;
+  const cpkLower = sigma > 0 ? (mu - lsl) / (3 * sigma) : 0;
   const cpk = Math.min(cpkUpper, cpkLower);
 
   let verdict: CapabilityStats["verdict"];
@@ -143,15 +146,17 @@ export function computeSpcStats(
     count,
   }));
 
-  // ── X-bar & R Charts (subgroups of 5) ──
-  const SUBGROUP_SIZE = 5;
+  // ── X-bar & R Charts with Dynamic Constants ──
+  const effectiveSize = Math.max(2, Math.min(15, subgroupSize));
+  const constants = SPC_CONSTANTS[effectiveSize] || SPC_CONSTANTS[5];
+
   const subgroups: Subgroup[] = [];
   for (
     let i = 0;
-    i + SUBGROUP_SIZE <= measurements.length;
-    i += SUBGROUP_SIZE
+    i + effectiveSize <= measurements.length;
+    i += effectiveSize
   ) {
-    const chunk = measurements.slice(i, i + SUBGROUP_SIZE).map((m) => m.value);
+    const chunk = measurements.slice(i, i + effectiveSize).map((m) => m.value);
     const xbar = mean(chunk);
     const range = Math.max(...chunk) - Math.min(...chunk);
     subgroups.push({ index: subgroups.length + 1, values: chunk, xbar, range });
@@ -159,9 +164,10 @@ export function computeSpcStats(
 
   const grandMean = mean(subgroups.map((s) => s.xbar));
   const rBar = mean(subgroups.map((s) => s.range));
-  const xbarUCL = grandMean + A2 * rBar;
-  const xbarLCL = grandMean - A2 * rBar;
-  const rUCL = D4 * rBar;
+  const xbarUCL = grandMean + constants.A2 * rBar;
+  const xbarLCL = grandMean - constants.A2 * rBar;
+  const rUCL = constants.D4 * rBar;
+  const rLCL = constants.D3 * rBar;
 
   const xbarChart: XBarChartData[] = subgroups.map((sg) => ({
     index: sg.index,
@@ -176,19 +182,19 @@ export function computeSpcStats(
     index: sg.index,
     range: +sg.range.toFixed(5),
     ucl: +rUCL.toFixed(5),
-    lcl: 0,
+    lcl: +rLCL.toFixed(5),
     cl: +rBar.toFixed(5),
-    outOfControl: sg.range > rUCL || sg.range < 0,
+    outOfControl: sg.range > rUCL || sg.range < rLCL,
   }));
 
   // ── P Chart ──
-  const totalScrap = pChartInput.reduce((s, d) => s + d.scrap, 0);
-  const totalParts = pChartInput.reduce((s, d) => s + d.good + d.scrap, 0);
+  const totalScrap = (pChartInput || []).reduce((s, d) => s + (d.scrap || 0), 0);
+  const totalParts = (pChartInput || []).reduce((s, d) => s + (d.good || 0) + (d.scrap || 0), 0);
   const pBar = totalParts > 0 ? totalScrap / totalParts : 0;
 
-  const pChart: PChartPoint[] = pChartInput.map((d) => {
-    const n = d.good + d.scrap;
-    const p = n > 0 ? d.scrap / n : 0;
+  const pChart: PChartPoint[] = (pChartInput || []).map((d) => {
+    const n = (d.good || 0) + (d.scrap || 0);
+    const p = n > 0 ? (d.scrap || 0) / n : 0;
     const sigma3 = n > 0 ? 3 * Math.sqrt((pBar * (1 - pBar)) / n) : 0;
     const ucl = Math.min(1, pBar + sigma3);
     const lcl = Math.max(0, pBar - sigma3);

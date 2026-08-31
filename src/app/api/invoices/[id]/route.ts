@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { numberToIndianWords } from "@/lib/invoicingEngine";
@@ -51,6 +52,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+    await logAudit({ actor: "system", action: "INVOICE_UPDATED", entityType: "Invoice", details: "Invoice updated" });
   try {
     const { id } = await params;
     const body = await req.json();

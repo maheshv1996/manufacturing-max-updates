@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { CALIBRATION_WARNING_DAYS } from "./calibration";
 
-const d = (v: Date | null | undefined) =>
-  v ? new Date(v).toLocaleDateString("en-IN") : "—";
+const d = (v: Date | string | null | undefined): string => {
+  if (!v) return "—";
+  const dateObj = new Date(v);
+  if (isNaN(dateObj.getTime())) return "—";
+  return dateObj.toLocaleDateString("en-IN");
+};
 
 export async function buildAuditPack() {
   const [
@@ -37,8 +42,11 @@ export async function buildAuditPack() {
   const openNcrs = ncrs.filter((n) => n.status === "OPEN").length;
   const expiringCal = tools.filter((t) => {
     if (t.status === "EXPIRED") return true;
-    const days = (new Date(t.expiresAt).getTime() - Date.now()) / 86400000;
-    return days < 30;
+    if (!t.expiresAt) return false;
+    const expTime = new Date(t.expiresAt).getTime();
+    if (isNaN(expTime)) return false;
+    const days = (expTime - Date.now()) / 86400000;
+    return days < CALIBRATION_WARNING_DAYS;
   }).length;
 
   const registers = [
@@ -50,7 +58,7 @@ export async function buildAuditPack() {
       status: expiringCal > 0 ? "ATTENTION" : "OK",
       note:
         expiringCal > 0
-          ? `${expiringCal} instruments expired or expiring < 30 days`
+          ? `${expiringCal} instruments expired or expiring < ${CALIBRATION_WARNING_DAYS} days`
           : "All instruments in calibration window",
       latest: tools.length ? d(tools[0].calibratedAt) : "—",
     },

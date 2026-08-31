@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState, useCallback } from "react";
 import {
   Beaker,
@@ -49,7 +51,7 @@ export default function RndDashboard() {
       const data = await res.json();
       setProjects(data.projects || []);
     } catch (err) {
-      console.error(err);
+      logClientError(err, "page");
     } finally {
       setLoading(false);
     }

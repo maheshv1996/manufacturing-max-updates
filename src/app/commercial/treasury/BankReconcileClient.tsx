@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Upload, Unlink, Trash2, Landmark } from "lucide-react";
 
@@ -112,7 +114,7 @@ export default function BankReconcileClient() {
         setSummary(d.summary || {});
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "BankReconcileClient");
     } finally {
       setLoading(false);
     }
@@ -140,7 +142,7 @@ export default function BankReconcileClient() {
           );
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "BankReconcileClient");
       alert("Action failed");
     } finally {
       setBusy(false);

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   ArrowUp,
@@ -47,7 +49,7 @@ export default function FiveSChecklistTab() {
         setItems(json.items || []);
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "FiveSChecklistTab");
     } finally {
       setLoading(false);
     }
@@ -96,7 +98,7 @@ export default function FiveSChecklistTab() {
         }),
       });
     } catch (err) {
-      console.error("Failed to reorder 5S items:", err);
+      logClientError("Failed to reorder 5S items:", err, "FiveSChecklistTab");
       fetchItems();
     }
   };
@@ -115,7 +117,7 @@ export default function FiveSChecklistTab() {
         fetchItems();
       }
     } catch (err) {
-      console.error("Failed to delete item:", err);
+      logClientError("Failed to delete item:", err, "FiveSChecklistTab");
     }
   };
 
@@ -161,7 +163,7 @@ export default function FiveSChecklistTab() {
         alert("Failed to save item");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "FiveSChecklistTab");
     } finally {
       setSaving(false);
     }

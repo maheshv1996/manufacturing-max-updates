@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { addDays, differenceInDays } from "date-fns";
 
-export type PlanType = "PILOT" | "STARTER" | "GROWTH";
+export type PlanType = "PILOT" | "STARTER" | "GROWTH" | "ENTERPRISE";
 export type PaymentStatus = "TRIAL" | "ACTIVE" | "OVERDUE" | "LOCKED";
 
 export interface LicenseInfo {
@@ -13,42 +13,57 @@ export interface LicenseInfo {
 
 const LICENSE_KEY = "LICENSE_INFO";
 
+export const PLAN_MACHINE_LIMITS: Record<PlanType, number> = {
+  PILOT: Infinity,
+  STARTER: 5,
+  GROWTH: 15,
+  ENTERPRISE: Infinity,
+};
+
+function createDefaultLicense(): LicenseInfo {
+  const now = new Date();
+  return {
+    plan: "PILOT",
+    planStartedAt: now.toISOString(),
+    nextDueDate: addDays(now, 60).toISOString(),
+    paymentStatus: "TRIAL",
+  };
+}
+
 export async function getLicense(): Promise<LicenseInfo> {
-  const setting = await prisma.setting.findUnique({
-    where: { key: LICENSE_KEY },
-  });
-
-  if (!setting) {
-    // Default to Pilot mode starting today if no license exists
-    const now = new Date();
-    const defaultLicense: LicenseInfo = {
-      plan: "PILOT",
-      planStartedAt: now.toISOString(),
-      nextDueDate: addDays(now, 60).toISOString(),
-      paymentStatus: "TRIAL",
-    };
-    await updateLicense(defaultLicense);
-    return defaultLicense;
-  }
-
   try {
-    return JSON.parse(setting.value) as LicenseInfo;
-  } catch {
-    const now = new Date();
+    const setting = await prisma.setting.findUnique({
+      where: { key: LICENSE_KEY },
+    });
+
+    if (!setting || !setting.value) {
+      const defaultLicense = createDefaultLicense();
+      await updateLicense(defaultLicense);
+      return defaultLicense;
+    }
+
+    const parsed = JSON.parse(setting.value) as Partial<LicenseInfo>;
+    if (!parsed.plan || !parsed.nextDueDate) {
+      return createDefaultLicense();
+    }
+
     return {
-      plan: "PILOT",
-      planStartedAt: now.toISOString(),
-      nextDueDate: addDays(now, 60).toISOString(),
-      paymentStatus: "TRIAL",
+      plan: (parsed.plan as PlanType) || "PILOT",
+      planStartedAt: parsed.planStartedAt || new Date().toISOString(),
+      nextDueDate: parsed.nextDueDate,
+      paymentStatus: (parsed.paymentStatus as PaymentStatus) || "ACTIVE",
     };
+  } catch {
+    return createDefaultLicense();
   }
 }
 
-export async function updateLicense(license: LicenseInfo) {
+export async function updateLicense(license: LicenseInfo): Promise<void> {
+  const payload = JSON.stringify(license);
   await prisma.setting.upsert({
     where: { key: LICENSE_KEY },
-    update: { value: JSON.stringify(license) },
-    create: { key: LICENSE_KEY, value: JSON.stringify(license) },
+    update: { value: payload },
+    create: { key: LICENSE_KEY, value: payload },
   });
 }
 
@@ -56,26 +71,28 @@ export async function getDerivedLicenseStatus(): Promise<LicenseInfo> {
   const license = await getLicense();
   const now = new Date();
   const dueDate = new Date(license.nextDueDate);
-  const diff = differenceInDays(now, dueDate);
-
-  let status = license.paymentStatus;
-
-  if (diff > 7) {
-    status = "LOCKED";
-  } else if (diff > 0) {
-    status = "OVERDUE";
-  } else if (status === "LOCKED" || status === "OVERDUE") {
-    status = "ACTIVE"; // if somehow paid but status was stuck
+  if (isNaN(dueDate.getTime())) {
+    return license;
   }
 
-  // If PILOT trial ended, force overdue
-  if (license.plan === "PILOT" && diff > 0) {
-    status = "OVERDUE";
-    if (diff > 7) status = "LOCKED";
+  // differenceInDays(now, dueDate): >0 when now is after dueDate (expired)
+  const daysPastDue = differenceInDays(now, dueDate);
+
+  let newStatus: PaymentStatus = license.paymentStatus;
+
+  if (daysPastDue > 7) {
+    newStatus = "LOCKED";
+  } else if (daysPastDue > 0) {
+    newStatus = "OVERDUE";
+  } else {
+    // Current / not past due
+    if (license.paymentStatus === "LOCKED" || license.paymentStatus === "OVERDUE") {
+      newStatus = "ACTIVE";
+    }
   }
 
-  if (status !== license.paymentStatus) {
-    license.paymentStatus = status;
+  if (newStatus !== license.paymentStatus) {
+    license.paymentStatus = newStatus;
     await updateLicense(license);
   }
 
@@ -84,7 +101,9 @@ export async function getDerivedLicenseStatus(): Promise<LicenseInfo> {
 
 export async function canAddMachine(): Promise<{
   allowed: boolean;
-  requiredPlan?: string;
+  requiredPlan?: PlanType;
+  currentCount?: number;
+  maxAllowed?: number;
 }> {
   const license = await getDerivedLicenseStatus();
 
@@ -92,14 +111,22 @@ export async function canAddMachine(): Promise<{
     where: { isActive: true },
   });
 
-  if (license.plan === "PILOT") return { allowed: true };
-  if (license.plan === "STARTER" && currentMachines >= 5) {
-    return { allowed: false, requiredPlan: "GROWTH" };
-  }
-  if (license.plan === "GROWTH" && currentMachines >= 15) {
-    // Arbitrary cap for growth per instructions (or maybe no limit, but prompt says max 15 machines)
-    return { allowed: false, requiredPlan: "ENTERPRISE" };
+  const limit = PLAN_MACHINE_LIMITS[license.plan] ?? Infinity;
+
+  if (currentMachines >= limit) {
+    let nextPlan: PlanType = "ENTERPRISE";
+    if (license.plan === "STARTER") nextPlan = "GROWTH";
+    return {
+      allowed: false,
+      requiredPlan: nextPlan,
+      currentCount: currentMachines,
+      maxAllowed: limit,
+    };
   }
 
-  return { allowed: true };
+  return {
+    allowed: true,
+    currentCount: currentMachines,
+    maxAllowed: limit,
+  };
 }

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Loader2,
@@ -193,7 +195,7 @@ export default function MetrologyTab() {
         setVendors(json.specialProcessVendors || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MetrologyTab");
     } finally {
       setLoading(false);
     }
@@ -223,7 +225,7 @@ export default function MetrologyTab() {
       await fetchData();
       return true;
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MetrologyTab");
       alert("Save failed");
       return false;
     } finally {
@@ -251,7 +253,7 @@ export default function MetrologyTab() {
         await fetchData();
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MetrologyTab");
       alert("Delete failed");
     } finally {
       setSaving(false);
@@ -330,7 +332,7 @@ export default function MetrologyTab() {
         await fetchData();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "MetrologyTab");
       alert("Issue failed");
     } finally {
       setSaving(false);
@@ -353,7 +355,7 @@ export default function MetrologyTab() {
         await fetchData();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "MetrologyTab");
       alert("Return failed");
     } finally {
       setSaving(false);
@@ -378,7 +380,7 @@ export default function MetrologyTab() {
         await fetchData();
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "MetrologyTab");
       alert("Upload failed");
     } finally {
       setUploadingId(null);

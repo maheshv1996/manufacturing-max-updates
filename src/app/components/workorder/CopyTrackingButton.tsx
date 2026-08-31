@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { Check, Share2 } from "lucide-react";
 
@@ -36,7 +38,7 @@ export default function CopyTrackingButton({
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (err) {
-      console.error("Failed to copy tracking link:", err);
+      logClientError("Failed to copy tracking link:", err, "CopyTrackingButton");
     }
   };
 

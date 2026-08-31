@@ -1,10 +1,8 @@
-export type Language = "en" | "te" | "hi";
+export type Language = "en" | "te" | "hi" | "ta" | "kn" | "mr" | "gu" | "ar" | "de" | "es" | "fr";
 
 export interface TranslationDictionary {
-  [key: string]: {
+  [key: string]: Partial<Record<Language, string>> & {
     en: string;
-    te: string;
-    hi: string;
   };
 }
 
@@ -269,24 +267,141 @@ export const translations: TranslationDictionary = {
   },
 };
 
-/**
- * Get translated string for a key based on active language.
- * Resolution order: language arg -> localStorage 'operator_lang' -> 'en'.
- */
-export function getTranslation(key: string, lang?: Language): string {
-  let activeLang: Language = lang || "en";
+export const SUPPORTED_LANGUAGES: { code: Language; name: string; nativeName: string; dir: "ltr" | "rtl" }[] = [
+  { code: "en", name: "English", nativeName: "English", dir: "ltr" },
+  { code: "te", name: "Telugu", nativeName: "తెలుగు", dir: "ltr" },
+  { code: "hi", name: "Hindi", nativeName: "हिन्दी", dir: "ltr" },
+  { code: "ta", name: "Tamil", nativeName: "தமிழ்", dir: "ltr" },
+  { code: "kn", name: "Kannada", nativeName: "ಕನ್ನಡ", dir: "ltr" },
+  { code: "mr", name: "Marathi", nativeName: "मराठी", dir: "ltr" },
+  { code: "gu", name: "Gujarati", nativeName: "ગુજરાતી", dir: "ltr" },
+  { code: "ar", name: "Arabic", nativeName: "العربية", dir: "rtl" },
+  { code: "de", name: "German", nativeName: "Deutsch", dir: "ltr" },
+  { code: "es", name: "Spanish", nativeName: "Español", dir: "ltr" },
+  { code: "fr", name: "French", nativeName: "Français", dir: "ltr" },
+];
 
-  if (!lang && typeof window !== "undefined") {
-    const saved = localStorage.getItem("operator_lang") as Language;
-    if (saved && ["en", "te", "hi"].includes(saved)) {
-      activeLang = saved;
+export function getLanguageDirection(lang?: Language): "ltr" | "rtl" {
+  const active = lang || getActiveLanguage();
+  return active === "ar" ? "rtl" : "ltr";
+}
+
+export function getActiveLanguage(): Language {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("operator_lang") as Language;
+      if (saved && SUPPORTED_LANGUAGES.some((l) => l.code === saved)) {
+        return saved;
+      }
+      const navLangs = navigator.languages ? [...navigator.languages] : [navigator.language || ""];
+      for (const raw of navLangs) {
+        const lower = (raw || "").toLowerCase();
+        const matched = SUPPORTED_LANGUAGES.find((l) => lower.startsWith(l.code));
+        if (matched) return matched.code;
+      }
+    } catch {
+      // Ignore localStorage access errors in restricted iframe / webview
+    }
+  }
+  return "en";
+}
+
+export function setLanguage(lang: Language): void {
+  if (typeof window !== "undefined" && SUPPORTED_LANGUAGES.some((l) => l.code === lang)) {
+    try {
+      localStorage.setItem("operator_lang", lang);
+      if (typeof document !== "undefined") {
+        document.documentElement.dir = getLanguageDirection(lang);
+        document.documentElement.lang = lang;
+      }
+      window.dispatchEvent(new CustomEvent("languagechange", { detail: { lang } }));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
+
+/**
+ * Humanizes camelCase or snake_case key strings as a graceful fallback.
+ */
+function humanizeKey(key: string): string {
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/[_.-]/g, " ")
+    .replace(/^./, (str) => str.toUpperCase())
+    .trim();
+}
+
+/**
+ * Resolves plural suffix using Intl.PluralRules where applicable.
+ */
+function resolvePluralKey(key: string, count: number, lang: Language): string {
+  try {
+    const pr = new Intl.PluralRules(lang);
+    const rule = pr.select(count); // 'one', 'other', 'zero', 'two', 'few', 'many'
+    const variantKey = `${key}_${rule}`;
+    if (translations[variantKey]) return variantKey;
+    const genericPlural = count === 1 ? `${key}_one` : `${key}_plural`;
+    if (translations[genericPlural]) return genericPlural;
+  } catch {
+    // Fallback to basic plural logic
+    const genericPlural = count === 1 ? `${key}_one` : `${key}_plural`;
+    if (translations[genericPlural]) return genericPlural;
+  }
+  return key;
+}
+
+/**
+ * Get translated string for a key based on active language, with optional template variable interpolation and pluralization.
+ * e.g. t("itemsCount", { count: 5 }) replaces "{count}" with 5 and checks for plural forms.
+ */
+export function getTranslation(
+  key: string,
+  langOrParams?: Language | Record<string, string | number>,
+  params?: Record<string, string | number>,
+): string {
+  let activeLang: Language;
+  let interpolations: Record<string, string | number> | undefined;
+
+  if (typeof langOrParams === "string" && SUPPORTED_LANGUAGES.some((l) => l.code === langOrParams)) {
+    activeLang = langOrParams as Language;
+    interpolations = params;
+  } else {
+    activeLang = getActiveLanguage();
+    interpolations = typeof langOrParams === "object" ? langOrParams : params;
+  }
+
+  let resolvedKey = key;
+  if (interpolations) {
+    const countVal = interpolations.count ?? interpolations.n ?? interpolations.total;
+    if (typeof countVal === "number") {
+      resolvedKey = resolvePluralKey(key, countVal, activeLang);
     }
   }
 
-  const dict = translations[key];
-  if (!dict) return key;
+  const dict = translations[resolvedKey] || translations[key];
+  let text = dict ? dict[activeLang] || dict.en || humanizeKey(key) : humanizeKey(key);
 
-  return dict[activeLang] || dict.en || key;
+  if (interpolations && typeof interpolations === "object") {
+    for (const [k, v] of Object.entries(interpolations)) {
+      text = text.replaceAll(`{${k}}`, String(v));
+    }
+  }
+
+  return text;
+}
+
+/**
+ * Plural-aware translation helper
+ * e.g. tp("item", 3, { name: "Bearing" })
+ */
+export function tp(
+  key: string,
+  count: number,
+  params?: Record<string, string | number>,
+  lang?: Language,
+): string {
+  return getTranslation(key, lang || getActiveLanguage(), { count, ...params });
 }
 
 export const t = getTranslation;

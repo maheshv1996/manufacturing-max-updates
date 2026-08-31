@@ -3,7 +3,7 @@ import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-let workstationState = {
+const workstationState = {
   stationId: "STATION-CNC-01",
   operatorName: "Rajesh Kumar (Badge #OP-442)",
   machineCode: "CNC-01",

@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import HandoverClient from "./HandoverClient";
 import { ClipboardEdit } from "lucide-react";
@@ -6,6 +9,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HandoverPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "people.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const [shifts, machines, users] = await Promise.all([
     prisma.shift.findMany({ orderBy: { startTime: "asc" } }),
     prisma.machine.findMany({ orderBy: { name: "asc" } }),

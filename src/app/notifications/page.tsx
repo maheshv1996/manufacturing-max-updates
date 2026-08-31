@@ -1,9 +1,21 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import NotificationsClient from "./NotificationsClient";
 import { Bell } from "lucide-react";
 
 export const metadata = { title: "Notifications Center" };
 
-export default function NotificationsPage() {
+export default async function NotificationsPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/notifications");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">

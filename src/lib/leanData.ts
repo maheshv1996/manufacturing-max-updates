@@ -1,4 +1,4 @@
-// Lean Analytics Data Helpers
+// Lean Analytics & Six Sigma Statistical Data Helpers
 import { prisma } from "@/lib/prisma";
 import { ParsedDateRange } from "./date-utils";
 import { getOEERules } from "./settings";
@@ -41,101 +41,107 @@ export interface DowntimeCategoryPoint {
   color: string;
 }
 
-export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
-  const [downtimeLogs, productionLogs, qualityInspections, defectCodes] =
+const round1 = (n: number) => Math.round((Number(n) || 0) * 10) / 10;
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
+export async function getLeanAnalyticsData(
+  parsedRange: ParsedDateRange,
+  plantId?: string,
+) {
+  const from = parsedRange?.current?.from || new Date();
+  const to = parsedRange?.current?.to || new Date();
+
+  const machinePlantFilter =
+    plantId && plantId !== "ALL" ? { plantId } : undefined;
+
+  const [downtimeLogs, productionLogs, qualityInspections, machines, oeeRules] =
     await Promise.all([
       prisma.downtimeLog.findMany({
         where: {
-          startTime: {
-            gte: parsedRange.current.from,
-            lte: parsedRange.current.to,
-          },
+          startTime: { gte: from, lte: to },
+          ...(machinePlantFilter ? { machine: machinePlantFilter } : {}),
         },
         include: { reason: true, machine: true },
         orderBy: { startTime: "asc" },
       }),
       prisma.productionLog.findMany({
         where: {
-          startTime: {
-            gte: parsedRange.current.from,
-            lte: parsedRange.current.to,
-          },
+          startTime: { gte: from, lte: to },
+          ...(machinePlantFilter ? { machine: machinePlantFilter } : {}),
         },
         orderBy: { startTime: "asc" },
       }),
       prisma.qualityInspection.findMany({
         where: {
-          createdAt: {
-            gte: parsedRange.current.from,
-            lte: parsedRange.current.to,
-          },
+          createdAt: { gte: from, lte: to },
         },
         include: { defectCode: true },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.downtimeReason.findMany(),
-      prisma.defectCode.findMany(),
+      prisma.machine.findMany({
+        where: {
+          isActive: true,
+          ...(machinePlantFilter ? machinePlantFilter : {}),
+        },
+        select: { id: true },
+      }),
+      getOEERules(),
     ]);
 
-  const oeeRules = await getOEERules();
+  const machineCount = Math.max(1, machines.length);
 
   // 1. KPI Calculations
   let totalDowntimeMinutes = 0;
   let downtimeCount = 0;
 
-  downtimeLogs.forEach((log: any) => {
-    const mins = log.durationMinutes || 0;
+  downtimeLogs.forEach((log) => {
+    const mins = Number(log.durationMinutes) || 0;
     totalDowntimeMinutes += mins;
     downtimeCount++;
   });
 
   const mttrMinutes =
-    downtimeCount > 0
-      ? Number((totalDowntimeMinutes / downtimeCount).toFixed(1))
-      : 0;
+    downtimeCount > 0 ? round1(totalDowntimeMinutes / downtimeCount) : 0;
 
   let totalGoodUnits = 0;
   let totalScrapUnits = 0;
+  let totalReworkUnits = 0;
 
-  productionLogs.forEach((log: any) => {
-    totalGoodUnits += log.goodQuantity || 0;
-    totalScrapUnits += log.scrapQuantity || 0;
+  productionLogs.forEach((log) => {
+    totalGoodUnits += Number(log.goodQuantity) || 0;
+    totalScrapUnits += Number(log.scrapQuantity) || 0;
+    totalReworkUnits += Number(log.reworkQuantity) || 0;
   });
 
-  const totalProduced = totalGoodUnits + totalScrapUnits;
+  const totalProduced = totalGoodUnits + totalScrapUnits + totalReworkUnits;
   const firstPassYieldPct =
     totalProduced > 0
-      ? Number(((totalGoodUnits / totalProduced) * 100).toFixed(1))
-      : 95.5;
+      ? round2((totalGoodUnits / totalProduced) * 100)
+      : 100.0;
 
   const scrapRatePct =
     totalProduced > 0
-      ? Number(((totalScrapUnits / totalProduced) * 100).toFixed(1))
-      : 4.5;
+      ? round2((totalScrapUnits / totalProduced) * 100)
+      : 0.0;
 
-  const totalDays =
-    (parsedRange.current.to.getTime() - parsedRange.current.from.getTime()) /
-    (1000 * 60 * 60 * 24);
-  const estimatedOperatingMinutes = totalDays * 24 * 60 - totalDowntimeMinutes;
+  const totalDays = Math.max(
+    1,
+    (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  const totalFleetMinutes = totalDays * 24 * 60 * machineCount;
+  const estimatedOperatingMinutes = Math.max(0, totalFleetMinutes - totalDowntimeMinutes);
   const mtbfHours =
     downtimeCount > 0
-      ? Number(
-          (Math.max(0, estimatedOperatingMinutes) / downtimeCount / 60).toFixed(
-            1,
-          ),
-        )
-      : 48.5;
+      ? round1(estimatedOperatingMinutes / downtimeCount / 60)
+      : round1((totalFleetMinutes / 60) || 720);
 
-  // 2. Downtime Pareto
-  const reasonMap = new Map<
-    string,
-    { code: string; name: string; minutes: number }
-  >();
+  // 2. Downtime Pareto (AIAG / Lean Category Stratification)
+  const reasonMap = new Map<string, { code: string; name: string; minutes: number }>();
 
-  downtimeLogs.forEach((log: any) => {
+  downtimeLogs.forEach((log) => {
     const code = log.reason?.code || "D-UNKN";
-    const name = log.reason?.description || "Unspecified Loss";
-    const mins = log.durationMinutes || 30;
+    const name = log.reason?.description || log.reason?.category || "Unspecified Loss";
+    const mins = Number(log.durationMinutes) || 0;
 
     const existing = reasonMap.get(code) || { code, name, minutes: 0 };
     existing.minutes += mins;
@@ -156,37 +162,22 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
       name: r.name,
       code: r.code,
       value: r.minutes,
-      cumulativePct: Number(
-        ((runningDowntimeSum / downtimeParetoTotal) * 100).toFixed(1),
-      ),
+      cumulativePct: round1((runningDowntimeSum / downtimeParetoTotal) * 100),
     };
   });
 
   // 3. Defect Pareto
-  const defectMap = new Map<
-    string,
-    { code: string; name: string; failed: number }
-  >();
+  const defectMap = new Map<string, { code: string; name: string; failed: number }>();
 
-  qualityInspections.forEach((insp: any) => {
+  qualityInspections.forEach((insp) => {
     const code = insp.defectCode?.code || "DEF-MISC";
     const name = insp.defectCode?.description || "General Defect";
-    const failed = insp.failed || 1;
+    const failed = Number(insp.failed) || 1;
 
     const existing = defectMap.get(code) || { code, name, failed: 0 };
     existing.failed += failed;
     defectMap.set(code, existing);
   });
-
-  if (defectMap.size === 0) {
-    defectCodes.forEach((dc: any, i: number) => {
-      defectMap.set(dc.code, {
-        code: dc.code,
-        name: dc.description,
-        failed: (defectCodes.length - i) * 12,
-      });
-    });
-  }
 
   const sortedDefects = Array.from(defectMap.values()).sort(
     (a, b) => b.failed - a.failed,
@@ -202,43 +193,39 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
       name: d.name,
       code: d.code,
       value: d.failed,
-      cumulativePct: Number(
-        ((runningDefectSum / defectParetoTotal) * 100).toFixed(1),
-      ),
+      cumulativePct: round1((runningDefectSum / defectParetoTotal) * 100),
     };
   });
 
-  // 4. OEE Control Chart & 5. FPY Trend
-  // Bucket by day based on totalDays
-  const diffDays = Math.ceil(totalDays);
+  // 4. SPC Control Chart (Daily Plant OEE with Upper & Lower 3-Sigma Control Limits)
+  const diffDays = Math.max(1, Math.ceil(totalDays));
   const numPoints = Math.min(diffDays, 30);
 
   const rawOeePoints: { date: string; oee: number; fpy: number }[] = [];
 
   for (let i = numPoints - 1; i >= 0; i--) {
-    const dFrom = new Date(
-      parsedRange.current.to.getTime() - (i + 1) * 24 * 60 * 60 * 1000,
-    );
-    const dateStr = dFrom.toLocaleDateString(undefined, {
+    const dayStart = new Date(to.getTime() - (i + 1) * 24 * 60 * 60 * 1000);
+    const dayEnd = new Date(to.getTime() - i * 24 * 60 * 60 * 1000);
+
+    const dateStr = dayStart.toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
     });
-    const isoDate = dFrom.toISOString().slice(0, 10);
 
     const dayPLogs = productionLogs.filter(
-      (l) => l.startTime.toISOString().slice(0, 10) === isoDate,
+      (l) => l.startTime >= dayStart && l.startTime < dayEnd,
     );
     const dayDLogs = downtimeLogs.filter(
-      (l) => l.startTime.toISOString().slice(0, 10) === isoDate,
+      (l) => l.startTime >= dayStart && l.startTime < dayEnd,
     );
 
     let good = 0;
     let scrap = 0;
     let rework = 0;
     dayPLogs.forEach((l) => {
-      good += l.goodQuantity;
-      scrap += l.scrapQuantity;
-      rework += l.reworkQuantity;
+      good += Number(l.goodQuantity) || 0;
+      scrap += Number(l.scrapQuantity) || 0;
+      rework += Number(l.reworkQuantity) || 0;
     });
     const total = good + scrap + rework;
 
@@ -247,40 +234,36 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
     let unplannedDowntimeMin = 0;
 
     dayDLogs.forEach((l) => {
-      const mins = l.durationMinutes || 0;
+      const mins = Number(l.durationMinutes) || 0;
       totalDowntimeMin += mins;
-      if (
-        l.reason?.category &&
-        oeeRules.plannedCategories.includes(l.reason.category)
-      ) {
+      const cat = l.reason?.category;
+      if (cat && oeeRules.plannedCategories.includes(cat)) {
         plannedDowntimeMin += mins;
       } else {
         unplannedDowntimeMin += mins;
       }
     });
 
-    // Simplistic aggregated OEE for the whole plant for the day
+    const shiftCapacityMinutes = 24 * 60 * machineCount;
     const plannedProductionTime = oeeRules.excludePlanned
-      ? 24 * 60 - plannedDowntimeMin
-      : 24 * 60;
+      ? Math.max(60, shiftCapacityMinutes - plannedDowntimeMin)
+      : shiftCapacityMinutes;
+
     const operatingMins = oeeRules.excludePlanned
-      ? plannedProductionTime - unplannedDowntimeMin
-      : 24 * 60 - totalDowntimeMin;
+      ? Math.max(0, plannedProductionTime - unplannedDowntimeMin)
+      : Math.max(0, shiftCapacityMinutes - totalDowntimeMin);
 
-    const avail =
-      plannedProductionTime > 0
-        ? Math.max(0, operatingMins) / plannedProductionTime
-        : 0;
-    const qual = total > 0 ? good / total : 0;
-    const perf = 0.85 + Math.random() * 0.1; // Without querying all machines for ideal cycle, simulate perf
+    const avail = plannedProductionTime > 0 ? Math.min(1, operatingMins / plannedProductionTime) : 1;
+    const qual = total > 0 ? Math.min(1, good / total) : 1;
+    const perf = total > 0 ? Math.min(1, Math.max(0.75, (good * 1.5) / Math.max(1, operatingMins))) : 0.90;
 
-    const oee = avail * perf * qual * 100;
-    const fpy = total > 0 ? (good / (good + scrap)) * 100 : 95;
+    const oee = round1(avail * perf * qual * 100);
+    const fpy = total > 0 ? round1((good / (good + scrap)) * 100) : 100;
 
     rawOeePoints.push({
       date: dateStr,
-      oee: Number(oee.toFixed(1)),
-      fpy: Number(fpy.toFixed(1)),
+      oee,
+      fpy,
     });
   }
 
@@ -294,9 +277,9 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
       : 0;
   const sigma = Math.sqrt(variance);
 
-  const ucl = Number(Math.min(100, meanOee + 3 * sigma).toFixed(1));
-  const lcl = Number(Math.max(0, meanOee - 3 * sigma).toFixed(1));
-  const meanVal = Number(meanOee.toFixed(1));
+  const ucl = round1(Math.min(100, meanOee + 3 * sigma));
+  const lcl = round1(Math.max(0, meanOee - 3 * sigma));
+  const meanVal = round1(meanOee);
 
   const controlChartData: ControlChartPoint[] = rawOeePoints.map((p) => {
     const isOutlier = p.oee > ucl || p.oee < lcl;
@@ -315,7 +298,7 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
     fpyPct: p.fpy,
   }));
 
-  // 6. Downtime by Category Donut
+  // 5. Downtime Category Distribution
   const categoryMap = new Map<string, number>();
   const categoryColors: Record<string, string> = {
     MECHANICAL: "#f43f5e",
@@ -323,11 +306,14 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
     MATERIAL: "#f59e0b",
     QUALITY: "#ea580c",
     OPERATOR: "#a855f7",
+    UTILITIES: "#06b6d4",
+    TOOLING: "#8b5cf6",
+    PLANNED_PM: "#10b981",
   };
 
-  downtimeLogs.forEach((log: any) => {
-    const cat = log.reason?.category || "MECHANICAL";
-    const mins = log.durationMinutes || 25;
+  downtimeLogs.forEach((log) => {
+    const cat = String(log.reason?.category || "MECHANICAL").toUpperCase();
+    const mins = Number(log.durationMinutes) || 0;
     categoryMap.set(cat, (categoryMap.get(cat) || 0) + mins);
   });
 
@@ -350,10 +336,10 @@ export async function getLeanAnalyticsData(parsedRange: ParsedDateRange) {
       totalDowntimeMinutes,
       totalDowntimeEvents: downtimeCount,
     },
-    downtimeParetoData: JSON.parse(JSON.stringify(downtimeParetoData)),
-    defectParetoData: JSON.parse(JSON.stringify(defectParetoData)),
-    controlChartData: JSON.parse(JSON.stringify(controlChartData)),
-    fpyTrendData: JSON.parse(JSON.stringify(fpyTrendData)),
-    downtimeCategoryData: JSON.parse(JSON.stringify(downtimeCategoryData)),
+    downtimeParetoData,
+    defectParetoData,
+    controlChartData,
+    fpyTrendData,
+    downtimeCategoryData,
   };
 }

@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import Link from "next/link";
 import {
   Crown,
@@ -438,7 +442,15 @@ function statusBadge(status: ItemStatus) {
   );
 }
 
-export default function DepartmentsPage() {
+export default async function DepartmentsPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/departments");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const totalItems = DEPARTMENTS.reduce((sum, d) => sum + d.items.length, 0);
   const liveItems = DEPARTMENTS.reduce(
     (sum, d) => sum + d.items.filter((i) => i.status !== "PLANNED").length,

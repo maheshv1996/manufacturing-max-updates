@@ -123,80 +123,98 @@ export interface ComputedMetrics {
   totalUnits: number;
 }
 
-// Helper to calculate real OEE from logs
+function safeJsonClone<T>(obj: T): T {
+  if (obj === null || typeof obj !== "object") return obj;
+  try {
+    return JSON.parse(
+      JSON.stringify(obj, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ),
+    );
+  } catch {
+    return obj;
+  }
+}
+
+/**
+ * Standardized Overall Equipment Effectiveness (OEE) Calculation Engine.
+ * Availability = Operating Time / Planned Production Time
+ * Performance = Total Units Produced / (Operating Time * Ideal Run Rate)
+ * Quality = Good Units / Total Units
+ */
 export function calculateOEE(
-  productionLogs: any[],
-  downtimeLogs: any[],
-  idealCycleTimeSeconds: number,
-  durationMs: number,
+  productionLogs: any[] = [],
+  downtimeLogs: any[] = [],
+  idealCycleTimeSeconds: number = 60,
+  durationMs: number = 24 * 60 * 60 * 1000,
   oeeRules?: OEERulesSettings,
 ): ComputedMetrics {
-  const totalMinutes = durationMs / (1000 * 60);
+  const safeCycleTime = Math.max(0.1, Number(idealCycleTimeSeconds) || 60);
+  const totalMinutes = Math.max(1, Number(durationMs) / (1000 * 60));
 
   let totalDowntimeMin = 0;
   let plannedDowntimeMin = 0;
   let unplannedDowntimeMin = 0;
 
-  for (const dl of downtimeLogs) {
-    if (dl.durationMinutes) {
-      totalDowntimeMin += dl.durationMinutes;
-      const isPlanned = oeeRules?.plannedCategories.includes(
-        dl.reason?.category,
-      );
+  const safeDownLogs = Array.isArray(downtimeLogs) ? downtimeLogs : [];
+  for (const dl of safeDownLogs) {
+    const mins = Number(dl?.durationMinutes) || 0;
+    if (mins > 0) {
+      totalDowntimeMin += mins;
+      const isPlanned = oeeRules?.plannedCategories?.includes(dl?.reason?.category);
       if (isPlanned) {
-        plannedDowntimeMin += dl.durationMinutes;
+        plannedDowntimeMin += mins;
       } else {
-        unplannedDowntimeMin += dl.durationMinutes;
+        unplannedDowntimeMin += mins;
       }
     }
   }
 
   const plannedProductionTime = oeeRules?.excludePlanned
-    ? totalMinutes - plannedDowntimeMin
+    ? Math.max(0, totalMinutes - plannedDowntimeMin)
     : totalMinutes;
-  const operatingMin = oeeRules?.excludePlanned
-    ? plannedProductionTime - unplannedDowntimeMin
-    : totalMinutes - totalDowntimeMin;
 
-  const availability =
-    plannedProductionTime > 0 ? operatingMin / plannedProductionTime : 0;
+  const operatingMin = oeeRules?.excludePlanned
+    ? Math.max(0, plannedProductionTime - unplannedDowntimeMin)
+    : Math.max(0, totalMinutes - totalDowntimeMin);
+
+  const availability = plannedProductionTime > 0 ? Math.min(1, operatingMin / plannedProductionTime) : 0;
 
   let goodUnits = 0;
   let scrapUnits = 0;
   let reworkUnits = 0;
 
-  for (const pl of productionLogs) {
-    goodUnits += pl.goodQuantity;
-    scrapUnits += pl.scrapQuantity;
-    reworkUnits += pl.reworkQuantity;
+  const safeProdLogs = Array.isArray(productionLogs) ? productionLogs : [];
+  for (const pl of safeProdLogs) {
+    goodUnits += Number(pl?.goodQuantity) || 0;
+    scrapUnits += Number(pl?.scrapQuantity) || 0;
+    reworkUnits += Number(pl?.reworkQuantity) || 0;
   }
 
   const totalUnits = goodUnits + scrapUnits + reworkUnits;
+  const quality = totalUnits > 0 ? Math.min(1, Math.max(0, goodUnits / totalUnits)) : 1;
 
-  const quality = totalUnits > 0 ? goodUnits / totalUnits : 0;
-
-  const idealRunRatePerMin = 60 / idealCycleTimeSeconds;
+  const idealRunRatePerMin = 60 / safeCycleTime;
   const theoreticalMax = operatingMin * idealRunRatePerMin;
 
   let performance = theoreticalMax > 0 ? totalUnits / theoreticalMax : 0;
-
-  // Cap at 1 (100%) to handle edge cases
   if (performance > 1) performance = 1;
+  if (performance < 0) performance = 0;
 
   const oee = availability * performance * quality;
 
   return {
-    oee: oee * 100,
-    availability: availability * 100,
-    performance: performance * 100,
-    quality: quality * 100,
-    totalDowntimeMin,
+    oee: Math.round(oee * 10000) / 100,
+    availability: Math.round(availability * 10000) / 100,
+    performance: Math.round(performance * 10000) / 100,
+    quality: Math.round(quality * 10000) / 100,
+    totalDowntimeMin: Math.round(totalDowntimeMin * 10) / 10,
     goodUnits,
     totalUnits,
   };
 }
 
-// Simple in-memory cache for high-frequency dashboard queries
+// In-memory cache for high-frequency dashboard queries
 const memoryCache = new Map<string, { data: any; expires: number }>();
 
 function getFromCache<T>(key: string): T | null {
@@ -207,7 +225,7 @@ function getFromCache<T>(key: string): T | null {
   return null;
 }
 
-function setToCache(key: string, data: any, ttlSeconds: number = 10) {
+function setToCache(key: string, data: any, ttlSeconds: number = 30) {
   memoryCache.set(key, { data, expires: Date.now() + ttlSeconds * 1000 });
 }
 
@@ -215,16 +233,14 @@ export async function getMachinesData(
   parsedRange: ParsedDateRange,
   plantId: string = "ALL",
 ): Promise<{ machines: any[]; previousMachines: any[] }> {
+  const isAll = !plantId || plantId === "ALL";
   const cacheKey = `machines_data_${plantId}_${parsedRange.current.from.toISOString()}_${parsedRange.current.to.toISOString()}`;
-  const cached = getFromCache<{ machines: any[]; previousMachines: any[] }>(
-    cacheKey,
-  );
+  const cached = getFromCache<{ machines: any[]; previousMachines: any[] }>(cacheKey);
   if (cached) return cached;
 
   const fetchForRange = async (range: { from: Date; to: Date }) => {
     return prisma.machine.findMany({
-      where:
-        plantId !== "ALL" ? { plantId, isActive: true } : { isActive: true },
+      where: isAll ? { isActive: true } : { plantId, isActive: true },
       select: {
         id: true,
         name: true,
@@ -278,18 +294,17 @@ export async function getMachinesData(
     });
   };
 
-  const durationMs =
-    parsedRange.current.to.getTime() - parsedRange.current.from.getTime();
+  const durationMs = parsedRange.current.to.getTime() - parsedRange.current.from.getTime();
 
   const [currentMachines, previousMachines, oeeRules] = await Promise.all([
     fetchForRange(parsedRange.current),
-    fetchForRange(parsedRange.previous),
+    parsedRange.previous ? fetchForRange(parsedRange.previous) : Promise.resolve([]),
     getOEERules(),
   ]);
 
   const processMachines = (machinesList: any[]) => {
     return machinesList.map((machine) => {
-      const activeLog = machine.productionLogs.find(
+      const activeLog = machine.productionLogs?.find(
         (log: any) => log.workOrder && log.workOrder.status === "IN_PROGRESS",
       );
       const metrics = calculateOEE(
@@ -312,7 +327,7 @@ export async function getMachinesData(
     previousMachines: processMachines(previousMachines),
   };
 
-  setToCache(cacheKey, result, 10);
+  setToCache(cacheKey, result, 30);
   return result;
 }
 
@@ -323,6 +338,7 @@ export async function getStatsData(
   oeeTrends: OeeTrendRow[];
   downtimeByCategory: DowntimeCategoryRow[];
 }> {
+  const isAll = !plantId || plantId === "ALL";
   const cacheKey = `stats_data_${plantId}_${parsedRange.current.from.toISOString()}_${parsedRange.current.to.toISOString()}`;
   const cached = getFromCache<{
     oeeTrends: OeeTrendRow[];
@@ -330,23 +346,15 @@ export async function getStatsData(
   }>(cacheKey);
   if (cached) return cached;
 
-  const machines = await prisma.machine.findMany({
-    where: plantId !== "ALL" ? { plantId, isActive: true } : { isActive: true },
-    select: { id: true, code: true, idealCycleTimeSeconds: true },
-    orderBy: { code: "asc" },
-  });
-
   const dateMap = new Map<string, Record<string, any>>();
-  const diffDays = Math.ceil(
+  const diffDays = Math.max(1, Math.round(
     (parsedRange.current.to.getTime() - parsedRange.current.from.getTime()) /
       (1000 * 60 * 60 * 24),
-  );
+  ));
   const numPoints = Math.min(diffDays, 30);
 
   for (let i = numPoints - 1; i >= 0; i--) {
-    const dFrom = new Date(
-      parsedRange.current.to.getTime() - (i + 1) * 24 * 60 * 60 * 1000,
-    );
+    const dFrom = new Date(parsedRange.current.to.getTime() - (i + 1) * 24 * 60 * 60 * 1000);
     const dateKey = dFrom.toISOString().slice(0, 10);
     const dateLabel = dFrom.toLocaleDateString(undefined, {
       month: "short",
@@ -355,16 +363,22 @@ export async function getStatsData(
     dateMap.set(dateKey, { dateKey, date: dateLabel });
   }
 
-  const machineIds = machines.map((m) => m.id);
+  const machineWhere = isAll ? { isActive: true } : { plantId, isActive: true };
 
-  const [allProdLogs, allDownLogs, oeeRules] = await Promise.all([
+  // All database lookups execute in parallel in a single Promise.all roundtrip
+  const [machines, allProdLogs, allDownLogs, oeeRules] = await Promise.all([
+    prisma.machine.findMany({
+      where: machineWhere,
+      select: { id: true, code: true, idealCycleTimeSeconds: true },
+      orderBy: { code: "asc" },
+    }),
     prisma.productionLog.findMany({
       where: {
         startTime: {
           gte: parsedRange.current.from,
           lte: parsedRange.current.to,
         },
-        machineId: { in: machineIds },
+        machine: machineWhere,
       },
       select: {
         machineId: true,
@@ -380,7 +394,7 @@ export async function getStatsData(
           gte: parsedRange.current.from,
           lte: parsedRange.current.to,
         },
-        machineId: { in: machineIds },
+        machine: machineWhere,
       },
       select: {
         machineId: true,
@@ -395,16 +409,16 @@ export async function getStatsData(
   for (const dateKey of dateMap.keys()) {
     const bucket = dateMap.get(dateKey)!;
     for (const m of machines) {
-      const pLogs = allProdLogs.filter(
-        (l) =>
-          l.machineId === m.id &&
-          l.startTime.toISOString().slice(0, 10) === dateKey,
-      );
-      const dLogs = allDownLogs.filter(
-        (l) =>
-          l.machineId === m.id &&
-          l.startTime.toISOString().slice(0, 10) === dateKey,
-      );
+      const pLogs = allProdLogs.filter((l) => {
+        if (l.machineId !== m.id || !l.startTime) return false;
+        const key = l.startTime instanceof Date ? l.startTime.toISOString().slice(0, 10) : String(l.startTime).slice(0, 10);
+        return key === dateKey;
+      });
+      const dLogs = allDownLogs.filter((l) => {
+        if (l.machineId !== m.id || !l.startTime) return false;
+        const key = l.startTime instanceof Date ? l.startTime.toISOString().slice(0, 10) : String(l.startTime).slice(0, 10);
+        return key === dateKey;
+      });
 
       const metrics = calculateOEE(
         pLogs,
@@ -413,7 +427,7 @@ export async function getStatsData(
         24 * 60 * 60 * 1000,
         oeeRules,
       );
-      bucket[m.code] = Number(metrics.oee.toFixed(1));
+      bucket[m.code || m.id] = Number(metrics.oee.toFixed(1));
     }
   }
 
@@ -437,7 +451,7 @@ export async function getStatsData(
     downtimeByCategory,
   };
 
-  setToCache(cacheKey, result, 10);
+  setToCache(cacheKey, result, 30);
   return result;
 }
 
@@ -489,8 +503,7 @@ export async function getMachineDetailData(
 
   if (!currentMachine) return null;
 
-  const durationMs =
-    parsedRange.current.to.getTime() - parsedRange.current.from.getTime();
+  const durationMs = parsedRange.current.to.getTime() - parsedRange.current.from.getTime();
 
   const currentMetrics = calculateOEE(
     currentMachine.productionLogs,
@@ -502,7 +515,7 @@ export async function getMachineDetailData(
   const previousMetrics = calculateOEE(
     previousMachine?.productionLogs || [],
     previousMachine?.downtimeLogs || [],
-    currentMachine.idealCycleTimeSeconds,
+    previousMachine?.idealCycleTimeSeconds || currentMachine.idealCycleTimeSeconds,
     durationMs,
     oeeRules,
   );
@@ -526,25 +539,29 @@ export async function getMachineDetailData(
     metrics: currentMetrics,
   };
 
-  return JSON.parse(JSON.stringify({ machine: finalMachine, previousMetrics }));
+  const result = safeJsonClone({ machine: finalMachine, previousMetrics });
+  setToCache(cacheKey, result, 30);
+  return result;
 }
 
 export async function getProductsData(): Promise<Product[]> {
   const products = await prisma.product.findMany({
+    where: { isActive: true },
     orderBy: { name: "asc" },
   });
-  return JSON.parse(JSON.stringify(products));
+  return safeJsonClone(products);
 }
 
 export async function getWorkOrdersData(
   statusFilter?: string,
   plantId: string = "ALL",
 ) {
+  const isAll = !plantId || plantId === "ALL";
   const where: any = {};
   if (statusFilter && statusFilter !== "ALL") {
     where.status = statusFilter;
   }
-  if (plantId !== "ALL") {
+  if (!isAll) {
     where.plantId = plantId;
   }
 
@@ -564,16 +581,18 @@ export async function getWorkOrdersData(
       },
       productionLogs: {
         include: { machine: true, operator: true, shift: true },
+        take: 20,
       },
-      downtimeLogs: { include: { machine: true, reason: true } },
+      downtimeLogs: { include: { machine: true, reason: true }, take: 20 },
     } as any,
     orderBy: { createdAt: "desc" },
+    take: 100,
   });
 
-  return JSON.parse(JSON.stringify(workOrders));
+  return safeJsonClone(workOrders);
 }
 
-export async function getWorkOrderDetailData(id: string) {
+export async function getWorkOrderDetailData(id: string): Promise<any> {
   const workOrder = await prisma.workOrder.findUnique({
     where: { id },
     include: {
@@ -595,31 +614,37 @@ export async function getWorkOrderDetailData(id: string) {
       productionLogs: {
         include: { machine: true, operator: true, shift: true },
         orderBy: { startTime: "desc" },
+        take: 50,
       },
       downtimeLogs: {
         include: { machine: true, reason: true },
         orderBy: { startTime: "desc" },
+        take: 50,
       },
       movementLogs: {
         orderBy: { at: "asc" },
+        take: 50,
       },
       inventoryTransactions: {
         include: { rawMaterial: true, materialCert: true },
         orderBy: { at: "desc" },
+        take: 50,
       },
       dispatchRecords: {
         include: { invoice: true },
         orderBy: { dispatchedAt: "desc" },
+        take: 20,
       },
       serialUnits: {
         include: { events: { orderBy: { at: "asc" } } },
         orderBy: { serialNo: "asc" },
+        take: 100,
       },
       holdPointSignoffs: true,
-      dataPackages: { orderBy: { createdAt: "desc" } },
+      dataPackages: { orderBy: { createdAt: "desc" }, take: 20 },
     } as any,
   });
 
   if (!workOrder) return null;
-  return JSON.parse(JSON.stringify(workOrder));
+  return safeJsonClone(workOrder);
 }

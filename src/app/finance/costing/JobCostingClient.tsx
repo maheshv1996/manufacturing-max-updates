@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   FileSpreadsheet,
@@ -81,7 +83,7 @@ export default function JobCostingClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load job costing ledger", err);
+      logClientError("Failed to load job costing ledger", err, "JobCostingClient");
     } finally {
       setLoading(false);
     }

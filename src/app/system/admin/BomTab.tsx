@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Layers,
@@ -43,7 +45,7 @@ export default function BomTab() {
         }
       }
     } catch (e) {
-      console.error("Failed to load BOM data:", e);
+      logClientError("Failed to load BOM data:", e, "BomTab");
     } finally {
       setLoading(false);
     }
@@ -51,6 +53,7 @@ export default function BomTab() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const currentProduct =
@@ -98,7 +101,7 @@ export default function BomTab() {
         alert(err.error || "Failed to add BOM line");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "BomTab");
       alert("Error adding BOM line");
     } finally {
       setSubmitting(false);
@@ -131,7 +134,7 @@ export default function BomTab() {
         alert(err.error || "Failed to edit BOM line");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "BomTab");
       alert("Error updating BOM line");
     } finally {
       setSubmitting(false);
@@ -161,7 +164,7 @@ export default function BomTab() {
         alert(err.error || "Failed to delete BOM line");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "BomTab");
     }
   };
 

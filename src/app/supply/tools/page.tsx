@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   AlertTriangle,
@@ -61,7 +63,7 @@ export default function ToolsManagementPage() {
       const macList = mData.machines || mData || [];
       setMachines(macList);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }
@@ -107,7 +109,7 @@ export default function ToolsManagementPage() {
         fetchToolsData();
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     }
   };
 

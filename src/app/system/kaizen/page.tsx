@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
@@ -63,6 +66,12 @@ async function getKaizenData() {
 }
 
 export default async function KaizenPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "system.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const { projects, machines } = await getKaizenData();
 
   const open = projects.filter(

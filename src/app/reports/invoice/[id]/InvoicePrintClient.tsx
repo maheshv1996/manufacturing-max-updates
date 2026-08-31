@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- print invoice branding logoUrl (dynamic, print context requires plain <img>) */
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -85,7 +87,7 @@ export default function MrmClient() {
         setIsManager(m.user?.level === "MANAGER" || m.user?.isOwner === true);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "MrmClient");
     } finally {
       setLoading(false);
     }

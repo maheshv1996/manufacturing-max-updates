@@ -2,65 +2,77 @@ import { prisma } from "./prisma";
 import { logAudit } from "./audit";
 import { DEPARTMENTS } from "./departments";
 
-export const ACCESS_REVIEW_DAYS = 90; // quarterly
+export const ACCESS_REVIEW_DAYS = 90; // Quarterly compliance cycle (ISO 27001 / SOC 2 / AS9100)
 
 /**
- * P30 — Quarterly access review.
+ * Quarterly Access Review & Segregation of Duties Enforcement Engine.
  *
- * runAccessReviewEnforcement() suspends any ACTIVE user who was not certified
- * in the current OPEN cycle once its due date has passed. Each suspension is
- * audited (ACCESS_SUSPENDED) and the cycle closes. This mirrors the app's
- * on-read enforcement pattern (permits auto-expire, backups auto-purge).
+ * Automatically suspends active uncertified user accounts when an overdue review cycle closes.
+ * Rotates session epochs and writes immutable audit entries.
  */
 export async function runAccessReviewEnforcement(now: Date = new Date()) {
-  // Enforce the most-overdue OPEN cycle first (dueDate ascending → earliest deadline)
+  const safeNow = now instanceof Date && !isNaN(now.getTime()) ? now : new Date();
+
   const openCycle = await prisma.accessReviewCycle.findFirst({
-    where: { status: "OPEN", dueDate: { lt: now } },
+    where: { status: "OPEN", dueDate: { lt: safeNow } },
     orderBy: { dueDate: "asc" },
-    include: { certifications: { select: { userId: true } } },
+    include: { certifications: { select: { userId: true, depts: true } } },
   });
 
   if (!openCycle) return { cycle: null, suspended: [] };
-  if (openCycle.dueDate > now) return { cycle: openCycle, suspended: [] };
+  if (openCycle.dueDate && openCycle.dueDate.getTime() > safeNow.getTime()) {
+    return { cycle: openCycle, suspended: [] };
+  }
 
   const certifiedIds = new Set(openCycle.certifications.map((c) => c.userId));
-  const uncertified = await prisma.user.findMany({
-    where: { isActive: true },
+
+  // Find active users (excluding system owners)
+  const activeUsers = await prisma.user.findMany({
+    where: { isActive: true, isOwner: false },
+    select: { id: true, name: true, username: true, employeeNumber: true, email: true },
   });
-  const toSuspend = uncertified.filter(
-    (u) => !certifiedIds.has(u.id) && !u.isOwner,
-  );
 
+  const toSuspend = activeUsers.filter((u) => !certifiedIds.has(u.id));
   const suspended: { id: string; name: string; username: string }[] = [];
+
   for (const u of toSuspend) {
-    await prisma.user.update({
-      where: { id: u.id },
-      data: { isActive: false, sessionEpoch: { increment: 1 } },
-    });
-    await logAudit({
-      actor: "SYSTEM_AUTO",
-      action: "ACCESS_SUSPENDED",
-      entityType: "USER",
-      entityId: u.id,
-      details: `Auto-suspended ${u.name} — not certified in access review "${openCycle.name}" (due ${openCycle.dueDate.toLocaleDateString()})`,
-    });
-    suspended.push({
-      id: u.id,
-      name: u.name,
-      username: u.username || u.employeeNumber || u.id,
-    });
+    try {
+      await prisma.user.update({
+        where: { id: u.id },
+        data: { isActive: false, sessionEpoch: { increment: 1 } },
+      });
+
+      await logAudit({
+        actor: "SYSTEM_ACCESS_SENTINEL",
+        action: "ACCESS_SUSPENDED",
+        entityType: "USER",
+        entityId: u.id,
+        severity: "SECURITY",
+        details: `Auto-suspended ${u.name} — not certified in quarterly access review cycle "${openCycle.name}" (due ${openCycle.dueDate.toISOString().slice(0, 10)})`,
+      });
+
+      suspended.push({
+        id: u.id,
+        name: u.name,
+        username: u.username || u.employeeNumber || u.email || u.id,
+      });
+    } catch (err) {
+      console.error(`Failed to suspend uncertified user ${u.id}:`, err);
+    }
   }
 
-  if (toSuspend.length > 0 || openCycle.dueDate < now) {
-    await prisma.accessReviewCycle.update({
-      where: { id: openCycle.id },
-      data: { status: "CLOSED", closedAt: now },
-    });
-  }
+  // Close the expired cycle
+  await prisma.accessReviewCycle.update({
+    where: { id: openCycle.id },
+    data: { status: "CLOSED", closedAt: safeNow },
+  });
 
   return { cycle: openCycle, suspended };
 }
 
+/**
+ * Fetches the comprehensive quarterly access review and disaster recovery compliance state.
+ */
 export async function getAccessReviewState(now: Date = new Date()) {
   const { suspended } = await runAccessReviewEnforcement(now);
 
@@ -80,30 +92,34 @@ export async function getAccessReviewState(now: Date = new Date()) {
   });
 
   const certified = new Set(cycle?.certifications.map((c) => c.userId) || []);
-  const deptByPerm = Object.fromEntries(
+  const deptByPerm: Record<string, string> = Object.fromEntries(
     DEPARTMENTS.map((d) => [d.permissionKey, d.title]),
   );
-  const titleByKey = Object.fromEntries(
+  const titleByKey: Record<string, string> = Object.fromEntries(
     DEPARTMENTS.map((d) => [d.id, d.title]),
   );
 
   const rows = users
-    .filter((u) => !u.isOwner) // owners are above the review
+    .filter((u) => !u.isOwner)
     .map((u) => {
       const rolePerms: string[] = Array.isArray(u.role?.permissions)
         ? u.role.permissions
         : [];
       const cert = cycle?.certifications.find((c) => c.userId === u.id) || null;
-      // Certified rows show exactly what was certified; uncertified rows show what they currently hold
-      const deptKeys = cert
-        ? cert.depts || []
-        : rolePerms.filter((p) => deptByPerm[p]);
-      const depts = deptKeys.map((k) => titleByKey[k]).filter(Boolean);
+
+      // Direct department resolution
+      const rawDeptKeys: string[] = cert && Array.isArray(cert.depts)
+        ? cert.depts
+        : rolePerms.map((p) => deptByPerm[p]).filter(Boolean);
+
+      const deptKeys = Array.from(new Set(rawDeptKeys));
+      const depts = deptKeys.map((k) => titleByKey[k] || k).filter(Boolean);
+
       return {
         userId: u.id,
         name: u.name,
         username: u.username || u.employeeNumber || u.email || "",
-        role: u.role?.name || "—",
+        role: u.role?.name || "Standard Role",
         level: u.level,
         depts,
         deptKeys,
@@ -118,16 +134,19 @@ export async function getAccessReviewState(now: Date = new Date()) {
         a.name.localeCompare(b.name),
     );
 
-  const drills = await prisma.restoreDrill.findMany({
-    include: { backupJob: { select: { startedAt: true, status: true } } },
-    orderBy: { drillDate: "desc" },
-  });
-
-  const backupJobs = await prisma.backupJob.findMany({
-    where: { status: "SUCCESS" },
-    orderBy: { startedAt: "desc" },
-    take: 20,
-  });
+  // Compliance Disaster Recovery & Restore Drill Audits
+  const [drills, backupJobs] = await Promise.all([
+    prisma.restoreDrill.findMany({
+      include: { backupJob: { select: { startedAt: true, status: true } } },
+      orderBy: { drillDate: "desc" },
+      take: 50,
+    }),
+    prisma.backupJob.findMany({
+      where: { status: "SUCCESS" },
+      orderBy: { startedAt: "desc" },
+      take: 20,
+    }),
+  ]);
 
   return {
     cycle,

@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   TrendingUp,
@@ -15,6 +18,12 @@ const fmt = (v: number) =>
   Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 export default async function ProcurementIntelligencePage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "supply.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const now = new Date();
 
   const [scorecards, suppliers, spareParts, pos] = await Promise.all([

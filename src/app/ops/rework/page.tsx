@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { CheckCircle2, Clock, Wrench, RefreshCw, Sliders } from "lucide-react";
 
@@ -43,7 +45,7 @@ export default function ReworkOrdersPage() {
       const data = await res.json();
       setReworkOrders(data.reworkOrders || []);
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }

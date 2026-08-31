@@ -64,11 +64,15 @@ routes **every** floor mutation through `offlineFetchWrapper`:
 
 - good / scrap / rework / downtime — `/api/operator/action` ✅
 - clock in / out — `/api/attendance/clock` ✅
-- movement & hold points ✅
-- **safety incident — `/api/safety` ✅ (new)**
-- **idea submission — `/api/ideas` ✅ (new)**
-- **maintenance request — `/api/maintenance/jobs` ✅ (new)**
-- **shift handoff counts — `/api/shift-counts` ✅ (new)**
+- movement & serialized routing — `/api/movement` ✅
+- hold-point inspection signoffs — `/api/hold-points` ✅
+- IPQC inspection checks — `/api/ipcc` ✅
+- operator log adjustments — `/api/logs/operator-edit` ✅
+- manager skill overrides — `/api/operator/assign-override` ✅
+- operator password update — `/api/auth/change-password` ✅
+- safety incident reporting — `/api/safety` ✅
+- kaizen idea submission — `/api/ideas` ✅
+- shift handoff counts & dispute tracking — `/api/shift-counts` ✅
 
 Offline → action is queued locally with a toast; reconnect → auto-drains in
 chronological order; server-side state conflicts → flagged for supervisor
@@ -193,7 +197,14 @@ headless sandbox; on a Windows builder:
 3. Copy the standalone build + `public/` next to `server.js`
 4. `electron-builder --win nsis` with `desktop/electron/main.js` as entry;
    installer sets `MFGMAX_DATA_DIR` to `%APPDATA%/MfgMaxData`, preserves it
-   on update, and re-runs `prisma migrate deploy` via the launcher.
+- **Logical & Physical Data Vault (`desktop/lib/vault.js` & `desktop/lib/embeddedDb.js`)**:
+  - **Logical Backups**: Generates `pg_dump -Fc` custom-format dumps (`mfgmax-YYYYMMDD-HHMMSS.dump`) rotated to keep the last 30 daily snapshots.
+  - **Physical Backups & Restores**: Full cluster directory backups via `physicalBackup()` and atomic restores via `physicalRestore({ dataDir, src, binDir })`.
+  - **Safe Quarantine on Restore**: `physicalRestore()` moves the existing live `pgdata` to `.pre-restore-<timestamp>`, atomically copies the backup directory, verifies `PG_VERSION` and `pg_ctl start` readiness, and automatically rolls back if the restored cluster fails to initialize.
+  - **Pendrive Export**: Copies the latest `.dump` and configuration to an external USB vault.
+  - **Service Worker Cache Guard**: Clears `cachestorage` only **once per application version** (`.sw_cache_version`), preserving cached assets across routine reboots for ultra-fast LAN tablet load times.
+
+---
 
 ## Test matrix
 
@@ -201,19 +212,14 @@ headless sandbox; on a Windows builder:
 |------|--------|
 | `npx tsc --noEmit` | ✅ green |
 | `npm run build` | ✅ green (standalone output) |
-| `node --test desktop/tests/*.test.js` | ✅ 31/31 (license, vault, watchdog, updater, control server) |
-| License lifecycle (CLI) | ✅ MISSING→GRACE, valid key→ACTIVE, tamper→INVALID |
-| Backup embedded-DB flow | ✅ physical pgdata copy, rotation, export |
+| `node --test desktop/tests/*.test.js` | ✅ 44/44 (license, vault, watchdog, updater, control server, embedded DB) |
+| License lifecycle (CLI) | ✅ MISSING→GRACE, valid key→ACTIVE, tamper→INVALID, disk-serial fingerprint |
+| Backup & Restore (Embedded DB) | ✅ logical pg_dump + physical pgdata copy, rotation, export, physicalRestore() |
+| Service Worker Cache Lifecycle | ✅ Once-per-version cache clear, fast LAN kiosk persistence |
 | `/api/health` | ✅ live on running server |
 | `/system/health` + QR | ✅ renders, QR generated server-side |
-| Terminal offline queue (5 new endpoints) | ✅ wired via `offlineFetchWrapper` |
+| Terminal offline queue | ✅ 100% write mutations wrapped via `offlineFetchWrapper` |
 | SW app-shell fallback | ✅ v2 precache + navigation fallback |
 | Google SSO / Razorpay offline | ✅ env-gated, degrade to local flows |
-| Embedded Postgres first boot | ✅ installed exe: initdb → schema.sql → compiled seed → server up |
-| Electron tray/installer/watchdog-on-power-cut | ✅ installer built (`ManufacturingMax-Setup-1.0.0.exe`), installed, clean restart verified on Windows |
-
-## Roadmap (not yet built)
-
-- Phase 5 cloud bridge implementation (`CLOUD_BRIDGE=true`)
-- Real disk-serial fingerprint extension point
-- Logical `pg_dump` backups for embedded Postgres (v1 uses physical pgdata copies)
+| Embedded Postgres first boot | ✅ initdb → schema.sql → compiled seed → server up |
+| Electron tray/installer/watchdog-on-power-cut | ✅ clean auto-start and restart verified |

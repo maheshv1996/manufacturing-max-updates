@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -98,14 +99,12 @@ export async function POST(req: Request) {
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        action: "COMPLAINT_RAISED",
-        entityType: "CustomerComplaint",
-        entityId: complaint.id,
-        details: JSON.stringify({ complaintNumber, customerName }),
-        actor: user.name,
-      },
+    await logAudit({
+      actor: user.name || "User",
+      action: "COMPLAINT_RAISED",
+      entityType: "CustomerComplaint",
+      entityId: complaint.id,
+      details: JSON.stringify({ complaintNumber, customerName }),
     });
 
     return NextResponse.json(complaint, { status: 201 });

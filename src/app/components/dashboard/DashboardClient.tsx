@@ -1,5 +1,7 @@
 "use client";
 
+import { logClientError } from "@/lib/clientLogger";
+import { offlineFetchWrapper } from "@/lib/offlineSync";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -144,7 +146,7 @@ export default function DashboardClient({
     fetch("/api/overrides")
       .then((r) => r.json())
       .then((d) => setOverrides(d.overrides || []))
-      .catch(console.error);
+      .catch((err) => logClientError(err, "DashboardClient"));
   };
 
   useEffect(() => {
@@ -153,7 +155,7 @@ export default function DashboardClient({
       .then((d) => {
         if (d.weeklySummary) setFiveSSummary(d.weeklySummary);
       })
-      .catch(console.error);
+      .catch((err) => logClientError(err, "DashboardClient"));
 
     fetchOverrides();
   }, []);
@@ -313,13 +315,13 @@ export default function DashboardClient({
   const handleUpdatePrefs = async (newPrefs: UserPreferences) => {
     setPrefs(newPrefs);
     try {
-      await fetch("/api/user/prefs", {
+      await offlineFetchWrapper("/api/user/prefs", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newPrefs),
       });
     } catch (e) {
-      console.error("Failed to save prefs", e);
+      logClientError("Failed to save prefs", e, "DashboardClient");
     }
   };
 

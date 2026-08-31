@@ -100,15 +100,13 @@ export const tokens = {
     glowPurple: "shadow-[0_0_30px_rgba(168,85,247,0.10)]",
     glowCyan: "shadow-[0_0_30px_rgba(6,182,212,0.10)]",
     inner: "shadow-inner",
-    glass:
-      "shadow-[0_4px_24px_rgba(0,0,0,0.32),0_0_36px_rgba(99,102,241,0.06)]",
-    glassHover:
-      "shadow-[0_8px_32px_rgba(0,0,0,0.42),0_0_44px_rgba(99,102,241,0.09)]",
+    glass: "shadow-[0_4px_24px_rgba(0,0,0,0.32),0_0_36px_rgba(99,102,241,0.06)]",
+    glassHover: "shadow-[0_8px_32px_rgba(0,0,0,0.42),0_0_44px_rgba(99,102,241,0.09)]",
   },
   transition: {
     fast: "transition-all duration-150 ease-out",
     normal: "transition-all duration-200 ease-out",
-    slow: "transition-all duration-300 ease-out",
+    slow: "transition-all duration-300 ease-out motion-reduce:transition-none",
     spring: "transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
     cinematic: "transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
   },
@@ -151,25 +149,19 @@ export const tokens = {
       "bg-gradient-to-br from-white/12 via-slate-800/55 to-slate-900/90 backdrop-blur-2xl border border-white/16",
   },
   gradient: {
-    auroraBlue:
-      "bg-gradient-to-br from-blue-500/12 via-transparent to-purple-500/12",
-    auroraEmerald:
-      "bg-gradient-to-br from-emerald-500/12 via-transparent to-cyan-500/12",
-    auroraAmber:
-      "bg-gradient-to-br from-amber-500/12 via-transparent to-orange-500/12",
-    auroraRose:
-      "bg-gradient-to-br from-rose-500/12 via-transparent to-pink-500/12",
-    auroraCyan:
-      "bg-gradient-to-br from-cyan-500/12 via-transparent to-blue-500/12",
+    auroraBlue: "bg-gradient-to-br from-blue-500/12 via-transparent to-purple-500/12",
+    auroraEmerald: "bg-gradient-to-br from-emerald-500/12 via-transparent to-cyan-500/12",
+    auroraAmber: "bg-gradient-to-br from-amber-500/12 via-transparent to-orange-500/12",
+    auroraRose: "bg-gradient-to-br from-rose-500/12 via-transparent to-pink-500/12",
+    auroraCyan: "bg-gradient-to-br from-cyan-500/12 via-transparent to-blue-500/12",
     mesh: "bg-[radial-gradient(ellipse_at_20%_20%,rgba(59,130,246,0.07)_0%,transparent_50%),radial-gradient(ellipse_at_80%_80%,rgba(168,85,247,0.06)_0%,transparent_50%),radial-gradient(ellipse_at_50%_50%,rgba(6,182,212,0.04)_0%,transparent_40%)]",
     meshWarm:
       "bg-[radial-gradient(ellipse_at_20%_20%,rgba(245,158,11,0.06)_0%,transparent_50%),radial-gradient(ellipse_at_80%_80%,rgba(251,113,133,0.06)_0%,transparent_50%),radial-gradient(ellipse_at_50%_50%,rgba(236,72,153,0.04)_0%,transparent_40%)]",
     cardAccent: "bg-gradient-to-br from-white/5 via-transparent to-white/2",
-    cardAccentHover:
-      "bg-gradient-to-br from-white/10 via-transparent to-white/5",
+    cardAccentHover: "bg-gradient-to-br from-white/10 via-transparent to-white/5",
   },
   focus:
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
 } as const;
 
 export type Tokens = typeof tokens;
@@ -178,31 +170,139 @@ export function cn(...classes: (string | undefined | null | false)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
+/**
+ * Universal Tone & Status Badge Style Normalizer.
+ * Handles snake_case, kebab-case, camelCase, and UPPERCASE values across ERP/MES modules.
+ */
 export function toneClass(tone: string): string {
-  const map: Record<string, string> = {
-    ok: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-    warn: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-    danger: "bg-rose-500/10 text-rose-500 border-rose-500/30",
-    info: "bg-sky-500/10 text-sky-500 border-sky-500/30",
-    live: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-    partial: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-    planned: "bg-slate-500/10 text-slate-500 border-slate-500/30",
-    draft: "bg-blue-500/10 text-blue-500 border-blue-500/30",
-    active: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-    in_progress: "bg-blue-500/10 text-blue-500 border-blue-500/30",
-    completed: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-    on_hold: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-    running: "bg-cyan-500/10 text-cyan-500 border-cyan-500/30",
-    warning: "bg-amber-500/10 text-amber-500 border-amber-500/30",
-    critical: "bg-rose-500/10 text-rose-500 border-rose-500/30",
-  };
-  return map[tone] || "bg-slate-500/10 text-slate-500 border-slate-500/30";
+  if (!tone) return "bg-slate-500/10 text-slate-400 border-slate-500/30";
+
+  const key = tone
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  // Success / Positive / Conforming
+  if (
+    [
+      "ok",
+      "pass",
+      "passed",
+      "approved",
+      "active",
+      "live",
+      "completed",
+      "conforming",
+      "resolved",
+      "success",
+      "healthy",
+      "verified",
+      "certified",
+      "closed_won",
+      "released",
+      "dispatched",
+      "cleared",
+    ].includes(key)
+  ) {
+    return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+  }
+
+  // Warning / Pending / In-Review / Attention
+  if (
+    [
+      "warn",
+      "warning",
+      "partial",
+      "on_hold",
+      "onhold",
+      "hold",
+      "expiring_soon",
+      "pending",
+      "in_review",
+      "under_review",
+      "review",
+      "quarantine",
+      "attention",
+      "stalled",
+      "delayed",
+      "maintenance_due",
+      "rework",
+    ].includes(key)
+  ) {
+    return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+  }
+
+  // Danger / Critical / Failed / Scrap
+  if (
+    [
+      "danger",
+      "critical",
+      "fail",
+      "failed",
+      "rejected",
+      "expired",
+      "suspended",
+      "breached",
+      "non_conforming",
+      "scrap",
+      "error",
+      "overdue",
+      "blocked",
+      "high_risk",
+      "unhealthy",
+      "breakdown",
+    ].includes(key)
+  ) {
+    return "bg-rose-500/10 text-rose-400 border-rose-500/30";
+  }
+
+  // Info / In-Progress / Running / Queued
+  if (
+    [
+      "info",
+      "draft",
+      "in_progress",
+      "inprogress",
+      "running",
+      "open",
+      "new",
+      "blue",
+      "cyan",
+      "processing",
+      "scheduled",
+      "assigned",
+      "submitted",
+      "queued",
+      "monitoring",
+    ].includes(key)
+  ) {
+    return "bg-sky-500/10 text-sky-400 border-sky-500/30";
+  }
+
+  // R&D / Special / Prototype
+  if (
+    [
+      "rnd",
+      "prototype",
+      "experimental",
+      "custom",
+      "special",
+      "purple",
+      "violet",
+    ].includes(key)
+  ) {
+    return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+  }
+
+  // Planned / Neutral / Archived / Default
+  return "bg-slate-500/10 text-slate-400 border-slate-500/30";
 }
 
 export function statusBadge(status: string, size: "sm" | "md" = "sm") {
   const padding =
-    size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs";
-  return `${padding} font-bold rounded-full border ${toneClass(status)}`;
+    size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-xs";
+  return `${padding} font-semibold rounded-full border ${toneClass(status)}`;
 }
 
 export function glassCard(
@@ -220,11 +320,11 @@ export function glassCard(
   const hoverCls = hover
     ? {
         default:
-          "hover:bg-slate-800/70 hover:border-white/16 hover:shadow-[0_8px_32px_rgba(0,0,0,0.42),0_0_44px_rgba(99,102,241,0.09)] hover:-translate-y-0.5",
+          "hover:bg-slate-800/70 hover:border-white/16 hover:shadow-[0_8px_32px_rgba(0,0,0,0.42),0_0_44px_rgba(99,102,241,0.09)] motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none",
         premium:
-          "hover:bg-gradient-to-br_hover:from-white/12_hover:via-slate-800/55_hover:to-slate-900/90 hover:border-white/16 hover:shadow-[0_12px_40px_rgba(0,0,0,0.5),0_0_52px_rgba(99,102,241,0.11)] hover:-translate-y-0.5",
+          "hover:bg-slate-800/60 hover:border-white/16 hover:shadow-[0_12px_40px_rgba(0,0,0,0.5),0_0_52px_rgba(99,102,241,0.11)] motion-safe:hover:-translate-y-0.5 motion-reduce:transform-none",
         modal: "",
       }[variant]
     : "";
-  return cn(base[variant], hoverCls, "transition-all duration-300 ease-out");
+  return cn(base[variant], hoverCls, "transition-all duration-300 ease-out motion-reduce:transition-none");
 }

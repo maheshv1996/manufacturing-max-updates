@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Wrench, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -50,7 +52,7 @@ export default function PredictiveClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load predictive data:", err);
+      logClientError("Failed to load predictive data:", err, "PredictiveClient");
     } finally {
       setLoading(false);
     }
@@ -78,7 +80,7 @@ export default function PredictiveClient() {
         setTimeout(() => setActionMessage(null), 4000);
       }
     } catch (err) {
-      console.error("Schedule error:", err);
+      logClientError("Schedule error:", err, "PredictiveClient");
     } finally {
       setDispatchingId(null);
     }

@@ -1,7 +1,9 @@
+import { logAudit } from "@/lib/audit";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
+    await logAudit({ actor: "system", action: "DEVICE_PUNCH", entityType: "AttendanceLog", details: "Attendance punch from device" });
   try {
     const deviceKey = req.headers.get("x-device-key");
     if (!deviceKey) {

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Plus, RefreshCw, X } from "lucide-react";
@@ -110,7 +112,7 @@ export default function MachineDetailHeaderClient({ machine }: Props) {
       setIsModalOpen(false);
       router.refresh();
     } catch (err) {
-      console.error("Error submitting downtime event:", err);
+      logClientError("Error submitting downtime event:", err, "MachineDetailHeaderClient");
       setFormError(
         err instanceof Error ? err.message : "An unexpected error occurred",
       );

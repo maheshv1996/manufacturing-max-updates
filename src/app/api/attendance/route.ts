@@ -102,7 +102,7 @@ export async function GET(request: Request) {
 
     // Monthly Register processing if operatorId is selected
     let monthlyRegister: any[] = [];
-    let monthlyTotals = {
+    const monthlyTotals = {
       presentDays: 0,
       lateCount: 0,
       totalHours: 0,
@@ -216,7 +216,7 @@ export async function GET(request: Request) {
 
       // Inject leave days into the monthly register
       monthlyLeaves.forEach((leave) => {
-        let current = new Date(
+        const current = new Date(
           Math.max(leave.fromDate.getTime(), startDate.getTime()),
         );
         const end = new Date(

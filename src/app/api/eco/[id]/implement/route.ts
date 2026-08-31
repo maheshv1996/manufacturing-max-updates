@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -7,6 +8,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+    await logAudit({ actor: "system", action: "ECO_IMPLEMENTED", entityType: "Eco", details: "Engineering change order implemented" });
   try {
     const { id } = await params;
     const body = await request.json();

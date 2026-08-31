@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -33,7 +35,7 @@ export default function MyRoutineCard({
         setCompletedIds(json.completedStepIds || []);
       }
     } catch (err) {
-      console.error("Failed to fetch routine:", err);
+      logClientError("Failed to fetch routine:", err, "MyRoutineCard");
     } finally {
       setLoading(false);
     }
@@ -41,6 +43,7 @@ export default function MyRoutineCard({
 
   useEffect(() => {
     fetchRoutine();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, userId]);
 
   const toggleStep = async (stepId: string, e: React.MouseEvent) => {
@@ -65,7 +68,7 @@ export default function MyRoutineCard({
         }),
       });
     } catch (err) {
-      console.error("Failed to update routine progress:", err);
+      logClientError("Failed to update routine progress:", err, "MyRoutineCard");
     }
   };
 

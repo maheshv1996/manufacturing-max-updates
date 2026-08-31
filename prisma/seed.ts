@@ -77,9 +77,6 @@ async function main() {
   console.log("1. Creating Plant & Production Lines...");
   const plant = await prisma.plant.create({
     data: {
-      // Fixed id so the schema's plantId defaults (cmsk25u7m000090odnjljb9rk)
-      // on Machine/WorkOrder/RawMaterial/InventoryTransaction resolve correctly.
-      id: "cmsk25u7m000090odnjljb9rk",
       name: "Apex Manufacturing Complex 1",
       address: "100 Industrial Parkway, Detroit, MI 48201",
     },
@@ -104,8 +101,7 @@ async function main() {
     data: {
       name: "CNC Milling Center 1",
       code: "CNC-01",
-      lineId: lineA.id,
-      idealCycleTimeSeconds: 30.0,
+      lineId: lineA.id, plantId: plant.id, idealCycleTimeSeconds: 30.0,
       status: "RUNNING",
       currentState: "RUNNING",
       iotEnabled: true,
@@ -117,8 +113,7 @@ async function main() {
     data: {
       name: "Injection Molding Machine 2",
       code: "IMM-02",
-      lineId: lineB.id,
-      idealCycleTimeSeconds: 15.0,
+      lineId: lineB.id, plantId: plant.id, idealCycleTimeSeconds: 15.0,
       status: "RUNNING",
       currentState: "RUNNING",
       iotEnabled: true,
@@ -130,8 +125,7 @@ async function main() {
     data: {
       name: "Robotic Welding Cell 3",
       code: "ROB-03",
-      lineId: lineA.id,
-      idealCycleTimeSeconds: 45.0,
+      lineId: lineA.id, plantId: plant.id, idealCycleTimeSeconds: 45.0,
       status: "RUNNING",
       currentState: "RUNNING",
       iotEnabled: true,
@@ -143,8 +137,7 @@ async function main() {
     data: {
       name: "Laser Cutter System 4",
       code: "LSR-04",
-      lineId: lineA.id,
-      idealCycleTimeSeconds: 20.0,
+      lineId: lineA.id, plantId: plant.id, idealCycleTimeSeconds: 20.0,
       status: "MAINTENANCE",
       stationName: "Cutting Bay",
     },
@@ -154,8 +147,7 @@ async function main() {
     data: {
       name: "Automated Packaging Cell 5",
       code: "PKG-05",
-      lineId: lineB.id,
-      idealCycleTimeSeconds: 10.0,
+      lineId: lineB.id, plantId: plant.id, idealCycleTimeSeconds: 10.0,
       status: "IDLE",
       stationName: "Packing Bay",
     },
@@ -3075,6 +3067,23 @@ async function main() {
       console.log("REV 2 drawing released — transmittal awaiting Production + Quality acknowledgement.");
     }
   }
+
+  console.log("Seeding Core System & Onboarding Settings...");
+  await prisma.setting.upsert({
+    where: { key: "onboardingComplete" },
+    update: { value: "true" },
+    create: { key: "onboardingComplete", value: "true" },
+  });
+  await prisma.setting.upsert({
+    where: { key: "onboardingSkipped" },
+    update: { value: "false" },
+    create: { key: "onboardingSkipped", value: "false" },
+  });
+  await prisma.setting.upsert({
+    where: { key: "companyCurrency" },
+    update: {},
+    create: { key: "companyCurrency", value: "INR" },
+  });
 
   console.log("Enterprise MES database seed complete!");
 }

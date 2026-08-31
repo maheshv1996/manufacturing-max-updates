@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus, Pencil, Trash2, X, Timer } from "lucide-react";
 
@@ -60,7 +62,7 @@ export default function TimeStudyClient() {
         setStudies(d.studies || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "TimeStudyClient");
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export default function TimeStudyClient() {
       if (!res.ok) alert(d.error || "Action failed");
       else await fetchData();
     } catch (e) {
-      console.error(e);
+      logClientError(e, "TimeStudyClient");
       alert("Action failed");
     } finally {
       setSaving(false);

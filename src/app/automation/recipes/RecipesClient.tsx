@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Zap,
@@ -50,7 +52,7 @@ export default function RecipesClient() {
         );
       }
     } catch (err) {
-      console.error("Failed to load recipes:", err);
+      logClientError("Failed to load recipes:", err, "RecipesClient");
     } finally {
       setLoading(false);
     }
@@ -76,7 +78,7 @@ export default function RecipesClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("Toggle error:", err);
+      logClientError("Toggle error:", err, "RecipesClient");
     } finally {
       setTogglingId(null);
     }

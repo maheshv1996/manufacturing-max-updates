@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
@@ -10,6 +11,7 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+    await logAudit({ actor: "system", action: "QUOTATION_CONVERTED", entityType: "Quotation", details: "Quotation converted to work order" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

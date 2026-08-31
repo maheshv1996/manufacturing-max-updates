@@ -105,15 +105,7 @@ export async function POST(req: Request) {
           destStep.specialProcessVendor.expiresAt,
         );
         if (vendorStatus === "EXPIRED") {
-          await prisma.auditLog.create({
-            data: {
-              action: "VENDOR_EXPIRED_BLOCKED",
-              actor: "system",
-              details: `Blocked dispatch to ${destStep.stationName}: vendor ${destStep.specialProcessVendor.name} (${destStep.specialProcessVendor.processType}) Nadcap cert EXPIRED`,
-              entityType: "WorkOrder",
-              entityId: workOrderId,
-            },
-          });
+          await logAudit({ action: "VENDOR_EXPIRED_BLOCKED", actor: movedByName || "system", details: `Blocked dispatch to ${destStep.stationName}: vendor ${destStep.specialProcessVendor.name} (${destStep.specialProcessVendor.processType}) Nadcap cert EXPIRED`, entityType: "WorkOrder", entityId: workOrderId });
           return NextResponse.json(
             {
               error: `Special process vendor ${destStep.specialProcessVendor.name} has an EXPIRED Nadcap certificate. Dispatch to ${destStep.stationName} blocked.`,

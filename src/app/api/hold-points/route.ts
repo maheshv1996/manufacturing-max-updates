@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -95,14 +96,12 @@ export async function POST(req: Request) {
         },
       });
 
-      await prisma.auditLog.create({
-        data: {
-          action: "HOLDPOINT_SIGNED",
-          actor: signedById || "system",
-          details: `Hold point signed off by ${inspectorName} (${inspectorOrg}) - ${result}`,
-          entityType: "WorkOrder",
-          entityId: workOrderId,
-        },
+      await logAudit({
+        action: "HOLDPOINT_SIGNED",
+        actor: signedById || inspectorName || "system",
+        details: `Hold point step ${routingStepId} signed off by ${inspectorName} (${inspectorOrg}) - ${result}`,
+        entityType: "WorkOrder",
+        entityId: workOrderId,
       });
 
       return NextResponse.json({ success: true, signoff });

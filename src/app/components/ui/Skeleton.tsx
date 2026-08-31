@@ -3,7 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/designTokens";
 
-interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   className?: string;
   variant?: "rectangular" | "circular" | "rounded";
 }
@@ -21,14 +21,15 @@ export function Skeleton({
 
   return (
     <div
+      aria-hidden="true"
       className={cn(
-        "bg-surface-3/60 relative overflow-hidden animate-pulse",
+        "bg-slate-800/60 relative overflow-hidden motion-safe:animate-pulse motion-reduce:animate-none border border-white/5",
         variantStyles[variant],
         className,
       )}
       {...props}
     >
-      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[shimmer_1.6s_infinite]" />
+      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent motion-safe:animate-[shimmer_1.6s_infinite] motion-reduce:hidden" />
     </div>
   );
 }
@@ -41,8 +42,12 @@ export function TableSkeleton({
   cols?: number;
 }) {
   return (
-    <div className="w-full space-y-3 p-4 bg-surface-1 border border-border rounded-3xl">
-      <div className="flex items-center justify-between pb-3 border-b border-border/60">
+    <div
+      role="status"
+      aria-label="Loading table data"
+      className="w-full space-y-3 p-4 bg-slate-800/40 border border-white/10 rounded-3xl backdrop-blur-xl"
+    >
+      <div className="flex items-center justify-between pb-3 border-b border-white/10">
         <Skeleton className="h-6 w-36" />
         <Skeleton className="h-8 w-24" />
       </div>
@@ -71,7 +76,11 @@ export function TableSkeleton({
 
 export function CardSkeleton() {
   return (
-    <div className="p-6 rounded-3xl bg-surface-1 border border-border space-y-4">
+    <div
+      role="status"
+      aria-label="Loading card content"
+      className="p-6 rounded-3xl bg-slate-800/40 border border-white/10 space-y-4 backdrop-blur-xl"
+    >
       <div className="flex items-center justify-between">
         <Skeleton className="h-5 w-28" />
         <Skeleton className="h-6 w-12" variant="circular" />

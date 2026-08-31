@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -88,7 +90,7 @@ export default function WorkOrderReadinessCard({
         alert(err.error || "Failed to create Purchase Order");
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "WorkOrderReadinessCard");
       alert("Error creating Purchase Order");
     } finally {
       setSubmittingPO(false);

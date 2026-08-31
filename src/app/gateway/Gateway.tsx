@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Cpu,
   ShieldCheck,
+  Brain,
 } from "lucide-react";
 import { DEPARTMENTS, type Department } from "@/lib/departments";
 import IconTile from "./IconTile";
@@ -45,10 +46,10 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Onboarding department toggle — key absent / empty = all departments shown.
   const [activeDepartments, setActiveDepartments] = useState<string[] | null>(
     null,
   );
+  const [dynamicDepts, setDynamicDepts] = useState<Department[]>(DEPARTMENTS);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -57,6 +58,31 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
         if (d?.user) setUser(d.user);
       })
       .catch(() => {});
+
+    fetch("/api/system/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.success && Array.isArray(data.departments) && data.departments.length > 0) {
+          // Merge with icons
+          const mapped = data.departments.map((d: any) => {
+            const base = DEPARTMENTS.find((b) => b.id === d.id);
+            return {
+              ...d,
+              icon: base?.icon || Factory,
+              functions: d.functions.map((fn: any) => {
+                const baseFn = base?.functions.find((bf) => bf.href === fn.href);
+                return {
+                  ...fn,
+                  icon: baseFn?.icon || ArrowRight,
+                };
+              }),
+            };
+          });
+          setDynamicDepts(mapped);
+        }
+      })
+      .catch(() => {});
+
     fetch("/api/settings")
       .then((r) => (r.ok ? r.json() : null))
       .then((s) => {
@@ -72,8 +98,8 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
   }, []);
 
   const visibleDepartments = activeDepartments
-    ? DEPARTMENTS.filter((d) => activeDepartments.includes(d.id))
-    : DEPARTMENTS;
+    ? dynamicDepts.filter((d) => activeDepartments.includes(d.id))
+    : dynamicDepts;
 
   const openDept = (d: Department) => {
     setView({ name: "dept", dept: d });
@@ -159,6 +185,13 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/ai/cortex")}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all shadow-sm"
+            >
+              <Brain className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Master Brain AI Cortex</span>
+            </button>
             {user ? (
               <div className="flex items-center gap-2">
                 <button
@@ -204,6 +237,17 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                   transition={{ duration: 0.4, delay: 0.15 }}
                   className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-3"
                 >
+                  <button
+                    onClick={() => router.push("/ai/cortex")}
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-extrabold text-xs shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-indigo-400/40"
+                  >
+                    <Brain className="w-4 h-4 text-indigo-200" />
+                    <span>Launch Master Brain Cortex</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] uppercase font-mono">
+                      12 Agents
+                    </span>
+                  </button>
+
                   <button
                     onClick={() =>
                       window.dispatchEvent(new Event("open-investor-modal"))

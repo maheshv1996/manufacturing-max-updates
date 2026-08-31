@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import Link from "next/link";
 import { Sparkles, Send, Bot, User, ArrowRight, RefreshCw } from "lucide-react";
@@ -66,7 +68,7 @@ export default function AiAssistantClient() {
         setMessages((prev) => [...prev, botMsg]);
       }
     } catch (err) {
-      console.error("AI error:", err);
+      logClientError("AI error:", err, "AiAssistantClient");
     } finally {
       setLoading(false);
     }

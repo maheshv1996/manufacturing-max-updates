@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { Mail, CheckCircle2 } from "lucide-react";
 
@@ -20,7 +22,7 @@ export default function EmailChallanButton({ month }: { month: string }) {
       if (!res.ok) alert(d.error || "Email failed");
       else setResult(d.message || "Done.");
     } catch (e) {
-      console.error(e);
+      logClientError(e, "EmailChallanButton");
       alert("Email failed");
     } finally {
       setBusy(false);

@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { computeSpcStats } from "@/lib/spcData";
 import type { SpcMeasurement } from "@/lib/spcData";
@@ -142,6 +145,12 @@ export default async function SpcPage(props: {
     characteristic?: string;
   }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const searchParams = await props.searchParams;
   const parsedRange = parseDateRange(searchParams || {});
 

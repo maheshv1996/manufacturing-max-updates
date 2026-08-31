@@ -44,10 +44,11 @@ if (fs.existsSync(standaloneDir)) {
 // via `prisma db push`), so concatenating migrations would produce a broken
 // install. `migrate diff --from-empty --to-schema` reflects the whole datamodel.
 try {
-  execSync(
-    `npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > ${path.join(resourcesDir, "schema.sql")}`,
-    { cwd: root, stdio: "pipe" }
-  );
+  const ddl = execSync(
+    `npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`,
+    { cwd: root, maxBuffer: 20 * 1024 * 1024 }
+  ).toString("utf8");
+  fs.writeFileSync(path.join(resourcesDir, "schema.sql"), ddl, "utf8");
 } catch (e) {
   const msg = String(e.stdout || e.stderr || e.message || "");
   throw new Error("schema generation failed:\n" + msg.slice(0, 1500));
@@ -91,7 +92,7 @@ fs.copyFileSync(path.join(root, "src", "lib", "grr.ts"), path.join(libSrcDir, "g
 
 try {
   execSync(
-    `npx tsc prisma/seed.ts src/lib/prisma.ts src/lib/grr.ts --outDir ${outDir.replace(/\\/g, "/")} --module commonjs --target es2020 --esModuleInterop --skipLibCheck --moduleResolution node --rootDir .`,
+    `npx tsc prisma/seed.ts src/lib/prisma.ts src/lib/grr.ts --outDir "${outDir.replace(/\\/g, "/")}" --module commonjs --target es2020 --esModuleInterop --skipLibCheck --moduleResolution node --rootDir .`,
     { cwd: srcDir, stdio: "pipe" }
   );
 } catch (e) {

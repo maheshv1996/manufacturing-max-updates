@@ -24,7 +24,7 @@ const crypto = require("crypto");
 const net = require("net");
 const { spawnSync } = require("child_process");
 
-const DEFAULT_PORT = 5432;
+const DEFAULT_PORT = 54329;
 const APP_DB = "mfgmax";
 const SUPERUSER = "mfgmax";
 
@@ -84,10 +84,16 @@ function initCluster({ dataDir, binDir, port = DEFAULT_PORT, log = () => {} }) {
   } catch {}
   if (init.status !== 0) throw new Error("initdb failed with status " + init.status);
 
+  // Explicitly configure port and listen_addresses in postgresql.conf to avoid colliding with any system Postgres
+  const confPath = path.join(pgdataDir, "postgresql.conf");
+  try {
+    fs.appendFileSync(confPath, `\nport = ${port}\nlisten_addresses = '127.0.0.1'\n`);
+  } catch {}
+
   const url = `postgresql://${SUPERUSER}:${encodeURIComponent(password)}@127.0.0.1:${port}/${APP_DB}`;
   const cfg = { url, password, pgdataDir, port, initialized: false, version: 1 };
   writeConfig(dataDir, cfg);
-  log("[db] cluster initialized — config written");
+  log("[db] cluster initialized — config written (port " + port + ")");
   return { ...cfg, fresh: true };
 }
 
@@ -165,8 +171,11 @@ function applyInitialData({
 
   const setup = path.join(seedDeploy, "setup-db.js");
   log("[db] applying schema + seed (first run)…");
-  const r = spawnSync(nodeBin, [setup], { env, stdio: "ignore", windowsHide: true, timeout: 600_000 });
-  if (r.status !== 0) throw new Error("initial data load failed with status " + r.status);
+  const r = spawnSync(nodeBin, [setup], { env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true, timeout: 600_000 });
+  if (r.status !== 0) {
+    const errText = (r.stderr || r.stdout || "").toString().trim();
+    throw new Error("initial data load failed with status " + r.status + (errText ? ": " + errText : ""));
+  }
 
   writeConfig(dataDir, { ...cfg, initialized: true });
   log("[db] initial data complete (.initialized written)");
@@ -334,4 +343,29 @@ function dirSize(dir) {
   return total;
 }
 
-module.exports = { initCluster, applyInitialData, tcpReady, physicalBackup, physicalRestore, logicalBackup, readConfig, writeConfig, configPath, DEFAULT_PORT, APP_DB, SUPERUSER };
+
+/**
+ * Logical restore of the embedded cluster via `pg_restore` from a custom format dump.
+ */
+function logicalRestore({ databaseUrl, binDir, backupFile, log = () => {} }) {
+  const pgRestore = path.join(binDir, process.platform === "win32" ? "pg_restore.exe" : "pg_restore");
+  if (!fs.existsSync(pgRestore)) throw new Error("pg_restore not found in " + binDir);
+  if (!fs.existsSync(backupFile)) throw new Error("backup file not found: " + backupFile);
+
+  log("[db] logical pg_restore from " + backupFile + "…");
+  const r = spawnSync(
+    pgRestore,
+    ["--clean", "--if-exists", "--no-owner", "--no-privileges", "--dbname=" + databaseUrl, backupFile],
+    { stdio: "ignore", windowsHide: true, timeout: 600_000 }
+  );
+
+  // pg_restore returns 0 on success, or 1 if warnings occurred (e.g. table didn't exist before clean)
+  if (r.status !== 0 && r.status !== 1) {
+    throw new Error("pg_restore failed with status " + r.status);
+  }
+
+  log("logical restore complete from " + backupFile);
+  return { restoredFrom: backupFile };
+}
+
+module.exports = { initCluster, applyInitialData, tcpReady, physicalBackup, physicalRestore, logicalBackup, logicalRestore, readConfig, writeConfig, configPath, DEFAULT_PORT, APP_DB, SUPERUSER };

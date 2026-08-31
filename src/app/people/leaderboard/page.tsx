@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import { Trophy } from "lucide-react";
 import DateRangeBar from "@/app/components/dashboard/DateRangeBar";
 import LeaderboardClient from "./LeaderboardClient";
@@ -12,6 +16,14 @@ export const revalidate = 0;
 export default async function LeaderboardPage(props: {
   searchParams?: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/people/leaderboard");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const searchParams = await props.searchParams;
 
   // Default to this month instead of today if range is not provided

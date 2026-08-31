@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Topbar from "./Topbar";
 import ServiceWorkerRegister from "./ServiceWorkerRegister";
@@ -14,6 +14,7 @@ import TopProgressBar from "./TopProgressBar";
 import GlossaryModal from "./GlossaryModal";
 import SessionInactivityGuard from "./SessionInactivityGuard";
 import InvestorDemoModal from "@/app/components/shared/InvestorDemoModal";
+import AuraSidecarDrawer from "@/app/components/ai/AuraSidecarDrawer";
 import { can } from "@/lib/permissions";
 import { useDeviceTier, PREMIUM_EASE } from "@/lib/motion";
 
@@ -35,6 +36,16 @@ export default function AppShell({
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const tier = useDeviceTier();
+  const [localSkipped, setLocalSkipped] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const isSkipped = localStorage.getItem("mfgmax_onboarding_skipped") === "true";
+        if (isSkipped) setLocalSkipped(true);
+      }
+    } catch {}
+  }, []);
 
   const isExcluded =
     pathname === "/login" ||
@@ -44,12 +55,13 @@ export default function AppShell({
     pathname?.startsWith("/track/");
 
   // First-run wizard: OWNER/ADMIN users are routed to /onboarding until they
-  // complete (or dismiss) it. Skipped paths never redirect.
+  // complete (or dismiss) it. Skipped paths / persisted skips never redirect.
   const needsOnboarding = !!(
     user &&
     (user.isOwner || can(user, "system.edit")) &&
     !onboardingComplete &&
-    !onboardingSkipped
+    !onboardingSkipped &&
+    !localSkipped
   );
   const onOnboardingPath =
     pathname === "/onboarding" || pathname?.startsWith("/onboarding/");
@@ -108,6 +120,7 @@ export default function AppShell({
       <GlossaryModal />
       <SessionInactivityGuard />
       <InvestorDemoModal />
+      <AuraSidecarDrawer />
 
       <div className="flex-1 flex flex-col min-h-screen">
         {!isExcluded && <Topbar user={user} />}

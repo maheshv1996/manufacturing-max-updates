@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect } from "react";
 
 export default function ServiceWorkerRegister() {
@@ -15,7 +17,7 @@ export default function ServiceWorkerRegister() {
           // registration handled; failures surface via console.error below
         })
         .catch((error) => {
-          console.error("Service Worker registration failed:", error);
+          logClientError("Service Worker registration failed:", error, "ServiceWorkerRegister");
         });
     }
   }, []);

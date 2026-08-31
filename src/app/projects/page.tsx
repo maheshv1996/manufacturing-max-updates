@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState, useCallback } from "react";
 import SubFunctionGrid from "@/app/components/shared/SubFunctionGrid";
 import {
@@ -225,10 +227,11 @@ export default function ProjectsDashboard() {
         );
       }
     } catch (err) {
-      console.error(err);
+      logClientError(err, "page");
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

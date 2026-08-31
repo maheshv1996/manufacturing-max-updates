@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import ExecutiveBriefingClient from "./ExecutiveBriefingClient";
 
 export const metadata = {
@@ -8,6 +12,14 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function ExecutiveBriefingPage() {
+export default async function ExecutiveBriefingPage() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/reports/executive-briefing");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   return <ExecutiveBriefingClient />;
 }

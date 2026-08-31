@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/designTokens";
 
 export type StatusVariant =
@@ -15,7 +15,11 @@ export type StatusVariant =
   | "planned"
   | "running"
   | "completed"
-  | "active";
+  | "active"
+  | "in_progress"
+  | "draft"
+  | "on_hold"
+  | "critical";
 
 interface StatusPillProps {
   variant: StatusVariant;
@@ -27,36 +31,40 @@ interface StatusPillProps {
   animated?: boolean;
 }
 
-const variantMap: Record<StatusVariant, string> = {
-  success: "ok",
-  warning: "warn",
-  danger: "danger",
-  info: "info",
-  neutral: "neutral",
-  live: "live",
-  partial: "partial",
-  planned: "planned",
-  running: "running",
-  completed: "completed",
-  active: "active",
+const gradientMap: Record<StatusVariant, string> = {
+  success: "from-emerald-500/15 to-emerald-500/5 text-emerald-400 border-emerald-500/30",
+  active: "from-emerald-500/15 to-emerald-500/5 text-emerald-400 border-emerald-500/30",
+  live: "from-emerald-500/15 to-emerald-500/5 text-emerald-400 border-emerald-500/30",
+  completed: "from-emerald-500/15 to-emerald-500/5 text-emerald-400 border-emerald-500/30",
+  warning: "from-amber-500/15 to-amber-500/5 text-amber-400 border-amber-500/30",
+  partial: "from-amber-500/15 to-amber-500/5 text-amber-400 border-amber-500/30",
+  on_hold: "from-amber-500/15 to-amber-500/5 text-amber-400 border-amber-500/30",
+  danger: "from-rose-500/15 to-rose-500/5 text-rose-400 border-rose-500/30",
+  critical: "from-rose-500/15 to-rose-500/5 text-rose-400 border-rose-500/30",
+  info: "from-sky-500/15 to-sky-500/5 text-sky-400 border-sky-500/30",
+  in_progress: "from-blue-500/15 to-blue-500/5 text-blue-400 border-blue-500/30",
+  draft: "from-blue-500/15 to-blue-500/5 text-blue-400 border-blue-500/30",
+  running: "from-cyan-500/15 to-cyan-500/5 text-cyan-400 border-cyan-500/30",
+  planned: "from-slate-500/15 to-slate-500/5 text-slate-400 border-slate-500/30",
+  neutral: "from-slate-500/15 to-slate-500/5 text-slate-400 border-slate-500/30",
 };
 
-const gradientMap: Record<string, string> = {
-  ok: "from-emerald-500/12 to-emerald-500/4",
-  warn: "from-amber-500/12 to-amber-500/4",
-  danger: "from-rose-500/12 to-rose-500/4",
-  info: "from-sky-500/12 to-sky-500/4",
-  live: "from-emerald-500/12 to-emerald-500/4",
-  partial: "from-amber-500/12 to-amber-500/4",
-  planned: "from-slate-500/12 to-slate-500/4",
-  draft: "from-blue-500/12 to-blue-500/4",
-  active: "from-emerald-500/12 to-emerald-500/4",
-  in_progress: "from-blue-500/12 to-blue-500/4",
-  completed: "from-emerald-500/12 to-emerald-500/4",
-  on_hold: "from-amber-500/12 to-amber-500/4",
-  running: "from-cyan-500/12 to-cyan-500/4",
-  warning: "from-amber-500/12 to-amber-500/4",
-  critical: "from-rose-500/12 to-rose-500/4",
+const dotColorMap: Record<StatusVariant, string> = {
+  success: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
+  active: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
+  live: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
+  completed: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
+  warning: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]",
+  partial: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]",
+  on_hold: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]",
+  danger: "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]",
+  critical: "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.6)]",
+  info: "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]",
+  in_progress: "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]",
+  draft: "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]",
+  running: "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]",
+  planned: "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.6)]",
+  neutral: "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.6)]",
 };
 
 export function StatusPill({
@@ -68,22 +76,23 @@ export function StatusPill({
   size = "sm",
   animated = false,
 }: StatusPillProps) {
-  const tone = variantMap[variant];
-  const gradient = gradientMap[tone] || gradientMap.neutral;
+  const shouldReduceMotion = useReducedMotion();
+  const isMotionAllowed = animated && !shouldReduceMotion;
+  const styleCls = gradientMap[variant] || gradientMap.neutral;
+  const dotCls = dotColorMap[variant] || dotColorMap.neutral;
 
   return (
     <motion.span
-      initial={animated ? { opacity: 0, scale: 0.9 } : false}
-      animate={animated ? { opacity: 1, scale: 1 } : false}
+      initial={isMotionAllowed ? { opacity: 0, scale: 0.95 } : false}
+      animate={isMotionAllowed ? { opacity: 1, scale: 1 } : false}
       transition={
-        animated ? { type: "spring", stiffness: 300, damping: 20 } : undefined
+        isMotionAllowed ? { type: "spring", stiffness: 300, damping: 20 } : undefined
       }
       className={cn(
-        "inline-flex items-center gap-1.5 font-semibold rounded-full border backdrop-blur-xl",
+        "inline-flex items-center gap-1.5 font-semibold rounded-full border backdrop-blur-xl select-none",
         "bg-gradient-to-br",
-        gradient,
-        "border-white/10",
-        size === "sm" && "px-2.5 py-0.5 text-[11px]",
+        styleCls,
+        size === "sm" && "px-2.5 py-0.5 text-xs",
         size === "md" && "px-3 py-1 text-xs",
         size === "lg" && "px-4 py-1.5 text-sm",
         className,
@@ -91,13 +100,18 @@ export function StatusPill({
     >
       {dot && (
         <motion.span
-          className="w-1.5 h-1.5 rounded-full bg-current opacity-80"
-          animate={animated ? { opacity: [0.8, 1, 0.8] } : undefined}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden="true"
+          className={cn("w-1.5 h-1.5 rounded-full shrink-0", dotCls)}
+          animate={isMotionAllowed ? { opacity: [0.6, 1, 0.6] } : undefined}
+          transition={
+            isMotionAllowed
+              ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              : undefined
+          }
         />
       )}
-      {icon && <span className="w-3.5 h-3.5 shrink-0">{icon}</span>}
-      {label}
+      {icon && <span aria-hidden="true" className="w-3.5 h-3.5 shrink-0">{icon}</span>}
+      <span>{label}</span>
     </motion.span>
   );
 }

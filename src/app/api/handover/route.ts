@@ -105,6 +105,13 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       if (handover.acknowledgedAt) {
+        await logAudit({
+          actor: user.name || "Supervisor",
+          action: "HANDOVER_ACK_DEDUPED",
+          entityType: "SHIFT_HANDOVER",
+          entityId: handover.id,
+          details: "Handover was already acknowledged; idempotent skip",
+        });
         return NextResponse.json({
           success: true,
           record: handover,

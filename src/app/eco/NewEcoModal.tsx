@@ -1,4 +1,5 @@
 ﻿"use client";
+import { logClientError } from "@/lib/clientLogger";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -32,7 +33,7 @@ export default function NewEcoModal() {
         alert("Failed to create ECO");
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "NewEcoModal");
       alert("Error creating ECO");
     } finally {
       setLoading(false);

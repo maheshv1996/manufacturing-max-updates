@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +15,7 @@ export default function FaiEditorPage() {
 
   useEffect(() => {
     fetchReport();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchReport = async () => {
@@ -24,7 +27,7 @@ export default function FaiEditorPage() {
         setChars(data.characteristics || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }
@@ -265,7 +268,7 @@ export default function FaiEditorPage() {
                 <tbody className="divide-y divide-white/10">
                   {chars.map((char, index) => {
                     return (
-                      <tr key={char.id} className="hover:bg-white/5">
+                      <tr key={char.id} className="hover:bg-slate-700/40">
                         <td className="px-4 py-2 text-sm text-white">
                           {char.charNo}
                         </td>

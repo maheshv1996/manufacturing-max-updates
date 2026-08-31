@@ -1,5 +1,6 @@
 "use client";
 
+import { offlineFetchWrapper } from "@/lib/offlineSync";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
@@ -29,7 +30,7 @@ export default function ChangePasswordPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await offlineFetchWrapper("/api/auth/change-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

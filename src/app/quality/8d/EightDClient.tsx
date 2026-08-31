@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -111,7 +113,7 @@ export default function EightDClient() {
         setProducts(d.products || []);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "EightDClient");
     } finally {
       setLoading(false);
     }
@@ -136,7 +138,7 @@ export default function EightDClient() {
         return d;
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "EightDClient");
       alert("Action failed");
     } finally {
       setSaving(false);

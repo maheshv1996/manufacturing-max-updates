@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import { getCapacityPlan } from "@/lib/capacityEngine";
 import CapacityClient from "./CapacityClient";
 import { startOfWeek } from "date-fns";
@@ -11,6 +15,14 @@ export default async function CapacityPage({
 }: {
   searchParams?: Promise<{ date?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/ops/capacity");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const sp = await searchParams;
   let startDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Default to Monday of current week
 

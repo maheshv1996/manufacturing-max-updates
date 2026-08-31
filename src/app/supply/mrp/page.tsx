@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import PageHeader from "@/app/components/shared/PageHeader";
 import {
@@ -65,7 +67,7 @@ export default function MrpWorkbench() {
         setMrpData(data.mrpResult);
       }
     } catch (err) {
-      console.error("MRP run failed:", err);
+      logClientError("MRP run failed:", err, "page");
     } finally {
       setLoading(false);
     }
@@ -95,7 +97,7 @@ export default function MrpWorkbench() {
         alert(err.error || "Failed to generate requisitions");
       }
     } catch (err) {
-      console.error("Generate requisitions error:", err);
+      logClientError("Generate requisitions error:", err, "page");
     } finally {
       setGenerating(false);
     }

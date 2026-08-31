@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Search, Loader2, Download } from "lucide-react";
@@ -33,6 +35,7 @@ export default function AuditTab() {
 
   useEffect(() => {
     fetchLogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, from, to, actionFilter, entityFilter]); // Trigger re-fetch when these change
 
   const fetchLogs = async (cursor?: string) => {
@@ -81,7 +84,7 @@ export default function AuditTab() {
         setNextCursor(data.nextCursor);
       }
     } catch (err) {
-      console.error("Failed to fetch logs", err);
+      logClientError("Failed to fetch logs", err, "AuditTab");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -114,7 +117,9 @@ export default function AuditTab() {
     }
     if (apiFrom) params.set("from", apiFrom);
     if (apiTo) params.set("to", apiTo);
-    window.location.href = `/api/audit/export?${params.toString()}`;
+    // API file download — must use location assign, not router.push (not a Next page)
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/api/audit/export?${params.toString()}`);
   };
 
   const actionOptions = [

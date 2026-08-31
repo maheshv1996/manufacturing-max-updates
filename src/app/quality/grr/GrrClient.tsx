@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import { Ruler, Plus, Loader2, X, Trash2, FlaskConical } from "lucide-react";
 import { computeGrr, grrVerdictLabel } from "@/lib/grr";
@@ -51,7 +53,7 @@ export default function GrrClient() {
         if (!toolId && d.tools?.[0]) setToolId(d.tools[0].id);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "GrrClient");
     } finally {
       setLoading(false);
     }
@@ -112,7 +114,7 @@ export default function GrrClient() {
       setLiveResult(computeGrr(measurements));
       setError("");
     } catch (e) {
-      console.error(e);
+      logClientError(e, "GrrClient");
     }
   };
 
@@ -150,7 +152,7 @@ export default function GrrClient() {
         await fetchData();
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "GrrClient");
       alert("Failed to save study");
     } finally {
       setSaving(false);

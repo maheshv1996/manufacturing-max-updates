@@ -27,7 +27,7 @@ export async function GET() {
       let totalCost = 0;
       let totalTests = 0;
       let passedTests = 0;
-      let iterationsCount = project.workOrders?.length || 0;
+      const iterationsCount = project.workOrders?.length || 0;
 
       project.workOrders?.forEach((wo: any) => {
         wo.testCampaigns?.forEach((tc: any) => {

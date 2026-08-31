@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import { CalendarDays } from "lucide-react";
@@ -33,6 +36,12 @@ const LEGEND: { label: string; cls: string }[] = [
 export default async function QualityCalendarReport(props: {
   searchParams?: Promise<{ year?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "quality.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const searchParams = await props.searchParams;
   const year = Number(searchParams?.year) || new Date().getFullYear();
   const now = new Date();

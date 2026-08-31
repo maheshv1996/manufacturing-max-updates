@@ -1,3 +1,4 @@
+import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -103,6 +104,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+    await logAudit({ actor: "system", action: "SUPPLIER_PAYMENT_RECORDED", entityType: "SupplierPayment", details: "Supplier payment recorded" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

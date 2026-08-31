@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Radio, Cpu, RefreshCw, Zap, Terminal } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -70,7 +72,7 @@ export default function SparkplugClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load Sparkplug B data:", err);
+      logClientError("Failed to load Sparkplug B data:", err, "SparkplugClient");
     } finally {
       setLoading(false);
     }
@@ -78,6 +80,7 @@ export default function SparkplugClient() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export default function SparkplugClient() {
       fetchData();
     }, 2500);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLive]);
 
   const handlePublishDbirth = async (deviceId: string) => {
@@ -102,7 +106,7 @@ export default function SparkplugClient() {
         await fetchData();
       }
     } catch (err) {
-      console.error("DBIRTH error:", err);
+      logClientError("DBIRTH error:", err, "SparkplugClient");
     }
   };
 

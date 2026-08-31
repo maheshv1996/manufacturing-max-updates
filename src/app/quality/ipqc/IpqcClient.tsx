@@ -220,7 +220,7 @@ export default function IpqcClient() {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="Review note (audit trail)…"
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-slate-500"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-slate-400"
                   />
                   <Button
                     onClick={() => doReview(run.id)}

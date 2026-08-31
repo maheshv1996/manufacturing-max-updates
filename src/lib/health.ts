@@ -22,12 +22,21 @@ let lastHealthy = true;
 let pinger: ReturnType<typeof setInterval> | null = null;
 let inflight = false;
 
+const DEFAULT_TIMEOUT_MS = 4000;
+const DEFAULT_INTERVAL_MS = 5000;
+
 export function subscribeHealth(listener: HealthListener) {
   listeners.add(listener);
   listener(lastPayload, lastHealthy);
   ensurePinger();
+
   return () => {
     listeners.delete(listener);
+    // Automatically tear down background timer when no active listeners remain
+    if (listeners.size === 0 && pinger) {
+      clearInterval(pinger);
+      pinger = null;
+    }
   };
 }
 
@@ -35,25 +44,31 @@ export function getHealthSnapshot() {
   return { payload: lastPayload, healthy: lastHealthy };
 }
 
-export async function pingHealth(): Promise<{
+export async function pingHealth(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<{
   payload: HealthPayload | null;
   healthy: boolean;
 }> {
+  if (typeof window === "undefined") {
+    return { payload: lastPayload, healthy: lastHealthy };
+  }
+
   if (inflight) return { payload: lastPayload, healthy: lastHealthy };
   inflight = true;
+
   let payload: HealthPayload | null = null;
   let healthy = false;
+
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     const res = await fetch("/api/health", {
       cache: "no-store",
       signal: controller.signal,
     });
     clearTimeout(timer);
-    // Any HTTP answer proves the server is REACHABLE — including 401/403
-    // (auth is a separate concern; the banner exists to catch dead servers,
-    // and a logged-out visitor would otherwise see a false "unreachable").
+
+    // Any HTTP answer proves the server process is reachable
     if (res.ok) {
       payload = await res.json();
       healthy = Boolean(payload?.ok);
@@ -73,16 +88,26 @@ export async function pingHealth(): Promise<{
   setServerOnline(healthy);
 
   if (changed) {
-    listeners.forEach((fn) => fn(payload, healthy));
+    listeners.forEach((fn) => {
+      try {
+        fn(payload, healthy);
+      } catch (err) {
+        console.error("Error in health listener callback:", err);
+      }
+    });
   }
+
   return { payload, healthy };
 }
 
 function ensurePinger() {
+  if (typeof window === "undefined") return;
   if (pinger) return;
+
   pinger = setInterval(() => {
     pingHealth();
-  }, 5000);
-  // Ping once immediately so the banner resolves fast on first paint.
+  }, DEFAULT_INTERVAL_MS);
+
+  // Ping immediately on mount so connectivity banner status resolves without initial delay
   pingHealth();
 }

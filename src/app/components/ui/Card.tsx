@@ -27,7 +27,7 @@ export function Card({
       {/* GPU-cheap glow: an opacity layer instead of animating box-shadow */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
         style={{
           boxShadow:
             "0 0 60px rgba(99,102,241,0.14), inset 0 0 30px rgba(255,255,255,0.03)",

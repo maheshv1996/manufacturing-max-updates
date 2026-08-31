@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useEffect, useState } from "react";
 import {
   Maximize,
@@ -39,7 +41,7 @@ export default function AndonBoard() {
         setMachines(data);
       }
     } catch (err) {
-      console.error("Failed to fetch Andon data:", err);
+      logClientError("Failed to fetch Andon data:", err, "page");
     }
   };
 
@@ -57,7 +59,7 @@ export default function AndonBoard() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
-        console.error("Error attempting to enable fullscreen:", err);
+        logClientError("Error attempting to enable fullscreen:", err, "page");
       });
       setIsFullscreen(true);
       const header = document.querySelector("header");

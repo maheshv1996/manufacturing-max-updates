@@ -37,6 +37,7 @@ export const DEFAULT_KPI_CARDS: KpiCardConfig[] = [
   { id: "scrap", visible: true, order: 3 },
   { id: "mttr", visible: false, order: 4 },
   { id: "fpy", visible: false, order: 5 },
+  { id: "capacity", visible: false, order: 6 },
 ];
 
 export const DEFAULT_SECTIONS: SectionConfig = {

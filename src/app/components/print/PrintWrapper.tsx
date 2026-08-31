@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import React, { useEffect, useState } from "react";
 import { Printer, ArrowLeft, Factory } from "lucide-react";
 import Link from "next/link";
@@ -40,7 +42,7 @@ export default function PrintWrapper({
           });
         }
       })
-      .catch((err) => console.error(err));
+      .catch((err) => logClientError(err, "PrintWrapper"));
   }, []);
 
   return (

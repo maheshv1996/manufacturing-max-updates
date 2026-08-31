@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import ClientReportControls from "./ClientReportControls";
@@ -11,6 +14,12 @@ export default async function DailyReportPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "ops.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const resolvedParams = await searchParams;
   const targetDate = resolvedParams.date
     ? parseISO(resolvedParams.date)
@@ -48,7 +57,7 @@ export default async function DailyReportPage({
     let mGood = 0;
     let mScrap = 0;
     let mDowntime = 0;
-    let idealCycleTimeSeconds = machine.idealCycleTimeSeconds || 60;
+    const idealCycleTimeSeconds = machine.idealCycleTimeSeconds || 60;
 
     const wosSet = new Map<string, string>();
 

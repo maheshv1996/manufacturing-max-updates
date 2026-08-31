@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   AlertOctagon,
@@ -73,7 +75,7 @@ export default function ScrapMRBPage() {
         setTargetMachineId(macList[0].id);
       }
     } catch (e) {
-      console.error(e);
+      logClientError(e, "page");
     } finally {
       setLoading(false);
     }
@@ -81,6 +83,7 @@ export default function ScrapMRBPage() {
 
   useEffect(() => {
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenModal = (item: ScrapQuarantineItem) => {

@@ -1,3 +1,6 @@
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import PrintButton from "@/app/components/print/PrintButton";
 import { getBranding } from "@/lib/settings";
@@ -79,6 +82,12 @@ const fmt = (v: number) => v.toLocaleString("en-IN");
 export default async function PfEsiChallanPage(props: {
   searchParams?: Promise<{ month?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.isOwner && !can(user, "people.view") && !can(user, "reports.print")) {
+    redirect("/");
+  }
+
   const searchParams = await props.searchParams;
   const branding = await getBranding();
 

@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import { Truck, MapPin, Navigation, RefreshCw, Radio } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
@@ -53,7 +55,7 @@ export default function FleetRadarClient() {
         }
       }
     } catch (err) {
-      console.error("Failed to load fleet radar data:", err);
+      logClientError("Failed to load fleet radar data:", err, "FleetRadarClient");
     } finally {
       setLoading(false);
     }

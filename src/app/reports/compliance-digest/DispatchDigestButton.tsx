@@ -1,5 +1,7 @@
 "use client";
 
+
+import { logClientError } from "@/lib/clientLogger";
 import { useState } from "react";
 import { Send, CheckCircle2 } from "lucide-react";
 
@@ -18,7 +20,7 @@ export default function DispatchDigestButton() {
       if (!res.ok) alert(d.error || "Dispatch failed");
       else setResult(d.message || "Digest dispatched.");
     } catch (e) {
-      console.error(e);
+      logClientError(e, "DispatchDigestButton");
       alert("Dispatch failed");
     } finally {
       setBusy(false);

@@ -1,3 +1,7 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { getUserFromHeaders, can } from "@/lib/permissions";
+import { permissionForPath } from "@/lib/departments";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar, Package } from "lucide-react";
@@ -32,6 +36,14 @@ export default async function MachineDetailPage(props: {
   params: Promise<{ machineId: string }>;
   searchParams?: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  const requiredPerm = permissionForPath("/system/machines/[machineId]");
+
+  if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    redirect("/");
+  }
+
   const { machineId } = await props.params;
   const searchParams = await props.searchParams;
   const parsedRange = parseDateRange(searchParams || {});

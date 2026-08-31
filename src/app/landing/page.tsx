@@ -35,7 +35,7 @@ const Counter = ({
 
   useEffect(() => {
     if (isInView) {
-      let start = from;
+      const start = from;
       const end = to;
       let startTime: number | null = null;
 

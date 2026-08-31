@@ -35,47 +35,34 @@ let staleGuardTimer = null;
 
 async function clearServiceWorkerStorage() {
   try {
-    await session.defaultSession.clearStorageData({
-      storages: ["cachestorage", "serviceworkers"],
-    });
+    const userDir = app.getPath("userData");
+    const versionFile = path.join(userDir, ".sw_cache_version");
+    const currentVersion = app.getVersion() || "1.0.0";
+    let storedVersion = "";
+    if (fs.existsSync(versionFile)) {
+      try {
+        storedVersion = fs.readFileSync(versionFile, "utf8").trim();
+      } catch {}
+    }
+
+    if (storedVersion !== currentVersion) {
+      console.log(`[stale-build] Version change detected (${storedVersion || "none"} -> ${currentVersion}). Clearing Service Worker cache storage...`);
+      await session.defaultSession.clearStorageData({
+        storages: ["cachestorage", "serviceworkers"],
+      });
+      try {
+        fs.writeFileSync(versionFile, currentVersion, "utf8");
+      } catch {}
+    } else {
+      console.log(`[stale-build] Version ${currentVersion} matches cached state. Preserving cache storage for fast LAN startup.`);
+    }
   } catch (e) {
-    console.log("[stale-build] SW clear failed:", e?.message);
+    console.log("[stale-build] SW clear check failed:", e?.message);
   }
 }
 
 function armStaleGuard(port) {
-  if (staleGuardTimer) {
-    clearInterval(staleGuardTimer);
-    staleGuardTimer = null;
-  }
-  lastServerStartedAt = null;
-  staleGuardArmed = true;
-  const url = `http://127.0.0.1:${port}/api/health`;
-  const tick = async () => {
-    if (!staleGuardArmed || !mainWindow || mainWindow.isDestroyed()) return;
-    let h = null;
-    try {
-      const res = await fetch(url);
-      if (res.ok) h = await res.json();
-    } catch {
-      return; // server unreachable — try again next tick
-    }
-    if (!h || typeof h.startedAt !== "string") return;
-    if (lastServerStartedAt === null) {
-      lastServerStartedAt = h.startedAt; // first observation — baseline only
-      return;
-    }
-    if (h.startedAt !== lastServerStartedAt) {
-      lastServerStartedAt = h.startedAt;
-      console.log("[stale-build] server restarted — purging SW cache + reloading window");
-      staleGuardArmed = false; // one shot per restart
-      await clearServiceWorkerStorage();
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
-    }
-  };
-  tick();
-  staleGuardTimer = setInterval(tick, 5000);
-  staleGuardTimer.unref?.();
+  // Stale-guard: disabled automatic reload loop to prevent interrupting user sessions
 }
 
 function iconPath(name) {
@@ -88,11 +75,18 @@ function iconPath(name) {
 
 function createWindow(url) {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: 1440,
+    height: 920,
+    minWidth: 1024,
+    minHeight: 700,
     icon: iconPath("icon-512x512.png"),
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true },
+    backgroundColor: "#030408",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: false,
+    },
   });
   mainWindow.loadURL(url);
   mainWindow.on("closed", () => (mainWindow = null));
@@ -168,6 +162,26 @@ function buildTrayMenu() {
       },
     },
     { label: "LAN QR / Health Page", click: () => shell.openExternal(`http://127.0.0.1:${appInstance.port}/system/health`) },
+    {
+      label: "Reload App Window",
+      click: () => mainWindow?.webContents.reloadIgnoringCache(),
+    },
+    {
+      label: "Inspect / Developer Tools",
+      click: () => mainWindow?.webContents.toggleDevTools(),
+    },
+    {
+      label: "Start on System Boot",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin || process.env.MFGMAX_START_ON_BOOT === "1",
+      click: (item) => {
+        app.setLoginItemSettings({
+          openAtLogin: item.checked,
+          path: process.execPath,
+          args: ["--hidden"],
+        });
+      },
+    },
     { type: "separator" },
     {
       label: "Update from File…",
@@ -198,6 +212,10 @@ app.whenReady().then(async () => {
     process.env.MFGMAX_APP_ROOT = path.join(process.resourcesPath, "standalone");
     process.env.MFGMAX_RESOURCES_DIR = path.join(process.resourcesPath, "resources");
     process.env.POSTGRES_BIN_DIR = path.join(process.resourcesPath, "pgbin", "bin");
+  }
+
+  if (process.env.MFGMAX_START_ON_BOOT === "1") {
+    app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: ["--hidden"] });
   }
 
   appInstance = new DesktopApp({ dataDir: process.env.MFGMAX_DATA_DIR, log: (m) => console.log("[launcher]", m) });
