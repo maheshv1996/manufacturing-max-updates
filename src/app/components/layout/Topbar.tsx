@@ -26,6 +26,7 @@ import InstallPrompt from "@/app/components/layout/InstallPrompt";
 import OfflineSyncBadge from "@/app/components/layout/OfflineSyncBadge";
 import PlantSwitcher from "@/app/components/layout/PlantSwitcher";
 import ShiftClock from "@/app/components/layout/ShiftClock";
+import ThemeSwitcher from "@/app/components/layout/ThemeSwitcher";
 import LeaveModal from "../modals/LeaveModal";
 
 interface TopbarProps {
@@ -241,6 +242,7 @@ export default function Topbar({ user }: TopbarProps) {
             <PlantSwitcher user={user} />
           )}
           <ShiftClock />
+          <ThemeSwitcher />
           <InstallPrompt />
 
           <Link

@@ -1,9 +1,16 @@
-:root {
-  /* Elevations - Default Dark Theme */
+:root,
+.dark,
+[data-theme="precision"] {
+  /* Elevations - Precision Titanium (Default) */
   --bg: #0b0c0e;
   --surface-1: #141519;
   --surface-2: #1b1d23;
   --surface-3: #22252c;
+
+  /* Specular Glass Surfaces */
+  --glass-bg: rgba(20, 21, 25, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
 
   /* Typography */
   --text-1: #f9fafb; /* primary */
@@ -12,10 +19,12 @@
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(59, 130, 246, 0.5);
 
-  /* Brand/Accent - Default to Tailwind Blue, overridden by white-label */
+  /* Brand/Accent - Electric Blue */
   --accent: var(--color-accent, #3b82f6);
   --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-glow: rgba(59, 130, 246, 0.35);
 
   /* Semantic Status Colors */
   --success: #10b981;
@@ -29,23 +38,174 @@
 
   /* Radii */
   --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  /* Shadows & Glows */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.7);
+  --glow-accent: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+/* Cyberpunk Shopfloor Theme (Telemetry High-Visibility) */
+[data-theme="cyberpunk"] {
+  --bg: #050608;
+  --surface-1: #0d0f14;
+  --surface-2: #131720;
+  --surface-3: #1a202c;
+
+  --glass-bg: rgba(13, 15, 20, 0.85);
+  --glass-border: rgba(6, 182, 212, 0.22);
+  --glass-highlight: rgba(6, 182, 212, 0.08);
+
+  --text-1: #00f0ff;
+  --text-2: #e2e8f0;
+  --text-3: #718096;
+
+  --border: rgba(6, 182, 212, 0.2);
+  --border-focus: #00f0ff;
+
+  --accent: #00f0ff;
+  --accent-soft: rgba(0, 240, 255, 0.15);
+  --accent-glow: rgba(0, 240, 255, 0.45);
+
+  --success: #10e080;
+  --success-soft: rgba(16, 224, 128, 0.15);
+  --warning: #ffb700;
+  --warning-soft: rgba(255, 183, 0, 0.15);
+  --danger: #ff0055;
+  --danger-soft: rgba(255, 0, 85, 0.15);
+  --info: #00f0ff;
+  --info-soft: rgba(0, 240, 255, 0.15);
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 0 8px rgba(0, 240, 255, 0.15);
+  --shadow-modal: 0 0 40px rgba(0, 240, 255, 0.25);
+  --glow-accent: 0 0 24px rgba(0, 240, 255, 0.35);
+}
+
+/* Aerospace Navy Theme (AS9100 / Mission-Critical) */
+[data-theme="aerospace"] {
+  --bg: #070d18;
+  --surface-1: #0e1726;
+  --surface-2: #152238;
+  --surface-3: #1d2e4a;
+
+  --glass-bg: rgba(14, 23, 38, 0.8);
+  --glass-border: rgba(56, 189, 248, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+
+  --text-1: #f8fafc;
+  --text-2: #cbd5e1;
+  --text-3: #64748b;
+
+  --border: rgba(56, 189, 248, 0.12);
+  --border-focus: rgba(56, 189, 248, 0.6);
+
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.15);
+  --accent-glow: rgba(56, 189, 248, 0.3);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.15);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.15);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.15);
+  --info: #38bdf8;
+  --info-soft: rgba(56, 189, 248, 0.15);
+
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 20px 48px rgba(0, 0, 0, 0.7);
+  --glow-accent: 0 0 20px rgba(56, 189, 248, 0.25);
+}
+
+/* High-Contrast Sunlight Kiosk Theme (WCAG AAA Rugged Shopfloor) */
+[data-theme="high-contrast"] {
+  --bg: #000000;
+  --surface-1: #111111;
+  --surface-2: #1f1f1f;
+  --surface-3: #2c2c2c;
+
+  --glass-bg: #111111;
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-highlight: rgba(255, 255, 255, 0.1);
+
+  --text-1: #ffffff;
+  --text-2: #f3f4f6;
+  --text-3: #e5e7eb;
+
+  --border: rgba(255, 255, 255, 0.28);
+  --border-focus: #10b981;
+
+  --accent: #10b981;
+  --accent-soft: rgba(16, 185, 129, 0.25);
+  --accent-glow: rgba(16, 185, 129, 0.5);
+
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.25);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.25);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.25);
+  --info: #38bdf8;
+  --info-soft: rgba(56, 189, 248, 0.25);
+
+  --radius-control: 8px;
   --radius-card: 12px;
   --radius-pill: 999px;
 
-  /* Shadows */
-  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-subtle: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  --shadow-modal: 0 0 0 4px rgba(255, 255, 255, 0.35);
+  --glow-accent: 0 0 16px rgba(16, 185, 129, 0.4);
 }
 
-.dark {
-  --bg: #0b0c0e;
-  --surface-1: #141519;
-  --surface-2: #1b1d23;
-  --surface-3: #22252c;
-  --text-1: #f9fafb;
-  --text-2: #d1d5db;
-  --text-3: #9ca3af;
-  --border: rgba(255, 255, 255, 0.08);
+/* Light / Executive Clean Theme */
+.light,
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --surface-1: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #e2e8f0;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.6);
+
+  --text-1: #0f172a;
+  --text-2: #334155;
+  --text-3: #64748b;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-focus: rgba(59, 130, 246, 0.6);
+
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --accent-glow: rgba(37, 99, 235, 0.2);
+
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.1);
+
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.15);
+  --glow-accent: 0 0 16px rgba(37, 99, 235, 0.15);
 }
 
 /* Typography Utilities */

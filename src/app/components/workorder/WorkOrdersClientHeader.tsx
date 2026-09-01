@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Plus, X, Filter } from "lucide-react";
 import { Product, Machine } from "@/lib/data";
 import PageHeader from "@/app/components/shared/PageHeader";
+import UniversalTableExport from "@/app/components/shared/UniversalTableExport";
 import { Button } from "@/app/components/ui/Button";
 import { Input } from "@/app/components/ui/Input";
 import { Select } from "@/app/components/ui/Select";
@@ -156,10 +157,13 @@ export default function WorkOrdersClientHeader({
         title="Work Orders"
         description="Production Scheduling & Work Order Management"
       >
-        <Button onClick={openModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Work Order
-        </Button>
+        <div className="flex items-center gap-2">
+          <UniversalTableExport fileName="work-orders-report" data={products} />
+          <Button onClick={openModal}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Work Order
+          </Button>
+        </div>
       </PageHeader>
 
       {/* FILTER BUTTONS ROW */}

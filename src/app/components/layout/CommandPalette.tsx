@@ -152,19 +152,51 @@ export default function CommandPalette() {
         )}
 
         {query.length === 0 && (
-          <div className="p-4 border-t border-border/60 bg-surface-2/40 text-xs text-text-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <kbd className="bg-surface-3 px-1.5 py-0.5 rounded text-[10px] font-mono">
-                Ctrl
-              </kbd>
-              <kbd className="bg-surface-3 px-1.5 py-0.5 rounded text-[10px] font-mono">
-                K
-              </kbd>
-              <span>Global Omni-Search</span>
+          <div className="p-4 space-y-3">
+            <div className="text-[10px] font-bold text-text-3 uppercase tracking-wider">
+              Quick Jump & Intelligence
             </div>
-            <span className="text-[11px] font-mono text-text-3">
-              100+ Functions Indexed
-            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[
+                { label: "Gateway 3D", href: "/", tag: "Hub" },
+                { label: "Master Brain AI", href: "/ai/cortex", tag: "AURA" },
+                { label: "Operator Terminal", href: "/terminal", tag: "Shopfloor" },
+                { label: "Active Work Orders", href: "/ops/work-orders", tag: "PPC" },
+                { label: "Machine Radar", href: "/system/machines", tag: "IoT" },
+                { label: "Quality Hub (AS9100)", href: "/quality", tag: "QA" },
+              ].map((item) => (
+                <button
+                  key={item.href}
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push(item.href);
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-surface-2/60 hover:bg-surface-3 text-left transition-all cursor-pointer group"
+                >
+                  <span className="text-xs font-bold text-text-1 group-hover:text-accent truncate">
+                    {item.label}
+                  </span>
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface-3 text-text-3">
+                    {item.tag}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs text-text-3">
+              <div className="flex items-center gap-1.5">
+                <kbd className="bg-surface-3 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                  Ctrl
+                </kbd>
+                <kbd className="bg-surface-3 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                  K
+                </kbd>
+                <span>Global Omni-Search</span>
+              </div>
+              <span className="text-[11px] font-mono text-text-3">
+                254 Routes &amp; 100+ Functions Indexed
+              </span>
+            </div>
           </div>
         )}
       </div>

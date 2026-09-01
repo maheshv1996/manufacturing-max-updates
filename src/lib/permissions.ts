@@ -13,6 +13,10 @@ export const WORKSPACE_PERMISSIONS = {
   maintenance: { view: "maintenance.view", edit: "maintenance.edit" },
   projects: { view: "projects.view", edit: "projects.edit" },
   exec: { view: "exec.view", edit: "exec.edit" },
+  legal: { view: "legal.view", edit: "legal.edit" },
+  risk: { view: "risk.view", edit: "risk.edit" },
+  brand: { view: "brand.view", edit: "brand.edit" },
+  sustainability: { view: "sustainability.view", edit: "sustainability.edit" },
 };
 
 // Special keys
