@@ -5,9 +5,12 @@ import {
   ShieldCheck,
   Check,
   Plus,
+  BookOpen,
+  Sliders,
 } from "lucide-react";
 import { toast } from "@/lib/toastStore";
 import { soundFx } from "@/lib/soundFx";
+import EnterpriseRolesDirectory, { EnterpriseRoleTemplate } from "@/app/components/roles/EnterpriseRolesDirectory";
 
 interface RoleRecord {
   id: string;
@@ -33,6 +36,7 @@ export default function RolesMatrixClient() {
   const [catalog, setCatalog] = useState<PermissionCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<RoleRecord | null>(null);
+  const [activeTab, setActiveTab] = useState<"configured" | "directory">("configured");
 
   // Form State for creating new role
   const [newRoleName, setNewRoleName] = useState("");
@@ -103,6 +107,20 @@ export default function RolesMatrixClient() {
     }
   };
 
+  const handleSelectTemplate = (template: EnterpriseRoleTemplate) => {
+    setNewRoleName(template.title);
+    setCustomDeptName(template.department);
+    setRoleDescription(template.summary);
+    if (template.permissions.includes("*")) {
+      const allKeys = catalog.flatMap((c) => c.keys.map((k) => k.key));
+      setSelectedPermissions(new Set(allKeys));
+    } else {
+      setSelectedPermissions(new Set(template.permissions));
+    }
+    setActiveTab("configured");
+    toast.success(`Pre-filled "${template.title}" template with ${template.permissions.length} permissions!`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -110,25 +128,55 @@ export default function RolesMatrixClient() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-mono font-bold border border-blue-500/30">
-              ROLE & CAPABILITY BUILDER
+              ROLE &amp; CAPABILITY BUILDER
             </span>
-            <span className="text-xs text-white/50 font-mono">CUSTOM DEPARTMENTS // ATOMIC PERMISSIONS</span>
+            <span className="text-xs text-white/50 font-mono">13 DEPARTMENTS // ATOMIC PERMISSIONS</span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">
-            Custom Department & Role Permission Matrix
+            Enterprise Roles &amp; Custom Permission Matrix
           </h1>
           <p className="text-xs text-white/60 max-w-2xl leading-relaxed">
-            Create any custom department name without rigid sub-department hierarchies. Define custom multi-hat roles and check off the exact operational capabilities each role is allowed to access.
+            Configure custom multi-hat roles across all 13 manufacturing departments or instantiate standard enterprise roles with 1-click permission templates.
           </p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-black/40 border border-blue-500/30 text-right font-mono">
-          <div className="text-[10px] text-white/50 uppercase font-bold">Total Configured Roles</div>
-          <div className="text-2xl font-black text-cyan-300">{roles.length}</div>
+        <div className="flex items-center gap-3">
+          <div className="p-1 rounded-xl border border-slate-700 bg-slate-800/80 flex items-center">
+            <button
+              onClick={() => setActiveTab("configured")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "configured"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Active Roles</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("directory")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "directory"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Roles Directory (13 Depts)</span>
+            </button>
+          </div>
+
+          <div className="p-3 px-4 rounded-2xl bg-black/40 border border-blue-500/30 text-right font-mono hidden sm:block">
+            <div className="text-[10px] text-white/50 uppercase font-bold">Active Roles</div>
+            <div className="text-xl font-black text-cyan-300">{roles.length}</div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {activeTab === "directory" ? (
+        <EnterpriseRolesDirectory onSelectTemplate={handleSelectTemplate} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-150">
         {/* Left: Roles List */}
         <div className="space-y-3">
           <h2 className="text-xs font-mono font-bold text-white/70 uppercase tracking-wider flex items-center justify-between">
@@ -282,6 +330,7 @@ export default function RolesMatrixClient() {
           </form>
         </div>
       </div>
+      )}
     </div>
   );
 }
