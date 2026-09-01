@@ -5,6 +5,7 @@ import { permissionForPath } from "@/lib/departments";
 import { Clock, Gauge, ShieldAlert, TrendingUp, Wrench } from "lucide-react";
 import { getLeanAnalyticsData } from "@/lib/leanData";
 import LeanChartsClient from "./LeanChartsClient";
+import SixSigmaBeltMatrix from "@/app/components/lean/SixSigmaBeltMatrix";
 import DateRangeBar from "@/app/components/dashboard/DateRangeBar";
 import { parseDateRange } from "@/lib/date-utils";
 
@@ -149,6 +150,11 @@ export default async function LeanAnalyticsPage(props: {
           fpyTrendData={leanData.fpyTrendData}
           downtimeCategoryData={leanData.downtimeCategoryData}
         />
+
+        {/* 3. SIX SIGMA BELT MATRIX & DMAIC ROADMAP */}
+        <section className="pt-4 border-t border-slate-800">
+          <SixSigmaBeltMatrix />
+        </section>
       </div>
     </div>
   );
