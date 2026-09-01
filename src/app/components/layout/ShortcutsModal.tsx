@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Cog,
   ClipboardList,
+  Brain,
 } from "lucide-react";
 
 export default function ShortcutsModal() {
@@ -51,6 +52,11 @@ export default function ShortcutsModal() {
           icon: Search,
         },
         {
+          keys: ["Ctrl", "Space"],
+          desc: "Toggle AURA AI Co-Pilot & Industrial Assistant",
+          icon: Brain,
+        },
+        {
           keys: ["?"],
           desc: "Toggle this Keyboard Shortcuts Cheatsheet",
           icon: Keyboard,
@@ -68,7 +74,7 @@ export default function ShortcutsModal() {
         { keys: ["Gateway"], desc: "Return to 3D Main Gateway", icon: Home },
         {
           keys: ["Departments"],
-          desc: "Open 11-Department Directory",
+          desc: "Open 13-Department Industrial Hub",
           icon: LayoutGrid,
         },
         {
