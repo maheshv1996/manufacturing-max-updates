@@ -27,6 +27,7 @@ import OfflineSyncBadge from "@/app/components/layout/OfflineSyncBadge";
 import PlantSwitcher from "@/app/components/layout/PlantSwitcher";
 import ShiftClock from "@/app/components/layout/ShiftClock";
 import ThemeSwitcher from "@/app/components/layout/ThemeSwitcher";
+import SoundToggle from "@/app/components/layout/SoundToggle";
 import LeaveModal from "../modals/LeaveModal";
 
 interface TopbarProps {
@@ -274,6 +275,8 @@ export default function Topbar({ user }: TopbarProps) {
           >
             <HelpCircle className="w-5 h-5" />
           </button>
+
+          <SoundToggle />
 
           <div className="relative">
             <button
