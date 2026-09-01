@@ -9,3 +9,5 @@ export { ToastContainer } from "./ToastContainer";
 export { AnimatedCounter } from "./AnimatedCounter";
 export { KpiCard } from "./KpiCard";
 export { Skeleton, TableSkeleton, CardSkeleton } from "./Skeleton";
+export { Sparkline, type SparklineProps } from "./Sparkline";
+export { TableDensityToggle, type TableDensity, type TableDensityToggleProps } from "./TableDensityToggle";
