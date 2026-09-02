@@ -4,6 +4,7 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import PageHeader from "@/app/components/shared/PageHeader";
 import UpdateCard from "@/app/components/shared/UpdateCard";
+import DiagnosticsPanel from "@/app/components/system/DiagnosticsPanel";
 import { collectHealth } from "@/lib/serverHealth";
 import QRCode from "qrcode";
 import {
@@ -182,6 +183,8 @@ export default async function SystemHealthPage() {
           sub="set LOG_DIR in the launcher"
         />
       </div>
+
+      <DiagnosticsPanel />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-surface-1 rounded-card border border-border p-6 flex flex-col items-center justify-center text-center">
