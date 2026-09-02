@@ -24,36 +24,89 @@ export interface GrrResult {
   messages: string[];
 }
 
-// d2* constants (AIAG Table 3): K1 for EV by number of trials
-const K1: Record<number, number> = {
+// ---------------------------------------------------------------------------
+// AIAG MSA multiplier constants (5.15-sigma convention).
+//
+// Every constant here is 5.15 / d2, where d2 is the bias-correction factor for
+// the range of a subgroup. Values are kept at AIAG's published 2-decimal
+// rounding so results reconcile with hand calculations and with an auditor
+// spot-checking against the MSA manual tables.
+//
+//   K1 (Equipment Variation)  indexed by TRIAL count, uses d2 with many
+//                             subgroups (g large):  K1 = 5.15 / d2(r)
+//   K2 (Appraiser Variation)  indexed by APPRAISER count
+//   K3 (Part Variation)       indexed by PART count
+//
+// K2 and K3 are the SAME FUNCTION of a single-subgroup count — both are
+// 5.15 / d2*(m, g=1) — so AIAG publishes one table and uses it twice. They
+// therefore share one constant here. K2 and K3 holding different values for
+// the same m is always a bug; grr.test.ts asserts they cannot diverge.
+// ---------------------------------------------------------------------------
+
+/** d2* for a single subgroup (g = 1) of size m — the divisor behind AIAG_K2_K3. */
+export const D2_STAR_G1: Record<number, number> = {
+  2: 1.41,
+  3: 1.91,
+  4: 2.24,
+  5: 2.48,
+  6: 2.67,
+  7: 2.83,
+  8: 2.96,
+  9: 3.08,
+  10: 3.18,
+  11: 3.26, // extended past AIAG's published 10-part table
+  12: 3.33, // extended past AIAG's published 10-part table
+};
+
+/** K1 for EV, by number of trials. 5.15 / d2(r), g large. */
+export const AIAG_K1: Record<number, number> = {
   2: 4.56,
   3: 3.05,
   4: 2.50,
   5: 2.21,
 };
 
-// K2 for AV by number of appraisers
-const K2: Record<number, number> = {
+/**
+ * K2 (by appraiser count) and K3 (by part count) — one table, 5.15 / d2*(m, 1).
+ * Do not split these apart: see the note above.
+ */
+export const AIAG_K2_K3: Record<number, number> = {
   2: 3.65,
   3: 2.70,
   4: 2.30,
   5: 2.08,
+  6: 1.93,
+  7: 1.82,
+  8: 1.74,
+  9: 1.67,
+  10: 1.62,
+  11: 1.58, // extended past AIAG's published 10-part table
+  12: 1.55, // extended past AIAG's published 10-part table
 };
 
-// K3 for PV by number of parts
-const K3: Record<number, number> = {
-  2: 3.65,
-  3: 1.91,
-  4: 1.74,
-  5: 1.62,
-  6: 1.53,
-  7: 1.46,
-  8: 1.41,
-  9: 1.37,
-  10: 1.33,
-  11: 1.30,
-  12: 1.28,
-};
+/**
+ * Looks up a tabulated constant, clamping to the largest tabulated size and
+ * recording a warning rather than silently substituting an arbitrary value.
+ */
+function lookupConstant(
+  table: Record<number, number>,
+  size: number,
+  label: string,
+  messages: string[],
+): number {
+  const direct = table[size];
+  if (direct !== undefined) return direct;
+
+  const sizes = Object.keys(table).map(Number);
+  const max = Math.max(...sizes);
+  const min = Math.min(...sizes);
+  const clamped = size > max ? max : min;
+  messages.push(
+    `${label} count of ${size} is outside the tabulated AIAG range (${min}-${max}); ` +
+      `clamped to ${clamped}. Treat this study as indicative only.`,
+  );
+  return table[clamped];
+}
 
 function round(n: number): number {
   return Math.round((Number(n) || 0) * 1000) / 1000;
@@ -136,7 +189,7 @@ export function computeGrr(rawMeasurements: GrrMeasurement[] = []): GrrResult {
   const rangeBar = rangeCount ? totalRange / rangeCount : 0;
 
   // 1. EV — Equipment Variation (Repeatability)
-  const k1 = K1[nTrials] ?? (nTrials > 5 ? 2.0 : 3.05);
+  const k1 = lookupConstant(AIAG_K1, nTrials, "Trial", messages);
   const ev = rangeBar * k1;
 
   // 2. AV — Appraiser Variation (Reproducibility)
@@ -144,7 +197,7 @@ export function computeGrr(rawMeasurements: GrrMeasurement[] = []): GrrResult {
   const xDiff = appraiserMeanVals.length >= 2
     ? Math.max(...appraiserMeanVals) - Math.min(...appraiserMeanVals)
     : 0;
-  const k2 = K2[nAppraisers] ?? (nAppraisers > 5 ? 1.8 : 2.70);
+  const k2 = lookupConstant(AIAG_K2_K3, nAppraisers, "Appraiser", messages);
   const denom = Math.max(1, nParts * nTrials);
   const avRaw = Math.pow(xDiff * k2, 2) - Math.pow(ev, 2) / denom;
   const av = avRaw > 0 ? Math.sqrt(avRaw) : 0;
@@ -157,7 +210,7 @@ export function computeGrr(rawMeasurements: GrrMeasurement[] = []): GrrResult {
   const rP = partMeanVals.length >= 2
     ? Math.max(...partMeanVals) - Math.min(...partMeanVals)
     : 0;
-  const k3 = K3[nParts] ?? (nParts > 12 ? 1.25 : 1.33);
+  const k3 = lookupConstant(AIAG_K2_K3, nParts, "Part", messages);
   const partVar = rP * k3;
 
   // 5. TV — Total Variation & %GRR

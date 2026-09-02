@@ -49,6 +49,7 @@ export default function CustomizableWidgetGrid({
         }
       }
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleWidget = (id: string) => {
