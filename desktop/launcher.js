@@ -105,6 +105,7 @@ class DesktopApp {
     this.serverWatchdog = null;
     this.dbWatchdog = null;
     this.backupTimer = null;
+    this.pruneTimer = null;
     this.controlServer = null;
     // The standalone server signs/verifies session JWTs with SESSION_SECRET
     // (getSecretKey() THROWS without it) — without this every desktop login
@@ -176,6 +177,10 @@ class DesktopApp {
       MFGMAX_CONTROL_PORT: String(this.controlPort),
       GITHUB_UPDATE_REPO: this.githubRepo,
       GITHUB_API_BASE: this.githubApiBase,
+      // Kiosk LAN gate — if set, proxy requires x-kiosk-token on /api/operator|terminal|ipcc
+      // Pass through from host env so offline LAN can be locked down without a cloud.
+      ...(process.env.MFGMAX_KIOSK_TOKEN ? { MFGMAX_KIOSK_TOKEN: process.env.MFGMAX_KIOSK_TOKEN } : {}),
+      ...(process.env.KIOSK_TOKEN ? { KIOSK_TOKEN: process.env.KIOSK_TOKEN } : {}),
     };
   }
 
@@ -517,6 +522,7 @@ class DesktopApp {
     this.stopDb();
     this.controlServer?.stop();
     if (this.backupTimer) clearInterval(this.backupTimer);
+    if (this.pruneTimer) clearInterval(this.pruneTimer);
     this.state.server = "stopped";
     this.state.db = "stopped";
     this.log("[app] stopped");
@@ -729,6 +735,29 @@ class DesktopApp {
     this.log(`[vault] daily auto-backup scheduled for ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
   }
 
+  scheduleIdempotencyPrune(hour = 2, minute = 15) {
+    if (this.pruneTimer) clearInterval(this.pruneTimer);
+    let lastPruneDay = "";
+    const tick = async () => {
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      if (now.getHours() === hour && now.getMinutes() === minute && lastPruneDay !== today) {
+        lastPruneDay = today;
+        try {
+          const { pruneIdempotency } = require("./lib/pruneIdempotency");
+          const deleted = await pruneIdempotency({ databaseUrl: this.databaseUrl(), days: 7, log: this.log });
+          this.log(`[prune] idempotency keys pruned: ${deleted} (older than 7 days)`);
+        } catch (e) {
+          this.log("[prune] failed: " + (e && e.message));
+        }
+      }
+    };
+    this.pruneTimer = setInterval(tick, 60_000);
+    // Avoid Node keeping the event loop alive solely for this timer in tests
+    this.pruneTimer.unref?.();
+    this.log(`[prune] daily idempotency prune scheduled for ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} (7-day TTL)`);
+  }
+
   notifyTray(message) {
     // Electron main calls tray.notify(message); plain-node mode logs it.
     this.log(`[tray] ${message}`);
@@ -811,6 +840,7 @@ async function main(argv) {
   if (!app.startServer()) process.exit(4);
   await app.startControlServer();
   app.scheduleDailyBackup();
+  app.scheduleIdempotencyPrune();
   app.silentUpdateCheck(); // fires and forgets — logs availability
   console.log(`[launcher] running — http://localhost:${port} (data: ${app.dataDir})`);
   console.log("Press Ctrl+C to stop.");

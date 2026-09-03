@@ -32,6 +32,11 @@ const standaloneDir = path.join(root, ".next", "standalone");
 if (fs.existsSync(standaloneDir)) {
   fs.cpSync(path.join(root, ".next", "static"), path.join(standaloneDir, ".next", "static"), { recursive: true });
   fs.cpSync(path.join(root, "public"), path.join(standaloneDir, "public"), { recursive: true });
+  const rogueDist = path.join(standaloneDir, "dist");
+  if (fs.existsSync(rogueDist)) {
+    fs.rmSync(rogueDist, { recursive: true, force: true });
+    console.log("[desktop-resources] Cleaned rogue dist directory from standalone");
+  }
   console.log("[desktop-resources] standalone completed: .next/static + public copied in");
 } else {
   console.warn("[desktop-resources] WARNING: .next/standalone not found — run `npm run build` first");
@@ -89,10 +94,14 @@ fs.writeFileSync(path.join(seedSrcDir, "seed.ts"), seedRaw);
 fs.copyFileSync(prismaLib, path.join(libSrcDir, "prisma.ts"));
 // seed.ts dynamically imports ../src/lib/grr (pure, no deps) for Gage R&R seed data.
 fs.copyFileSync(path.join(root, "src", "lib", "grr.ts"), path.join(libSrcDir, "grr.ts"));
+// GL engine + its deps (sequence/idempotency) — seed.ts seeds the default COA from glEngine.
+for (const lib of ["glEngine.ts", "sequence.ts", "idempotency.ts"]) {
+  fs.copyFileSync(path.join(root, "src", "lib", lib), path.join(libSrcDir, lib));
+}
 
 try {
   execSync(
-    `npx tsc prisma/seed.ts src/lib/prisma.ts src/lib/grr.ts --outDir "${outDir.replace(/\\/g, "/")}" --module commonjs --target es2020 --esModuleInterop --skipLibCheck --moduleResolution node --rootDir .`,
+    `npx tsc prisma/seed.ts src/lib/prisma.ts src/lib/grr.ts src/lib/glEngine.ts src/lib/sequence.ts src/lib/idempotency.ts --outDir "${outDir.replace(/\\/g, "/")}" --module commonjs --target es2020 --esModuleInterop --skipLibCheck --moduleResolution node --rootDir .`,
     { cwd: srcDir, stdio: "pipe" }
   );
 } catch (e) {
@@ -103,7 +112,7 @@ try {
 fs.rmSync(srcDir, { recursive: true, force: true });
 
 const outFiles = fs.readdirSync(path.join(outDir, "src", "lib"));
-console.log(`[desktop-resources] seedbuild: seed.js + src/lib/{prisma,grr}.js (${outFiles.join(", ")})`);
+console.log(`[desktop-resources] seedbuild: seed.js + src/lib/{prisma,grr,glEngine,sequence,idempotency}.js (${outFiles.join(", ")})`);
 
 // ---- 2b. seed runtime deps + env hygiene --------------------------------
 // The standalone trace only covers the SERVER's imports. The compiled seed

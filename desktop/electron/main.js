@@ -241,6 +241,7 @@ app.whenReady().then(async () => {
   appInstance.startControlServer();
   appInstance.startDbWatchdog();
   appInstance.scheduleDailyBackup();
+  appInstance.scheduleIdempotencyPrune();
 
   tray = new Tray(iconPath("icon-192x192.png"));
   tray.setToolTip("MfgMax Offline Edition");
