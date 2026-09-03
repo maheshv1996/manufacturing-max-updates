@@ -193,3 +193,38 @@ expiries). Everything below returned 0 model matches in schema.prisma:
     (intimation -> surveyor -> settlement) do not.
 12. **Sales quota & commission** - enquiry funnel tracks pipeline; per-sales-
     person targets and commission accrual are unmodeled.
+
+## Tier-4 - verified against the schema (grep-confirmed absent, 2026-09-04)
+
+Checked-but-exist: `Announcement` (notice board / internal comms), haz-waste
+manifests (waste disposal), dead-stock write-offs (scrap), NCR/SPC defect
+codes (defect tracking). The real misses:
+
+1. **Supplier self-service portal / ASN** - POs are one-way today. Real orgs
+   let suppliers acknowledge POs, send advance shipping notices and delivery
+   schedules. Medium-big lift; the cheapest useful slice is ASN + PO ack.
+2. **Accident / incident register with LTI** - statutory (Factories Act
+   notice) plus lost-time-injury / frequency metrics for the EHS board.
+3. **POSH / ICC case register** - Internal Complaints Committee cases,
+   statutory in India; separate from grievances (which are discipline-side).
+4. **Employee credential / document expiry tracker** - licences, trade
+   certs, visas, medicals per employee, with expiry alerts (skill matrix
+   covers competency; this covers documents).
+5. **Litigation register** - legal cases / notices / summons with deadlines
+   and outcomes. The `legal.*` permission space exists but has nothing.
+6. **IP register** - patents, trademarks, designs, trade secrets with
+   renewal dates - natural for an R&D-heavy shop.
+7. **Tender / bid management** - government / GEM tenders: pipeline, bid
+   deadlines, win/loss with reasons (reuses the winLoss taxonomy).
+8. **Bank guarantee / letter-of-credit register** - instrument issuance,
+   validity, invocation - import/export reality beside EXIM.
+9. **Capex request (CER)** - justification + ROI + staged approval before a
+   PO; fixed-asset register exists, the decision workflow does not.
+10. **Product recall / customer notification** - containment, suspect-part
+    tracing, customer advisory notices (complements serialization).
+11. **Software license register** - minor IT housekeeping (infrastructure
+    assets exist; license ownership/expiry does not).
+
+Platform note: a true customer AND supplier self-service portal is the one
+multi-month item on the horizon; the slices above (ASN, recall notices,
+quote-status portal) are the incremental path to it.

@@ -58,3 +58,8 @@ Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SE
      employee loans & advances, petty cash, e-invoice IRN + GSTR-1/3B
      exports, board resolutions + related-party registers, password policy
      enforcement, cheque register, insurance claims, sales quota/commission.
+  6. Tier-4 (grep-verified absent): supplier portal/ASN, accident register
+     with LTI, POSH/ICC cases, employee credential expiry, litigation
+     register, IP register, tender/bid management, BG/LC register, capex
+     request (CER) with ROI, product recall/notices. (Announcements,
+     haz-waste, write-offs, defect tracking already exist.)
