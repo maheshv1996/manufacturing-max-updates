@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   FileText,
+  ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { toast } from "@/lib/toastStore";
 import { Card, CardHeader, CardContent, Button, StatusPill } from "@/app/components/ui";
@@ -30,6 +32,38 @@ interface Candidate {
   memo: string;
 }
 
+interface RunView {
+  id: string;
+  runAt: string;
+  kind: string;
+  status: string;
+  actor: string;
+  posted: number;
+  skipped: number;
+  failed: number;
+  unbalanced: number;
+  unposted: number;
+  details: string | null;
+}
+
+interface IntegrityResult {
+  checkedAt: string;
+  totalEntries: number;
+  unbalancedCount: number;
+  unpostedTotal: number;
+  issues: Array<{ entryNumber: string; diffRupees: number; memo: string }>;
+}
+
+function fmtWhen(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function GlBackfillClient() {
   const [total, setTotal] = useState<number | null>(null);
   const [byKind, setByKind] = useState<Record<string, number>>({});
@@ -37,6 +71,47 @@ export default function GlBackfillClient() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ posted: number; skipped: number; failed: unknown[] } | null>(null);
+  const [history, setHistory] = useState<RunView[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [integrity, setIntegrity] = useState<IntegrityResult | null>(null);
+
+  const loadHistory = async () => {
+    try {
+      const res = await fetch("/api/finance/gl-integrity");
+      if (res.ok) {
+        const d = await res.json();
+        setHistory(d.runs || []);
+      }
+    } catch {
+      /* history is auxiliary */
+    }
+  };
+
+  const runIntegrity = async () => {
+    setChecking(true);
+    setIntegrity(null);
+    try {
+      const res = await fetch("/api/finance/gl-integrity", { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) {
+        toast.error(d.error || "Integrity check failed");
+        return;
+      }
+      setIntegrity(d);
+      const bad = (d.unbalancedCount || 0) + (d.unpostedTotal || 0);
+      toast.success(
+        bad === 0
+          ? "Ledger integrity clean — all entries balance, nothing unposted"
+          : `Integrity check found ${bad} issue${bad === 1 ? "" : "s"} — see details below`,
+      );
+      await loadHistory();
+      await load();
+    } catch {
+      toast.error("Integrity check failed");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -57,6 +132,7 @@ export default function GlBackfillClient() {
   };
   useEffect(() => {
     load();
+    loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -187,6 +263,83 @@ export default function GlBackfillClient() {
                   </span>
                 </div>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Ledger Integrity & Run History"
+          subtitle="Unbalanced posted entries and documents missing from the ledger — surfaced by the last scan and the daily desktop sweep."
+          icon={<ShieldCheck className="h-4 w-4 text-emerald-400" />}
+          action={
+            <Button variant="outline" size="sm" isLoading={checking} onClick={runIntegrity}>
+              <Activity className="size-3.5" /> Run integrity check
+            </Button>
+          }
+        />
+        <CardContent>
+          {checking ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+            </div>
+          ) : integrity && integrity.unbalancedCount + integrity.unpostedTotal > 0 ? (
+            <div className="space-y-3 mb-5">
+              <div className="px-4 py-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-sm">
+                <p className="font-semibold text-rose-300 flex items-center gap-2">
+                  <AlertTriangle className="size-4" />
+                  {integrity.unbalancedCount} unbalanced {integrity.unbalancedCount === 1 ? "entry" : "entries"} ·{" "}
+                  {integrity.unpostedTotal} unposted document{integrity.unpostedTotal === 1 ? "" : "s"}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Checked {fmtWhen(integrity.checkedAt)} · {integrity.totalEntries} ledger entries. Unposted docs can be
+                  recovered with Backfill Now above; unbalanced entries need manual repair in the journals.
+                </p>
+              </div>
+              {integrity.issues.length > 0 && (
+                <div className="divide-y divide-white/5 rounded-lg border border-rose-500/20 overflow-hidden">
+                  {integrity.issues.map((s, i) => (
+                    <div key={i} className="px-3 py-2 flex items-center gap-3 text-xs">
+                      <span className="font-mono text-rose-300 shrink-0">{s.entryNumber}</span>
+                      <span className="text-slate-400 truncate">{s.memo}</span>
+                      <span className="text-rose-300 font-mono ml-auto shrink-0">
+                        ₹{s.diffRupees.toLocaleString("en-IN")} off
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : integrity ? (
+            <div className="mb-5 px-4 py-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0" />
+              <span>
+                Books check out — {integrity.totalEntries} entries balance and nothing in scope is unposted ({""}
+                {fmtWhen(integrity.checkedAt)}).
+              </span>
+            </div>
+          ) : null}
+
+          {history.length === 0 ? (
+            <p className="text-xs text-slate-500 py-4 text-center">
+              No runs recorded yet — run a backfill or an integrity check to start the ledger audit trail.
+            </p>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {history.map((r) => (
+                <div key={r.id} className="py-2.5 flex items-center gap-3">
+                  <StatusPill
+                    variant={
+                      r.kind === "BACKFILL" ? "info" : r.status === "ISSUES" ? "danger" : "success"
+                    }
+                    label={r.kind === "BACKFILL" ? "BACKFILL" : r.status === "ISSUES" ? "ISSUES" : "INTEGRITY"}
+                  />
+                  <span className="text-xs text-slate-400 shrink-0">{fmtWhen(r.runAt)}</span>
+                  <span className="text-xs text-slate-400 truncate">{r.details || r.kind}</span>
+                  <span className="text-[10px] text-slate-600 ml-auto shrink-0">by {r.actor}</span>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

@@ -40,7 +40,7 @@ export default async function FinanceHub() {
   const now = new Date();
   const thisMonth = format(now, "yyyy-MM");
 
-  const [invoices, supplierInvoices, treasury, payslips, budgetLines, coq] =
+  const [invoices, supplierInvoices, treasury, payslips, budgetLines, coq, latestRun] =
     await Promise.all([
       prisma.invoice.findMany({ orderBy: { invoiceDate: "desc" }, take: 200 }),
       prisma.supplierInvoice.findMany({
@@ -57,6 +57,10 @@ export default async function FinanceHub() {
       computeCoQ(
         `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
       ),
+      prisma.glIntegrityRun.findFirst({
+        orderBy: { runAt: "desc" },
+        take: 1,
+      }),
     ]);
   // Ledger-style fixed point: invoice / supplier-invoice / treasury rows store
   // paise — map to the rupee contract before any KPI, feed or section display.
@@ -118,6 +122,25 @@ export default async function FinanceHub() {
         description="Payables, receivables, job costing, payroll, GST and treasury — one ledger view."
         icon={<Calculator className="h-5 w-5 text-emerald-500" />}
       />
+      {latestRun && latestRun.status === "ISSUES" && (
+        <a
+          href="/finance/gl-backfill"
+          className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm hover:bg-rose-500/15 transition-colors"
+        >
+          <AlertTriangle className="size-4 text-rose-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold text-rose-300">
+              Ledger integrity flags —{" "}
+              {latestRun.kind === "BACKFILL"
+                ? `${latestRun.failed} document${latestRun.failed === 1 ? "" : "s"} failed backfill`
+                : `${latestRun.unbalanced} unbalanced entry${latestRun.unbalanced === 1 ? "" : "ies"} · ${latestRun.unposted} unposted document${latestRun.unposted === 1 ? "" : "s"}`}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {latestRun.details} — open the GL Backfill Workbench to review and repair.
+            </p>
+          </div>
+        </a>
+      )}
       <HubClient
         kpis={[
           {

@@ -4667,6 +4667,7 @@ model JournalEntry {
   source       JournalSource      @default(MANUAL)
   sourceId     String?            // originating doc (voucher / invoice id) when applicable
   totalDebit   Float              @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
+  totalCredit  Float              @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
   createdBy    String
   postedBy     String?
   postedAt     DateTime?
@@ -4694,12 +4695,32 @@ model JournalLine {
   accountId String
   account   GlAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
   debit     Float       @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
+  credit    Float       @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
   reference String?     // source doc number (invoice / voucher / PO)
   narration String?
   createdAt DateTime    @default(now())
 
   @@index([accountId])
   @@index([entryId])
+}
+
+model GlIntegrityRun {
+  id         String   @id @default(cuid())
+  runAt      DateTime @default(now())
+  kind       String // BACKFILL | INTEGRITY — provenance for ledger repair events
+  status     String   @default("OK") // OK | ISSUES | FAILED
+  actor      String   @default("system")
+  posted     Int      @default(0) // BACKFILL: entries created
+  skipped    Int      @default(0) // BACKFILL: already present
+  failed     Int      @default(0) // BACKFILL: documents that errored
+  unbalanced Int      @default(0) // INTEGRITY: posted entries whose lines don't sum to zero
+  unposted   Int      @default(0) // INTEGRITY: documents missing a journal entry
+  issues     Json? // INTEGRITY: sample issue list (kept small)
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([runAt])
+  @@index([kind])
 }
 
 enum FiscalPeriodStatus {

@@ -106,6 +106,7 @@ class DesktopApp {
     this.dbWatchdog = null;
     this.backupTimer = null;
     this.pruneTimer = null;
+    this.integritySweep = null;
     this.controlServer = null;
     // The standalone server signs/verifies session JWTs with SESSION_SECRET
     // (getSecretKey() THROWS without it) — without this every desktop login
@@ -523,6 +524,8 @@ class DesktopApp {
     this.controlServer?.stop();
     if (this.backupTimer) clearInterval(this.backupTimer);
     if (this.pruneTimer) clearInterval(this.pruneTimer);
+    if (this.integritySweep) this.integritySweep.stop();
+    this.integritySweep = null;
     this.state.server = "stopped";
     this.state.db = "stopped";
     this.log("[app] stopped");
@@ -758,6 +761,24 @@ class DesktopApp {
     this.log(`[prune] daily idempotency prune scheduled for ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} (7-day TTL)`);
   }
 
+  /**
+   * Daily ledger integrity sweep (02:30 by default): asks the running app
+   * server to scan for unbalanced entries + unposted documents via the
+   * control-token endpoint, then logs the outcome. Runs happen through
+   * ./lib/ledgerIntegrity so the timing guard is testable in isolation.
+   */
+  scheduleLedgerIntegrity(hour = 2, minute = 30) {
+    const { scheduleLedgerIntegrity } = require("./lib/ledgerIntegrity");
+    this.integritySweep = scheduleLedgerIntegrity({
+      baseUrl: `http://127.0.0.1:${this.port}`,
+      token: this.controlToken,
+      hour,
+      minute,
+      log: this.log,
+      isServerRunning: () => this.state.server === "running",
+    });
+  }
+
   notifyTray(message) {
     // Electron main calls tray.notify(message); plain-node mode logs it.
     this.log(`[tray] ${message}`);
@@ -845,6 +866,7 @@ async function main(argv) {
   await app.startControlServer();
   app.scheduleDailyBackup();
   app.scheduleIdempotencyPrune();
+  app.scheduleLedgerIntegrity();
   app.silentUpdateCheck(); // fires and forgets — logs availability
   console.log(`[launcher] running — http://localhost:${port} (data: ${app.dataDir})`);
   console.log("Press Ctrl+C to stop.");

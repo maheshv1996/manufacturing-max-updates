@@ -132,6 +132,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Desktop control bypass: the launcher's daily GL-integrity sweep POSTs with
+  // the control-token Bearer (same token the update channel uses). When the
+  // token is configured, a matching Authorization on the sweep endpoint passes
+  // through; the route re-validates it. Anything else still needs a session.
+  if (pathname === "/api/finance/gl-integrity" && request.method === "POST") {
+    const controlToken = process.env.MFGMAX_CONTROL_TOKEN;
+    if (controlToken) {
+      const provided = request.headers.get("authorization");
+      if (provided === `Bearer ${controlToken}`) {
+        return NextResponse.next();
+      }
+    }
+  }
+
   const sessionCookie = request.cookies.get("app_session")?.value;
 
   // No session → the gateway stays public, everything else goes to /login (401 for APIs)

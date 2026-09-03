@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { listGlBackfillCandidates, runGlBackfill } from "@/lib/glBackfill";
+import { recordGlRun } from "@/lib/glIntegrity";
 import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,17 @@ export async function POST() {
       entityType: "GL_JOURNAL",
       entityId: "batch",
       details: `GL backfill executed: ${result.posted} posted, ${result.skipped} already present, ${result.failed.length} failed`,
+    });
+    // Provenance: persist this execution so the workbench history and the
+    // scheduled sweep share one record of what was repaired and when.
+    await recordGlRun({
+      kind: "BACKFILL",
+      status: result.failed.length > 0 ? "ISSUES" : "OK",
+      actor,
+      posted: result.posted,
+      skipped: result.skipped,
+      failed: result.failed.length,
+      details: `Backfill: ${result.posted} posted, ${result.skipped} already present, ${result.failed.length} failed`,
     });
 
     return NextResponse.json({ success: true, previewed: preview.length, result });
