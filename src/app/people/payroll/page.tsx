@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import PayrollClient from "./PayrollClient";
 import { Wallet } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Payroll & Salary" };
 
 export default async function PayrollPage() {

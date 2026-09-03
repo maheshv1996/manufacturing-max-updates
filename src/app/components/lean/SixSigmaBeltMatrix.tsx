@@ -34,7 +34,7 @@ const BELTS: BeltInfo[] = [
   {
     id: "white",
     title: "White Belt",
-    badge: "Level 1 â€¢ Awareness",
+    badge: "Level 1 • Awareness",
     color: "#f8fafc",
     border: "border-slate-400/40",
     bgSoft: "bg-slate-500/10",
@@ -47,7 +47,7 @@ const BELTS: BeltInfo[] = [
   {
     id: "yellow",
     title: "Yellow Belt",
-    badge: "Level 2 â€¢ Contributor",
+    badge: "Level 2 • Contributor",
     color: "#eab308",
     border: "border-yellow-500/40",
     bgSoft: "bg-yellow-500/10",
@@ -60,7 +60,7 @@ const BELTS: BeltInfo[] = [
   {
     id: "green",
     title: "Green Belt",
-    badge: "Level 3 â€¢ Practitioner",
+    badge: "Level 3 • Practitioner",
     color: "#10b981",
     border: "border-emerald-500/40",
     bgSoft: "bg-emerald-500/10",
@@ -68,12 +68,12 @@ const BELTS: BeltInfo[] = [
     timeCommitment: "25% - 50% (Part-time project lead)",
     focus: "Leading mid-sized departmental DMAIC projects to reduce scrap, stabilize cycle times, and improve First Pass Yield (FPY).",
     coreTools: ["Process Capability (Cp, Cpk, Pp, Ppk)", "Measurement System Analysis (Gage R&R < 10%)", "Statistical Process Control (SPC)", "Hypothesis Testing (t-tests, ANOVA)", "FMEA (RPN Reduction)"],
-    keyOutcomes: ["Cp/Cpk â‰¥ 1.67 process capability", "Scrap reduction of 20-40%", "Validated Gage R&R measurement systems"],
+    keyOutcomes: ["Cp/Cpk ≥ 1.67 process capability", "Scrap reduction of 20-40%", "Validated Gage R&R measurement systems"],
   },
   {
     id: "black",
     title: "Black Belt",
-    badge: "Level 4 â€¢ Change Agent",
+    badge: "Level 4 • Change Agent",
     color: "#38bdf8",
     border: "border-cyan-500/40",
     bgSoft: "bg-cyan-500/10",
@@ -86,7 +86,7 @@ const BELTS: BeltInfo[] = [
   {
     id: "mbb",
     title: "Master Black Belt (MBB)",
-    badge: "Level 5 â€¢ Program Architect",
+    badge: "Level 5 • Program Architect",
     color: "#a855f7",
     border: "border-purple-500/40",
     bgSoft: "bg-purple-500/10",
@@ -99,7 +99,7 @@ const BELTS: BeltInfo[] = [
   {
     id: "champion",
     title: "Champion / Executive Sponsor",
-    badge: "Level 6 â€¢ Sponsor & Executive",
+    badge: "Level 6 • Sponsor & Executive",
     color: "#f59e0b",
     border: "border-amber-500/40",
     bgSoft: "bg-amber-500/10",
@@ -261,7 +261,7 @@ export default function SixSigmaBeltMatrix() {
                       style={{ backgroundColor: belt.color }}
                     />
                     <span className="text-[10px] font-mono text-slate-400 font-bold">
-                      {belt.badge.split("â€¢")[0].trim()}
+                      {belt.badge.split("•")[0].trim()}
                     </span>
                   </div>
                   <div className="text-xs font-black text-white truncate">
@@ -288,7 +288,7 @@ export default function SixSigmaBeltMatrix() {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    Target Role: <strong className="text-slate-200">{activeBeltInfo.role}</strong> â€¢ Time Allocation: <strong className="text-slate-200">{activeBeltInfo.timeCommitment}</strong>
+                    Target Role: <strong className="text-slate-200">{activeBeltInfo.role}</strong> • Time Allocation: <strong className="text-slate-200">{activeBeltInfo.timeCommitment}</strong>
                   </p>
                 </div>
               </div>
@@ -371,7 +371,7 @@ export default function SixSigmaBeltMatrix() {
                     </span>
                     {step.deliverables.map((item, idx) => (
                       <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-400">
-                        <span className="text-blue-400 font-mono">â€¢</span>
+                        <span className="text-blue-400 font-mono">•</span>
                         <span>{item}</span>
                       </div>
                     ))}
@@ -473,7 +473,7 @@ export default function SixSigmaBeltMatrix() {
                   {totalOpportunities.toLocaleString()}
                 </div>
                 <span className="text-[11px] text-slate-500 font-mono">
-                  {numUnits} units Ã— {numOpps} opps
+                  {numUnits} units × {numOpps} opps
                 </span>
               </div>
 
@@ -506,10 +506,10 @@ export default function SixSigmaBeltMatrix() {
                   Process Sigma (Z)
                 </span>
                 <div className="text-3xl font-black text-white font-mono my-2">
-                  {sigmaLevel} Ïƒ
+                  {sigmaLevel} σ
                 </div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-bold font-mono inline-block w-fit bg-blue-600/30 text-blue-200 border border-blue-400/30">
-                  {sigmaLevel >= 6.0 ? "World Class (6Ïƒ)" : sigmaLevel >= 4.0 ? "Industry Standard (4-5Ïƒ)" : "Needs DMAIC (â‰¤3Ïƒ)"}
+                  {sigmaLevel >= 6.0 ? "World Class (6σ)" : sigmaLevel >= 4.0 ? "Industry Standard (4-5σ)" : "Needs DMAIC (≤3σ)"}
                 </span>
               </div>
             </div>

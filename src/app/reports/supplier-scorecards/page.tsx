@@ -43,7 +43,7 @@ export default async function SupplierScorecardsReport() {
               Approved Supplier Scorecard Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {cards.length} scorecards Â·
+              Generated: {now.toLocaleString()} · {cards.length} scorecards ·
               Weighted: 35% OTD + 35% PPM + 15% cost + 15% responsiveness
             </p>
           </div>
@@ -123,8 +123,8 @@ export default async function SupplierScorecardsReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Supplier Scorecard Register Â· Supplier Development
-        & SQA Â· Confidential
+        Manufacturing MAX · Supplier Scorecard Register · Supplier Development
+        & SQA · Confidential
       </p>
     </main>
   );

@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ComplaintsClient from "./ComplaintsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ComplaintsPage() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);

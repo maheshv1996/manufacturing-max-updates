@@ -14,7 +14,13 @@ import {
   BadgeIndianRupee,
   ClipboardList,
   TrendingUp,
+  BookOpen,
+  FileText,
+  CalendarRange,
+  BarChart3,
+  Receipt,
   ShieldAlert,
+  Wrench,
 } from "lucide-react";
 import { format } from "date-fns";
 import { computeCoQ } from "@/lib/costOfQuality";
@@ -179,6 +185,36 @@ export default async function FinanceHub() {
             label: "Cost of Quality",
             href: "/quality/cost-of-quality",
             icon: <ShieldAlert className="h-4 w-4" />,
+          },
+          {
+            label: "Chart of Accounts",
+            href: "/finance/chart-of-accounts",
+            icon: <BookOpen className="h-4 w-4" />,
+          },
+          {
+            label: "Journal Entries",
+            href: "/finance/journals",
+            icon: <FileText className="h-4 w-4" />,
+          },
+          {
+            label: "GL Reports",
+            href: "/finance/gl-reports",
+            icon: <BarChart3 className="h-4 w-4" />,
+          },
+          {
+            label: "Fiscal Periods",
+            href: "/finance/fiscal-periods",
+            icon: <CalendarRange className="h-4 w-4" />,
+          },
+          {
+            label: "Expense Claims",
+            href: "/finance/expenses",
+            icon: <Receipt className="h-4 w-4" />,
+          },
+          {
+            label: "GL Auto-Post Repair",
+            href: "/finance/gl-repair",
+            icon: <Wrench className="h-4 w-4" />,
           },
         ]}
         sections={[

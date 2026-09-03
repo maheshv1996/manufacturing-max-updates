@@ -15,27 +15,27 @@ import {
 const CATEGORIES = [
   {
     key: "SORT",
-    label: "1S â€” Sort (Seiri)",
+    label: "1S — Sort (Seiri)",
     desc: "Eliminate unneeded items from the workspace",
   },
   {
     key: "SET_IN_ORDER",
-    label: "2S â€” Set in Order (Seiton)",
+    label: "2S — Set in Order (Seiton)",
     desc: "Organize items so they are easy to find and use",
   },
   {
     key: "SHINE",
-    label: "3S â€” Shine (Seiso)",
+    label: "3S — Shine (Seiso)",
     desc: "Clean and inspect the workplace systematically",
   },
   {
     key: "STANDARDIZE",
-    label: "4S â€” Standardize (Seiketsu)",
+    label: "4S — Standardize (Seiketsu)",
     desc: "Establish standards and visual controls for 1S-3S",
   },
   {
     key: "SUSTAIN",
-    label: "5S â€” Sustain (Shitsuke)",
+    label: "5S — Sustain (Shitsuke)",
     desc: "Maintain standards through discipline and routine audits",
   },
 ];
@@ -173,11 +173,11 @@ export default function FiveSClient() {
             {areaRankings.map((rk) => {
               const medal =
                 rk.rank === 1
-                  ? "ðŸ¥‡"
+                  ? "🥇"
                   : rk.rank === 2
-                    ? "ðŸ¥ˆ"
+                    ? "🥈"
                     : rk.rank === 3
-                      ? "ðŸ¥‰"
+                      ? "🥉"
                       : `#${rk.rank}`;
 
               return (
@@ -285,7 +285,7 @@ export default function FiveSClient() {
                 >
                   {existingAreas.map((a) => (
                     <option key={a} value={a}>
-                      ðŸ“ {a}
+                      📍 {a}
                     </option>
                   ))}
                 </select>
@@ -470,7 +470,7 @@ export default function FiveSClient() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold text-white text-base">
-                    ðŸ“ {a.area}
+                    📍 {a.area}
                   </span>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-black font-mono border ${scoreColor}`}
@@ -513,14 +513,14 @@ export default function FiveSClient() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  ðŸ“ {selectedAudit.area} 5S Audit
+                  📍 {selectedAudit.area} 5S Audit
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
                   Auditor:{" "}
                   <strong className="text-white">
                     {selectedAudit.auditorName}
                   </strong>{" "}
-                  â€¢ {new Date(selectedAudit.date).toLocaleString()}
+                  • {new Date(selectedAudit.date).toLocaleString()}
                 </p>
               </div>
               <button

@@ -43,8 +43,8 @@ export default function BudgetVarianceBanner() {
                 key={b.id}
                 className="px-3 py-1.5 rounded-full bg-rose-600 text-white text-xs font-bold"
               >
-                {b.department} / {b.category} â€” {b.pct.toFixed(0)}% (â‚¹
-                {Number(b.spent).toLocaleString("en-IN")} of â‚¹
+                {b.department} / {b.category} — {b.pct.toFixed(0)}% (₹
+                {Number(b.spent).toLocaleString("en-IN")} of ₹
                 {Number(b.allocated).toLocaleString("en-IN")})
               </span>
             ))}
@@ -62,7 +62,7 @@ export default function BudgetVarianceBanner() {
                 key={b.id}
                 className="px-3 py-1.5 rounded-full bg-amber-500 text-white text-xs font-bold"
               >
-                {b.department} / {b.category} â€” {b.pct.toFixed(0)}%
+                {b.department} / {b.category} — {b.pct.toFixed(0)}%
               </span>
             ))}
           </div>

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function GatewayPage() {
   const settings = await getSettings();
-  if (!settings.onboardingComplete) {
+  if (!settings.onboardingComplete && !settings.onboardingSkipped) {
     redirect("/onboarding");
   }
 
@@ -16,5 +16,9 @@ export default async function GatewayPage() {
   const user = getUserFromHeaders(headersList);
   const isLoggedIn = !!user.id || user.isOwner;
 
-  return <Gateway initialUser={isLoggedIn ? user : null} />;
+  if (isLoggedIn) {
+    redirect("/command");
+  }
+
+  return <Gateway initialUser={null} />;
 }

@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Megaphone,
@@ -14,6 +16,7 @@ import {
   X,
   ChevronRight,
   Save,
+  FileText
 } from "lucide-react";
 
 type Campaign = any;
@@ -217,7 +220,7 @@ export default function MarketingClient() {
       const d = await res.json().catch(() => ({}));
       if (!res.ok) alert(d.error || "Save failed");
       else {
-        setSavedMsg("Landing page saved â€” live at /landing.");
+        setSavedMsg("Landing page saved — live at /landing.");
         setTimeout(() => setSavedMsg(""), 4000);
       }
     } catch (err) {
@@ -236,8 +239,8 @@ export default function MarketingClient() {
       type: "select",
       options: ["DIGITAL", "EMAIL", "TRADE_SHOW", "PRINT", "REFERRAL", "OTHER"],
     },
-    { key: "budget", label: "Budget (â‚¹)", type: "number" },
-    { key: "spent", label: "Spent (â‚¹)", type: "number" },
+    { key: "budget", label: "Budget (₹)", type: "number" },
+    { key: "spent", label: "Spent (₹)", type: "number" },
     {
       key: "status",
       label: "Status",
@@ -284,7 +287,7 @@ export default function MarketingClient() {
       type: "select",
       options: ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "WON", "LOST"],
     },
-    { key: "value", label: "Estimated Value (â‚¹)", type: "number" },
+    { key: "value", label: "Estimated Value (₹)", type: "number" },
     { key: "notes", label: "Notes", type: "textarea" },
   ];
 
@@ -346,16 +349,23 @@ export default function MarketingClient() {
                   key={c.id}
                   className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 shadow-sm space-y-3"
                 >
+      <PageHeader
+        title="Marketing"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-white">{c.name}</h3>
                       <p className="text-xs text-slate-400">
-                        {c.channel} Â·{" "}
+                        {c.channel} ·{" "}
                         {c.startDate
                           ? new Date(c.startDate).toLocaleDateString()
-                          : "â€”"}
+                          : "—"}
                         {c.endDate
-                          ? ` â†’ ${new Date(c.endDate).toLocaleDateString()}`
+                          ? ` → ${new Date(c.endDate).toLocaleDateString()}`
                           : ""}
                       </p>
                     </div>
@@ -368,7 +378,7 @@ export default function MarketingClient() {
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-400 mb-1">
                       <span>
-                        â‚¹{Number(c.spent).toLocaleString("en-IN")} / â‚¹
+                        ₹{Number(c.spent).toLocaleString("en-IN")} / ₹
                         {Number(c.budget).toLocaleString("en-IN")}
                       </span>
                       <span>{pct}%</span>
@@ -449,7 +459,7 @@ export default function MarketingClient() {
                       colSpan={8}
                       className="px-5 py-10 text-center text-slate-400 italic"
                     >
-                      No leads yet â€” they also flow in from the /landing
+                      No leads yet — they also flow in from the /landing
                       contact form.
                     </td>
                   </tr>
@@ -464,17 +474,17 @@ export default function MarketingClient() {
                         {l.contactName}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {l.email || l.phone || "â€”"}
+                        {l.email || l.phone || "—"}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
                       {l.company}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {l.campaign?.name || "â€”"}
+                      {l.campaign?.name || "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {l.source || "â€”"}
+                      {l.source || "—"}
                     </td>
                     <td className="px-5 py-3">
                       <span
@@ -485,8 +495,8 @@ export default function MarketingClient() {
                     </td>
                     <td className="px-5 py-3 font-mono text-slate-600 text-slate-300">
                       {l.value
-                        ? `â‚¹${Number(l.value).toLocaleString("en-IN")}`
-                        : "â€”"}
+                        ? `₹${Number(l.value).toLocaleString("en-IN")}`
+                        : "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-400">
                       {new Date(l.at).toLocaleDateString()}

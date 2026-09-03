@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet,
@@ -17,6 +19,7 @@ import {
   CheckCircle2,
   Lock,
   Download,
+  Users
 } from "lucide-react";
 import Link from "next/link";
 
@@ -40,19 +43,19 @@ const STRUCTURE_FIELDS: Field[] = [
     placeholder: "e.g. EMP-004",
   },
   { key: "designation", label: "Designation" },
-  { key: "basicPay", label: "Basic Pay (â‚¹)", type: "number" },
-  { key: "hra", label: "HRA (â‚¹)", type: "number" },
-  { key: "specialAllowance", label: "Special Allowance (â‚¹)", type: "number" },
-  { key: "conveyance", label: "Conveyance (â‚¹)", type: "number" },
-  { key: "otherAllowance", label: "Other Allowance (â‚¹)", type: "number" },
+  { key: "basicPay", label: "Basic Pay (₹)", type: "number" },
+  { key: "hra", label: "HRA (₹)", type: "number" },
+  { key: "specialAllowance", label: "Special Allowance (₹)", type: "number" },
+  { key: "conveyance", label: "Conveyance (₹)", type: "number" },
+  { key: "otherAllowance", label: "Other Allowance (₹)", type: "number" },
   {
     key: "pfPercent",
-    label: "PF % (of basic, capped at â‚¹15,000)",
+    label: "PF % (of basic, capped at ₹15,000)",
     type: "number",
   },
   {
     key: "professionalTax",
-    label: "Professional Tax / month (â‚¹)",
+    label: "Professional Tax / month (₹)",
     type: "number",
   },
   { key: "notes", label: "Notes" },
@@ -152,7 +155,7 @@ export default function PayrollClient() {
     const d = await api("salaryStructures", "generate", { month });
     if (d.success)
       setMsg(
-        `Generated payslips for ${month} â€” ${d.record?.generated || 0} employees. Draft created — a manager must approve & lock before export.`,
+        `Generated payslips for ${month} — ${d.record?.generated || 0} employees. Draft created — a manager must approve & lock before export.`,
       );
   };
 
@@ -178,6 +181,16 @@ export default function PayrollClient() {
     const d = await api("", "lock-run", { month, reason });
     if (d?.run) setMsg(`Run ${month} LOCKED. CSV export is now allowed.`);
   };
+  const settleRun = async () => {
+    const reason = window.prompt(
+      "Settlement reason (required) — pays net wages & remits PF/ESI/PT from the bank.",
+    );
+    if (!reason) return;
+    const d = await api("", "settle-run", { month, reason });
+    if (d?.settled)
+      setMsg(`Run ${month} SETTLED — ₹${(d.settled.settledAmount || 0).toLocaleString("en-IN")} paid out (net + statutory).`);
+  };
+
   const exportCsv = async () => {
     try {
       const res = await fetch(`/api/payroll/export?month=${month}`);
@@ -217,6 +230,13 @@ export default function PayrollClient() {
 
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="Payroll"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       <div className="flex gap-2 flex-wrap print:hidden">
         <button
           onClick={() => setTab("structures")}
@@ -303,7 +323,7 @@ export default function PayrollClient() {
                       {s.employeeCode}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {s.designation || "â€”"}
+                      {s.designation || "—"}
                     </td>
                     <td className="px-5 py-3 font-mono text-right">
                       {fmt(s.basicPay)}
@@ -401,7 +421,21 @@ export default function PayrollClient() {
                   <Lock className="w-4 h-4" /> Lock run
                 </button>
               )}
-              <button
+                            {(run?.status === "APPROVED" || run?.status === "LOCKED") && !run?.settledAt && (
+                <button
+                  onClick={settleRun}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  <Wallet className="w-4 h-4" /> Settle run (pay out)
+                </button>
+              )}
+              {run?.settledAt && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-lg">
+                  <Wallet className="w-3.5 h-3.5" /> Settled {new Date(run.settledAt).toLocaleDateString("en-IN")}
+                </span>
+              )}
+<button
                 onClick={exportCsv}
                 disabled={saving || run?.status !== "LOCKED"}
                 title={
@@ -434,7 +468,7 @@ export default function PayrollClient() {
                 Generate Monthly Pay Slips
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Computes gross, PF (min(basic, â‚¹15,000) Ã— PF% default 12),
+                Computes gross, PF (min(basic, ₹15,000) × PF% default 12),
                 professional tax, and net pay for every structure. Re-running
                 updates the month.
               </p>
@@ -500,7 +534,7 @@ export default function PayrollClient() {
                       colSpan={9}
                       className="px-5 py-10 text-center text-slate-400 italic"
                     >
-                      No payslips for {month} yet â€” click Generate Month.
+                      No payslips for {month} yet — click Generate Month.
                     </td>
                   </tr>
                 )}
@@ -516,7 +550,7 @@ export default function PayrollClient() {
                       {p.salaryStructure?.employeeCode}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {p.salaryStructure?.designation || "â€”"}
+                      {p.salaryStructure?.designation || "—"}
                     </td>
                     <td className="px-5 py-3 font-mono text-slate-600 text-slate-300">
                       {p.month}
@@ -525,10 +559,10 @@ export default function PayrollClient() {
                       {fmt(p.grossPay)}
                     </td>
                     <td className="px-5 py-3 font-mono text-right text-rose-500">
-                      âˆ’{fmt(p.pfDeduction)}
+                      −{fmt(p.pfDeduction)}
                     </td>
                     <td className="px-5 py-3 font-mono text-right text-rose-500">
-                      âˆ’{fmt(p.ptDeduction)}
+                      −{fmt(p.ptDeduction)}
                     </td>
                     <td className="px-5 py-3 font-mono font-black text-right text-emerald-400">
                       {fmt(p.netPay)}

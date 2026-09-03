@@ -58,6 +58,9 @@ export default async function WorkOrdersPage({
   const requiredPerm = permissionForPath("/ops/work-orders");
 
   if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    if (!user.id && !user.isOwner) {
+      redirect("/login?redirectTo=/ops/work-orders");
+    }
     redirect("/");
   }
 

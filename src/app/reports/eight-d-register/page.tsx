@@ -50,8 +50,8 @@ export default async function EightDRegisterPage() {
               8D Problem Solving Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {reports.length} report(s) Â·{" "}
-              {open} open Â· {closed} closed
+              Generated: {now.toLocaleString()} · {reports.length} report(s) ·{" "}
+              {open} open · {closed} closed
             </p>
           </div>
         </div>
@@ -88,14 +88,14 @@ export default async function EightDRegisterPage() {
               <tr key={r.id} className="align-top">
                 <td className="p-3 font-mono font-bold">{r.reportNumber}</td>
                 <td className="p-3 font-medium max-w-[220px]">{r.title}</td>
-                <td className="p-3 font-mono">{r.ncr?.ncrNumber || "â€”"}</td>
+                <td className="p-3 font-mono">{r.ncr?.ncrNumber || "—"}</td>
                 <td className="p-3">
-                  {r.product ? `${r.product.sku} Â· ${r.product.name}` : "â€”"}
+                  {r.product ? `${r.product.sku} · ${r.product.name}` : "—"}
                 </td>
                 <td className="p-3">{r.severity}</td>
                 <td className="p-3">{STATUS_LABELS[r.status] || r.status}</td>
                 <td className="p-3 max-w-[220px]">
-                  {r.rootCauseSummary || "â€”"}
+                  {r.rootCauseSummary || "—"}
                 </td>
                 <td className="p-3">{r.actions?.length || 0}</td>
                 <td className="p-3">{r.raisedAt.toLocaleDateString()}</td>
@@ -106,7 +106,7 @@ export default async function EightDRegisterPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-4 print:text-gray-500">
-        Manufacturing MAX Â· 8D / CAPA Register Â· ISO 9001 / AS9100 Evidence Â·
+        Manufacturing MAX · 8D / CAPA Register · ISO 9001 / AS9100 Evidence ·
         Confidential
       </p>
     </main>

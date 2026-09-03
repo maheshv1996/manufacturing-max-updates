@@ -30,7 +30,7 @@ const MATCH_META: Record<string, { label: string; cls: string }> = {
     cls: "bg-amber-500/10 text-amber-400 border border-amber-500/30",
   },
   MATCHED: {
-    label: "Matched âœ“",
+    label: "Matched ✓",
     cls: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
   },
   MISMATCHED: {
@@ -115,12 +115,28 @@ export default function GrnClient() {
     return null;
   };
 
+  const linesOf = (p: any) =>
+    p?.lines && p.lines.length ? p.lines : null;
+
+  const defaultLineId = (p: any) => {
+    const ls = linesOf(p);
+    if (!ls || ls.length === 0) return "";
+    return (
+      ls.find(
+        (l: any) => Number(l.qty) - Number(l.receivedQty || 0) > 0,
+      )?.id || ls[0].id
+    );
+  };
+
   const openReceive = () => {
     const firstPo = pos.find(
       (p) => p.status === "ORDERED" || p.status === "PARTIAL",
     );
+    const poId = firstPo?.id || (pos[0]?.id ?? "");
+    const chosen = pos.find((p: any) => p.id === poId);
     setForm({
-      poId: firstPo?.id || (pos[0]?.id ?? ""),
+      poId,
+      poLineId: defaultLineId(chosen),
       receivedQty: "",
       batchNo: "",
       notes: "",
@@ -139,6 +155,7 @@ export default function GrnClient() {
       invoiceDate: new Date().toISOString().slice(0, 10),
       dueDate: "",
       notes: "",
+      lines: [],
     });
     setModal({ entity: "invoice" });
   };
@@ -149,7 +166,15 @@ export default function GrnClient() {
       if (d?.success) setModal(null);
       else if (d?.error) alert(d.error);
     } else {
-      const d = await api("invoice", form);
+      const payload: any = { ...form };
+      const ls: any[] = Array.isArray(form.lines) ? form.lines : [];
+      if (ls.length > 0) {
+        payload.amount = ls.reduce(
+          (s: number, r: any) => s + Number(r.qty || 0) * Number(r.unitCost || 0),
+          0,
+        );
+      }
+      const d = await api("invoice", payload);
       if (d?.success) setModal(null);
       else if (d?.error) alert(d.error);
     }
@@ -179,7 +204,7 @@ export default function GrnClient() {
           </h2>
           <p className="text-slate-400 text-sm">
             Receive stock against POs (GRN), capture supplier invoices, and
-            match PO â‡„ GRN â‡„ Invoice before payment.
+            match PO ⇄ GRN ⇄ Invoice before payment.
           </p>
         </div>
         <div className="flex gap-2">
@@ -217,10 +242,10 @@ export default function GrnClient() {
               Outstanding Payables
             </div>
             <div className="text-xl font-black font-mono mt-1 text-white">
-              â‚¹{cashflow.outstandingTotal?.toLocaleString("en-IN")}
+              ₹{cashflow.outstandingTotal?.toLocaleString("en-IN")}
             </div>
             <div className="text-[11px] text-rose-500 mt-0.5">
-              â‚¹{cashflow.overdueTotal?.toLocaleString("en-IN")} overdue
+              ₹{cashflow.overdueTotal?.toLocaleString("en-IN")} overdue
             </div>
           </div>
           {cashflow.buckets30?.map((b: any, _i: number) => (
@@ -234,7 +259,7 @@ export default function GrnClient() {
               <div
                 className={`text-lg font-black font-mono mt-1 ${b.label === "Overdue" && b.amount > 0 ? "text-rose-500" : "text-white"}`}
               >
-                â‚¹{b.amount.toLocaleString("en-IN")}
+                ₹{b.amount.toLocaleString("en-IN")}
               </div>
               <div className="h-1.5 mt-2 bg-slate-800/60 rounded-full overflow-hidden">
                 <div
@@ -256,19 +281,19 @@ export default function GrnClient() {
         {[
           {
             n: "1",
-            label: "PO â€” Purchase Order",
+            label: "PO — Purchase Order",
             sub: "Qty & unit cost commitment",
             ok: true,
           },
           {
             n: "2",
-            label: "GRN â€” Goods Receipt",
+            label: "GRN — Goods Receipt",
             sub: "What actually arrived",
             ok: true,
           },
           {
             n: "3",
-            label: "Invoice â€” Supplier Bill",
+            label: "Invoice — Supplier Bill",
             sub: "What the vendor billed",
             ok: true,
           },
@@ -372,7 +397,10 @@ export default function GrnClient() {
                     </span>
                   </td>
                   <td className="px-5 py-3 font-mono text-slate-500">
-                    {g.po?.qty}
+                    {(g.poLineId &&
+                      g.po?.lines?.find(
+                        (l: any) => l.id === g.poLineId,
+                      ))?.qty ?? g.po?.qty}
                   </td>
                   <td className="px-5 py-3">
                     {g.inspectionStatus === "PENDING" ? (
@@ -406,7 +434,7 @@ export default function GrnClient() {
                     </span>
                   </td>
                   <td className="px-5 py-3 text-xs font-mono text-slate-500">
-                    {g.batchNo || "â€”"}
+                    {g.batchNo || "—"}
                   </td>
                   <td className="px-5 py-3 text-right text-xs text-slate-400">
                     {new Date(g.receivedAt).toLocaleDateString()}
@@ -463,24 +491,32 @@ export default function GrnClient() {
                   key={inv.id}
                   className={`hover:bg-slate-800/90/20 ${inv.matchStatus === "MISMATCHED" ? "bg-rose-50/40 dark:bg-rose-950/20" : ""}`}
                 >
-                  <td className="px-5 py-3 font-mono font-bold text-white">
-                    {inv.invoiceNumber}
+                  <td className="px-5 py-3">
+                    <div className="font-mono font-bold text-white">
+                      {inv.invoiceNumber}
+                    </div>
+                    {inv.lines?.length > 0 && (
+                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        {inv.lines.length} line item
+                        {inv.lines.length > 1 ? "s" : ""}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-3">{inv.supplier?.name}</td>
                   <td className="px-5 py-3 font-mono text-slate-600 text-slate-300">
-                    {inv.po?.poNumber || "â€”"}
+                    {inv.po?.poNumber || "—"}
                   </td>
                   <td className="px-5 py-3 font-mono text-slate-600 text-slate-300">
-                    {inv.grn?.grnNumber || "â€”"}
+                    {inv.grn?.grnNumber || "—"}
                   </td>
                   <td className="px-5 py-3 font-mono">
-                    â‚¹{inv.amount?.toLocaleString("en-IN")}
+                    ₹{inv.amount?.toLocaleString("en-IN")}
                   </td>
                   <td className="px-5 py-3 font-mono text-slate-500">
-                    â‚¹{inv.taxAmount?.toLocaleString("en-IN")}
+                    ₹{inv.taxAmount?.toLocaleString("en-IN")}
                   </td>
                   <td className="px-5 py-3 font-mono font-bold">
-                    â‚¹{inv.totalAmount?.toLocaleString("en-IN")}
+                    ₹{inv.totalAmount?.toLocaleString("en-IN")}
                   </td>
                   <td className="px-5 py-3">
                     {inv.matchStatus === "MISMATCHED" ? (
@@ -496,11 +532,18 @@ export default function GrnClient() {
                     )}
                   </td>
                   <td className="px-5 py-3">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded ${inv.status === "PAID" ? "bg-emerald-500/10 text-emerald-400" : inv.status === "MISMATCHED" ? "bg-rose-500/10 text-rose-400" : "bg-slate-500/10 text-slate-400"}`}
-                    >
-                      {inv.status}
-                    </span>
+                    <div>
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${inv.status === "PAID" ? "bg-emerald-500/10 text-emerald-400" : inv.status === "MISMATCHED" ? "bg-rose-500/10 text-rose-400" : "bg-slate-500/10 text-slate-400"}`}
+                      >
+                        {inv.status}
+                      </span>
+                      {inv.glRef && (
+                        <div className="text-[10px] text-slate-500 font-mono mt-1">
+                          JE {inv.glRef}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-3 text-right">
                     {inv.status === "PAID" ? (
@@ -538,7 +581,7 @@ export default function GrnClient() {
           </table>
           <div className="px-5 py-3 border-t border-slate-700 text-xs text-slate-500 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            Payment is hard-blocked until PO â‡„ GRN â‡„ Invoice all agree
+            Payment is hard-blocked until PO ⇄ GRN ⇄ Invoice all agree
             (3-way MATCHED).
           </div>
         </div>
@@ -564,19 +607,65 @@ export default function GrnClient() {
                 <select
                   className={input}
                   value={form.poId || ""}
-                  onChange={(e) => setForm({ ...form, poId: e.target.value })}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const p = pos.find((x) => x.id === v);
+                    setForm({
+                      ...form,
+                      poId: v,
+                      poLineId: defaultLineId(p),
+                    });
+                  }}
                 >
                   {pos
                     .filter((p) => ["ORDERED", "PARTIAL"].includes(p.status))
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.poNumber} Â· {p.supplier?.name} Â·{" "}
-                        {p.rawMaterial?.name} ({p.qty} {p.rawMaterial?.unit},
-                        received {p.receivedQty})
+                        {p.poNumber} · {p.supplier?.name} ·{" "}
+                        {linesOf(p)
+                          ? `${linesOf(p).length} line(s) · ${linesOf(p).reduce((s: number, l: any) => s + l.qty, 0)} ${p.rawMaterial?.unit} ordered, ${p.receivedQty} received`
+                          : `${p.rawMaterial?.name} (${p.qty} ${p.rawMaterial?.unit}, received ${p.receivedQty})`}
                       </option>
                     ))}
                 </select>
               </Field>
+              {(() => {
+                const chosen = pos.find((p: any) => p.id === form.poId);
+                const ls = linesOf(chosen);
+                if (!ls || ls.length < 1) return null;
+                return (
+                  <Field label="PO Line" required={ls.length > 1}>
+                    <select
+                      className={input}
+                      value={form.poLineId || ""}
+                      onChange={(e) =>
+                        setForm({ ...form, poLineId: e.target.value })
+                      }
+                    >
+                      {ls.length === 1 && !form.poLineId ? (
+                        <option value="">
+                          {ls[0].rawMaterial?.name} · {ls[0].qty}{" "}
+                          {chosen?.rawMaterial?.unit} ordered ·{" "}
+                          {ls[0].receivedQty || 0} received
+                        </option>
+                      ) : (
+                        ls.map((l: any) => (
+                          <option key={l.id} value={l.id}>
+                            {l.rawMaterial?.name || l.rawMaterialId} · {l.qty}{" "}
+                            {l.rawMaterial?.unit || chosen?.rawMaterial?.unit}{" "}
+                            ordered · {l.receivedQty || 0} received ·{" "}
+                            {Math.max(
+                              0,
+                              Number(l.qty) - Number(l.receivedQty || 0),
+                            )}{" "}
+                            open
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </Field>
+                );
+              })()}
               <Field label="Received Quantity" required>
                 <input
                   type="number"
@@ -678,19 +767,30 @@ export default function GrnClient() {
                   <select
                     className={input}
                     value={form.poId || ""}
-                    onChange={(e) => setForm({ ...form, poId: e.target.value })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const p = pos.find((x: any) => x.id === v);
+                      const pls = p?.lines && p.lines.length ? p.lines : [];
+                      const lines = pls.map((l: any) => ({
+                        poLineId: l.id,
+                        rawMaterialId: l.rawMaterialId,
+                        qty: String(l.qty),
+                        unitCost: String(l.unitCost),
+                      }));
+                      setForm({ ...form, poId: v, lines });
+                    }}
                   >
-                    <option value="">â€” None â€”</option>
+                    <option value="">— None —</option>
                     {pos.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.poNumber} Â· {p.supplier?.name}
+                        {p.poNumber} · {p.supplier?.name}
                       </option>
                     ))}
                   </select>
                 </Field>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
-                <Field label="Net Amount (â‚¹)" required>
+                <Field label="Net Amount (₹)" required>
                   <input
                     type="number"
                     step="any"
@@ -701,7 +801,7 @@ export default function GrnClient() {
                     }
                   />
                 </Field>
-                <Field label="Tax (â‚¹)">
+                <Field label="Tax (₹)">
                   <input
                     type="number"
                     step="any"
@@ -723,6 +823,136 @@ export default function GrnClient() {
                   />
                 </Field>
               </div>
+              {(() => {
+                const chosen = pos.find((p: any) => p.id === form.poId);
+                const pls = chosen?.lines && chosen.lines.length ? chosen.lines : null;
+                if (!pls) return null;
+                const rows: any[] =
+                  Array.isArray(form.lines) && form.lines.length
+                    ? form.lines
+                    : [];
+                const rowTotal = rows.reduce(
+                  (s: number, r: any) =>
+                    s + Number(r.qty || 0) * Number(r.unitCost || 0),
+                  0,
+                );
+                const unitLabel = chosen?.rawMaterial?.unit || "units";
+                return (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Line Items · billed against this PO
+                    </div>
+                    <div className="rounded-xl border border-slate-700 bg-slate-900/40 overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-800/60 border-b border-slate-700">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold text-slate-200">
+                              Material
+                            </th>
+                            <th className="px-3 py-2 font-semibold text-slate-200 w-24">
+                              Qty billed
+                            </th>
+                            <th className="px-3 py-2 font-semibold text-slate-200 w-28">
+                              Unit cost
+                            </th>
+                            <th className="px-3 py-2 font-semibold text-slate-200 text-right w-24">
+                              Amount
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {pls.map((l: any, i: number) => {
+                            const cur = rows[i];
+                            const qty = cur ? cur.qty : String(l.qty);
+                            const cost = cur
+                              ? cur.unitCost
+                              : String(l.unitCost);
+                            const amt =
+                              Number(qty || 0) * Number(cost || 0);
+                            const setRow = (patch: any) => {
+                              const next = rows.map((r) => ({ ...r }));
+                              while (next.length <= i)
+                                next.push({
+                                  poLineId: "",
+                                  rawMaterialId: "",
+                                  qty: "",
+                                  unitCost: "",
+                                });
+                              next[i] = {
+                                poLineId: l.id,
+                                rawMaterialId: l.rawMaterialId,
+                                qty:
+                                  patch.qty !== undefined
+                                    ? patch.qty
+                                    : cur
+                                      ? cur.qty
+                                      : String(l.qty),
+                                unitCost:
+                                  patch.unitCost !== undefined
+                                    ? patch.unitCost
+                                    : cur
+                                      ? cur.unitCost
+                                      : String(l.unitCost),
+                              };
+                              setForm({ ...form, lines: next });
+                            };
+                            return (
+                              <tr key={l.id}>
+                                <td className="px-3 py-2">
+                                  <div className="font-medium text-white">
+                                    {l.rawMaterial?.name}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 font-mono">
+                                    {l.rawMaterial?.sku} · PO line{" "}
+                                    {l.lineNo ?? i + 1} · received{" "}
+                                    {l.receivedQty || 0}/{l.qty} {unitLabel}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="any"
+                                    className={input}
+                                    value={qty}
+                                    onChange={(e) =>
+                                      setRow({ qty: e.target.value })
+                                    }
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="any"
+                                    className={input}
+                                    value={cost}
+                                    onChange={(e) =>
+                                      setRow({ unitCost: e.target.value })
+                                    }
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-white">
+                                  {amt.toLocaleString("en-IN")}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div className="px-3 py-2 border-t border-slate-700 bg-slate-800/60 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">
+                          Net auto-fills from line items. Overbilling a line or
+                          drifting from the agreed price flags the 3-way match.
+                        </span>
+                        <span className="text-sm font-black font-mono text-white">
+                          Net ₹{rowTotal.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <Field label="Due Date">
                 <input
                   type="date"

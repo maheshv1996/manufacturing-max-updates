@@ -116,7 +116,7 @@ export default function WorkOrderSerialsCard({ wo }: { wo: any }) {
                 onClick={() => setSelectedSerial(null)}
                 className="p-2 hover:bg-slate-200 hover:bg-slate-800/90 rounded-full text-slate-500 transition-colors"
               >
-                âœ•
+                ✕
               </button>
             </div>
 

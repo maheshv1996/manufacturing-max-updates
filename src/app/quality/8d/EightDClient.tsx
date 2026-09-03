@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
+
 
 import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
@@ -280,7 +282,7 @@ export default function EightDClient() {
         </div>
         <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Open (D1â€“D7)
+            Open (D1–D7)
           </div>
           <div className="text-2xl font-black mt-1 text-amber-500">
             {
@@ -362,7 +364,7 @@ export default function EightDClient() {
                         {r.ncr.ncrNumber}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">â€”</span>
+                      <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
                   <td className="px-5 py-3">
@@ -424,10 +426,10 @@ export default function EightDClient() {
             <div className="sticky top-0 bg-slate-800/80 border-b border-slate-700 backdrop-blur-sm px-6 py-4 flex items-center justify-between z-10">
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  {detail.reportNumber} â€” {detail.title}
+                  {detail.reportNumber} — {detail.title}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Raised by {detail.raisedBy} Â·{" "}
+                  Raised by {detail.raisedBy} ·{" "}
                   {new Date(detail.raisedAt).toLocaleString()}
                 </p>
               </div>
@@ -454,7 +456,7 @@ export default function EightDClient() {
 
             <div className="p-6 space-y-6">
               {/* D1 Team */}
-              <Section icon={<Users className="w-4 h-4" />} title="D1 â€” Team">
+              <Section icon={<Users className="w-4 h-4" />} title="D1 — Team">
                 <p className="text-sm text-slate-600 text-slate-300">
                   {detail.teamMembers || (
                     <span className="text-slate-400 italic">Not defined</span>
@@ -465,7 +467,7 @@ export default function EightDClient() {
               {/* D2 Problem */}
               <Section
                 icon={<MessageSquare className="w-4 h-4" />}
-                title="D2 â€” Problem Description"
+                title="D2 — Problem Description"
               >
                 <p className="text-sm text-slate-600 text-slate-300">
                   {detail.problemDescription || detail.problemStatement || (
@@ -477,7 +479,7 @@ export default function EightDClient() {
               {/* D3 Containment */}
               <Section
                 icon={<ShieldAlert className="w-4 h-4" />}
-                title="D3 â€” Containment"
+                title="D3 — Containment"
               >
                 <p className="text-sm text-slate-600 text-slate-300">
                   {detail.containmentAction || (
@@ -488,7 +490,7 @@ export default function EightDClient() {
                   <p className="text-xs text-slate-500 mt-1">
                     Owner: {detail.containmentOwner}
                     {detail.containmentDue
-                      ? ` Â· Due ${new Date(detail.containmentDue).toLocaleDateString()}`
+                      ? ` · Due ${new Date(detail.containmentDue).toLocaleDateString()}`
                       : ""}
                   </p>
                 )}
@@ -497,7 +499,7 @@ export default function EightDClient() {
               {/* D4 Root cause */}
               <Section
                 icon={<GitBranch className="w-4 h-4" />}
-                title="D4 â€” Root Cause (5-Why)"
+                title="D4 — Root Cause (5-Why)"
               >
                 <WhyTree report={detail} />
                 {detail.rootCauseSummary && (
@@ -512,7 +514,7 @@ export default function EightDClient() {
               <div className="grid md:grid-cols-2 gap-4">
                 <Section
                   icon={<Wrench className="w-4 h-4" />}
-                  title="D5 â€” Corrective Action"
+                  title="D5 — Corrective Action"
                 >
                   <p className="text-sm text-slate-600 text-slate-300">
                     {detail.correctiveAction || (
@@ -523,14 +525,14 @@ export default function EightDClient() {
                     <p className="text-xs text-slate-500 mt-1">
                       Owner: {detail.correctiveOwner}
                       {detail.correctiveDue
-                        ? ` Â· Due ${new Date(detail.correctiveDue).toLocaleDateString()}`
+                        ? ` · Due ${new Date(detail.correctiveDue).toLocaleDateString()}`
                         : ""}
                     </p>
                   )}
                 </Section>
                 <Section
                   icon={<ShieldCheck className="w-4 h-4" />}
-                  title="D6 â€” Preventive Action"
+                  title="D6 — Preventive Action"
                 >
                   <p className="text-sm text-slate-600 text-slate-300">
                     {detail.preventiveAction || (
@@ -541,7 +543,7 @@ export default function EightDClient() {
                     <p className="text-xs text-slate-500 mt-1">
                       Owner: {detail.preventiveOwner}
                       {detail.preventiveDue
-                        ? ` Â· Due ${new Date(detail.preventiveDue).toLocaleDateString()}`
+                        ? ` · Due ${new Date(detail.preventiveDue).toLocaleDateString()}`
                         : ""}
                     </p>
                   )}
@@ -551,7 +553,7 @@ export default function EightDClient() {
               {/* D7 */}
               <Section
                 icon={<CheckCircle2 className="w-4 h-4" />}
-                title="D7 â€” Verification"
+                title="D7 — Verification"
               >
                 <p className="text-sm text-slate-600 text-slate-300">
                   {detail.verificationMethod || (
@@ -560,7 +562,7 @@ export default function EightDClient() {
                 </p>
                 {detail.verifiedAt && (
                   <p className="text-xs text-slate-500 mt-1">
-                    Verified by {detail.verifiedBy || "â€”"} on{" "}
+                    Verified by {detail.verifiedBy || "—"} on{" "}
                     {new Date(detail.verifiedAt).toLocaleString()}
                   </p>
                 )}
@@ -569,7 +571,7 @@ export default function EightDClient() {
               {/* D8 */}
               <Section
                 icon={<BadgeCheck className="w-4 h-4" />}
-                title="D8 â€” Closure & Effectiveness"
+                title="D8 — Closure & Effectiveness"
               >
                 <p className="text-sm text-slate-600 text-slate-300">
                   {detail.closureSummary || (
@@ -619,7 +621,7 @@ export default function EightDClient() {
                         {(a.owner || a.dueDate) && (
                           <p className="text-xs text-slate-500 mt-0.5">
                             {a.owner}
-                            {a.owner && a.dueDate ? " Â· " : ""}
+                            {a.owner && a.dueDate ? " · " : ""}
                             {a.dueDate
                               ? `Due ${new Date(a.dueDate).toLocaleDateString()}`
                               : ""}
@@ -770,10 +772,10 @@ export default function EightDClient() {
                       setForm({ ...form, ncrId: e.target.value })
                     }
                   >
-                    <option value="">â€” None â€”</option>
+                    <option value="">— None —</option>
                     {ncrs.map((n) => (
                       <option key={n.id} value={n.id}>
-                        {n.ncrNumber} Â· {n.status}
+                        {n.ncrNumber} · {n.status}
                       </option>
                     ))}
                   </select>
@@ -787,10 +789,10 @@ export default function EightDClient() {
                     setForm({ ...form, productId: e.target.value })
                   }
                 >
-                  <option value="">â€” None â€”</option>
+                  <option value="">— None —</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.sku} Â· {p.name}
+                      {p.sku} · {p.name}
                     </option>
                   ))}
                 </select>
@@ -802,7 +804,7 @@ export default function EightDClient() {
                     <div className="text-sm font-bold text-slate-200 uppercase tracking-wider">
                       Discipline fields
                     </div>
-                    <Field label="D1 â€” Team Members">
+                    <Field label="D1 — Team Members">
                       <textarea
                         rows={2}
                         className={input}
@@ -813,7 +815,7 @@ export default function EightDClient() {
                         placeholder="Cross-functional team"
                       />
                     </Field>
-                    <Field label="D3 â€” Containment Action">
+                    <Field label="D3 — Containment Action">
                       <textarea
                         rows={2}
                         className={input}
@@ -851,7 +853,7 @@ export default function EightDClient() {
                       </Field>
                     </div>
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      D4 â€” 5-Why
+                      D4 — 5-Why
                     </div>
                     {[1, 2, 3, 4, 5].map((i) => (
                       <input
@@ -874,7 +876,7 @@ export default function EightDClient() {
                         }
                       />
                     </Field>
-                    <Field label="D5 â€” Corrective Action">
+                    <Field label="D5 — Corrective Action">
                       <textarea
                         rows={2}
                         className={input}
@@ -908,7 +910,7 @@ export default function EightDClient() {
                         />
                       </Field>
                     </div>
-                    <Field label="D6 â€” Preventive Action">
+                    <Field label="D6 — Preventive Action">
                       <textarea
                         rows={2}
                         className={input}
@@ -942,7 +944,7 @@ export default function EightDClient() {
                         />
                       </Field>
                     </div>
-                    <Field label="D7 â€” Verification Method">
+                    <Field label="D7 — Verification Method">
                       <textarea
                         rows={2}
                         className={input}
@@ -964,7 +966,7 @@ export default function EightDClient() {
                         }
                       />
                     </Field>
-                    <Field label="D8 â€” Effectiveness Score (1-10)">
+                    <Field label="D8 — Effectiveness Score (1-10)">
                       <input
                         type="number"
                         min={1}
@@ -979,7 +981,7 @@ export default function EightDClient() {
                         }
                       />
                     </Field>
-                    <Field label="D8 â€” Closure Summary">
+                    <Field label="D8 — Closure Summary">
                       <textarea
                         rows={2}
                         className={input}
@@ -1048,7 +1050,7 @@ function WhyTree({ report }: { report: any }) {
   );
 }
 
-// 6-box Ishikawa (fishbone) â€” Man, Machine, Material, Method, Measurement, Environment
+// 6-box Ishikawa (fishbone) — Man, Machine, Material, Method, Measurement, Environment
 function Fishbone({ report: _report }: { report: any }) {
   const categories = [
     { key: "Man", cls: "border-rose-300 text-rose-500 bg-rose-500/5" },
@@ -1067,7 +1069,7 @@ function Fishbone({ report: _report }: { report: any }) {
   return (
     <div className="mt-4">
       <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
-        Ishikawa / Fishbone â€” potential cause categories
+        Ishikawa / Fishbone — potential cause categories
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {categories.map((c) => (
@@ -1116,6 +1118,13 @@ function Field({
 }) {
   return (
     <div>
+      <PageHeader
+        title="8d"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
         {label}
         {required && <span className="text-rose-500"> *</span>}

@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   AlertTriangle,
@@ -9,6 +11,7 @@ import {
   Lock,
   Sparkles,
   FileCheck2,
+  ShieldCheck
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/lib/toastStore";
@@ -140,6 +143,13 @@ export default function NcrEscalationsClient() {
                   isCritical ? "bg-red-950/20 border-red-500/30" : "bg-black/40 border-white/10"
                 }`}
               >
+      <PageHeader
+        title="Escalations"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
                 <div className="space-y-1 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-black text-cyan-300">{ncr.ncrNumber}</span>

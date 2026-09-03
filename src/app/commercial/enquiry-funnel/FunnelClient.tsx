@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   Filter,
   Loader2,
@@ -9,6 +11,7 @@ import {
   Clock,
   AlertTriangle,
   Trophy,
+  FileText
 } from "lucide-react";
 
 const STAGE_STYLE: Record<string, string> = {
@@ -163,6 +166,13 @@ export default function FunnelClient() {
             const wonW = Math.round((r.won / total) * 100);
             return (
               <div key={r.reason}>
+      <PageHeader
+        title="Enquiry Funnel"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-semibold text-slate-300">
                     {r.reason}

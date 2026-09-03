@@ -190,7 +190,7 @@ export default function SubscriptionClient({
                           {format(new Date(p.at), "dd MMM yyyy")}
                         </td>
                         <td className="px-6 py-4 text-slate-600 text-slate-300">
-                          â‚¹{p.amount.toLocaleString()}
+                          ₹{p.amount.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-slate-600 text-slate-300">
                           {p.method}
@@ -241,7 +241,7 @@ export default function SubscriptionClient({
             <form onSubmit={handleManualRecord} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                  Amount (â‚¹)
+                  Amount (₹)
                 </label>
                 <input
                   type="number"

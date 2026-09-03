@@ -321,7 +321,7 @@ const DEPARTMENTS: Department[] = [
   },
   {
     no: 10,
-    title: "EHS â€” Environment, Health & Safety",
+    title: "EHS — Environment, Health & Safety",
     icon: Leaf,
     color: "text-lime-500 bg-lime-500/10 border-lime-500/30",
     desc: "Safety investigation, occupational health, environment, fire.",
@@ -464,7 +464,7 @@ export default async function DepartmentsPage() {
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
               <Factory className="w-8 h-8 text-blue-500" />
-              Enterprise Organization â€” All Departments
+              Enterprise Organization — All Departments
             </h1>
             <p className="text-sm text-slate-400 mt-1">
               Every department of the manufacturing enterprise, mapped to its
@@ -538,7 +538,7 @@ export default async function DepartmentsPage() {
         </div>
 
         <p className="text-xs text-slate-500 pb-8">
-          Manufacturing MAX Â· Enterprise Department Tree Â· LIVE = fully
+          Manufacturing MAX · Enterprise Department Tree · LIVE = fully
           implemented module, PARTIAL = implemented with limited scope, PLANNED
           = next build target.
         </p>

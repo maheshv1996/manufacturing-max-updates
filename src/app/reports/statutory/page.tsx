@@ -42,8 +42,8 @@ export default async function StatutoryReport() {
               PF / ESI Statutory Contribution Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· Periods:{" "}
-              {months.join(", ") || "â€”"} Â· {monthRows.length} entries
+              Generated: {now.toLocaleString()} · Periods:{" "}
+              {months.join(", ") || "—"} · {monthRows.length} entries
             </p>
           </div>
         </div>
@@ -86,10 +86,10 @@ export default async function StatutoryReport() {
                   {r.employeeName}
                 </td>
                 <td className="p-3 text-slate-400 print:text-gray-600">
-                  {r.employeeCode || "â€”"}
+                  {r.employeeCode || "—"}
                 </td>
                 <td className="p-3 text-slate-400 print:text-gray-600">
-                  {r.pfNumber || "â€”"}
+                  {r.pfNumber || "—"}
                 </td>
                 <td className="p-3 text-right">
                   {r.pfWage.toLocaleString("en-IN")}
@@ -143,8 +143,8 @@ export default async function StatutoryReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· PF (Employees' Provident Fund) & ESI (Employees'
-        State Insurance) Register Â· Statutory Compliance Evidence Â·
+        Manufacturing MAX · PF (Employees' Provident Fund) & ESI (Employees'
+        State Insurance) Register · Statutory Compliance Evidence ·
         Confidential
       </p>
     </main>

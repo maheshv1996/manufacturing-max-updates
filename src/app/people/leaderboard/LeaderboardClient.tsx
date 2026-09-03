@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState } from "react";
 import { LeaderboardData, LeaderboardEntry } from "@/lib/leaderboardData";
-import { Trophy, Medal, ArrowUp, ArrowDown } from "lucide-react";
+import { Trophy, Medal, ArrowUp, ArrowDown,
+  Users
+} from "lucide-react";
 
 type Tab = "shifts" | "machines" | "operators" | "plants";
 
@@ -48,6 +52,13 @@ export default function LeaderboardClient({ data }: { data: LeaderboardData }) {
 
   return (
     <div className="space-y-8">
+      <PageHeader
+        title="Leaderboard"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       {/* Tabs */}
       <div className="flex border-b border-slate-700 overflow-x-auto">
         {(["shifts", "machines", "operators", "plants"] as Tab[]).map((tab) => (

@@ -1122,6 +1122,32 @@ export default function OperatorTabletView() {
                   </p>
                 )}
 
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className="text-[11px] text-slate-400 font-mono">Quick PIN:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmpInput("1001");
+                      setEmpError(null);
+                      soundFx.playClick();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold cursor-pointer transition-all"
+                  >
+                    1001 (Admin)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmpInput("2001");
+                      setEmpError(null);
+                      soundFx.playClick();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-bold cursor-pointer transition-all"
+                  >
+                    2001 (Operator)
+                  </button>
+                </div>
+
                 {/* big keypad */}
                 <div className="grid grid-cols-3 gap-3 max-w-sm">
                   {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (

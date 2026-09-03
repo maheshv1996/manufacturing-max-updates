@@ -108,7 +108,7 @@ export default function WorkOrderDrawingsCard({
 
                 <div className="pt-2 border-t border-slate-600/60 flex items-center justify-between">
                   <span className="text-[11px] text-slate-400 font-mono">
-                    {doc.mimeType?.split("/")[1]?.toUpperCase() || "FILE"} â€¢{" "}
+                    {doc.mimeType?.split("/")[1]?.toUpperCase() || "FILE"} •{" "}
                     {doc.sizeKb} KB
                   </span>
                   <button

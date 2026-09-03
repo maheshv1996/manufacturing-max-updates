@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import {
   Save,
@@ -15,6 +17,7 @@ import {
   AlertTriangle,
   Target,
   Wrench,
+  Users
 } from "lucide-react";
 import SourceRecordEditModal from "@/app/components/modals/SourceRecordEditModal";
 
@@ -248,7 +251,14 @@ export default function HandoverClient({
 
   return (
     <div className="space-y-12">
-      {/* â”€â”€ WRITE HANDOVER FORM â”€â”€ */}
+      <PageHeader
+        title="Handover"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
+      {/* ── WRITE HANDOVER FORM ── */}
       <section className="bg-slate-800/60 rounded-2xl border border-slate-700 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-slate-700 bg-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -310,7 +320,7 @@ export default function HandoverClient({
                     : "bg-emerald-600 text-white border-emerald-500"
                 }`}
               >
-                {targetMissed ? "Target Missed âš ï¸" : "Target Met âœ“"}
+                {targetMissed ? "Target Missed ⚠️" : "Target Met ✓"}
               </span>
             </div>
           </div>
@@ -469,7 +479,7 @@ export default function HandoverClient({
         </form>
       </section>
 
-      {/* â”€â”€ HISTORY LIST â”€â”€ */}
+      {/* ── HISTORY LIST ── */}
       <section className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-700">
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -550,7 +560,7 @@ export default function HandoverClient({
                 {h.missReason && (
                   <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 space-y-1">
                     <strong className="text-rose-400 font-bold block">
-                      âš ï¸ Miss Reason:
+                      ⚠️ Miss Reason:
                     </strong>
                     <span>{h.missReason}</span>
                   </div>

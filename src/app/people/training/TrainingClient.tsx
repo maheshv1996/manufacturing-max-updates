@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState, useEffect, useCallback } from "react";
 import {
   Loader2,
   Trophy,
@@ -8,6 +10,7 @@ import {
   Plus,
   GraduationCap,
   ClipboardCheck,
+  Users
 } from "lucide-react";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -186,6 +189,13 @@ export default function TrainingClient() {
             key={p.id}
             className="rounded-2xl bg-slate-800/60 border border-slate-700/60 p-4 space-y-3"
           >
+      <PageHeader
+        title="Training"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">

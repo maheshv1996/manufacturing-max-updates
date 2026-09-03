@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   ClipboardCheck,
@@ -115,6 +117,13 @@ export default function IpqcClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Ipqc"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {

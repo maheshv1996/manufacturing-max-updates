@@ -153,7 +153,7 @@ export default function NotificationsClient() {
         <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-12 text-center space-y-3">
           <Bell className="w-10 h-10 text-slate-600 mx-auto" />
           <p className="text-slate-400 italic">
-            You&apos;re all caught up â€” no open notifications.
+            You&apos;re all caught up — no open notifications.
           </p>
         </div>
       ) : (

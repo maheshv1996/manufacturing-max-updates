@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import RecruitmentClient from "./RecruitmentClient";
 import { UserPlus } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Recruitment & Onboarding" };
 
 export default async function RecruitmentPage() {

@@ -551,8 +551,8 @@ export default function MetrologyTab() {
                       <div className="font-bold text-white">{t.name}</div>
                       <div className="text-[10px] font-black text-slate-500 mt-0.5">
                         {t.toolType}
-                        {t.lifecycle === "RETIRED" && " Â· RETIRED"}
-                        {t.lifecycle === "PROCUREMENT" && " Â· PROCUREMENT"}
+                        {t.lifecycle === "RETIRED" && " · RETIRED"}
+                        {t.lifecycle === "PROCUREMENT" && " · PROCUREMENT"}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-slate-600 text-slate-300">
@@ -560,7 +560,7 @@ export default function MetrologyTab() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-mono text-slate-400">
-                        {t.certNumber || "â€”"}
+                        {t.certNumber || "—"}
                       </div>
                       <a
                         href={`/api/metrology/cert?toolId=${t.id}`}
@@ -582,7 +582,7 @@ export default function MetrologyTab() {
                     <td className="px-6 py-4 text-slate-600 text-slate-300">
                       {t.nextDue
                         ? new Date(t.nextDue).toLocaleDateString()
-                        : "â€”"}
+                        : "—"}
                     </td>
                     <td className="px-6 py-4">
                       <LifeBar expiresAt={t.expiresAt} />
@@ -595,7 +595,7 @@ export default function MetrologyTab() {
                       </span>
                       {t.openIssue && (
                         <div className="text-[10px] font-mono text-slate-400 mt-1">
-                          {t.openIssue.issuedToName} Â· since{" "}
+                          {t.openIssue.issuedToName} · since{" "}
                           {new Date(t.openIssue.issuedAt).toLocaleDateString()}
                         </div>
                       )}
@@ -643,9 +643,9 @@ export default function MetrologyTab() {
                             disabled={!canIssue}
                             title={
                               isQuarantined
-                                ? "In quarantine cage â€” cannot be issued"
+                                ? "In quarantine cage — cannot be issued"
                                 : isRetired
-                                  ? "Retired â€” cannot be issued"
+                                  ? "Retired — cannot be issued"
                                   : "Issue to operator"
                             }
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 hover:bg-blue-900/40 text-blue-400 rounded-lg border border-blue-200 dark:border-blue-800 text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -749,7 +749,7 @@ export default function MetrologyTab() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-mono text-slate-600 text-slate-300">
-                      {v.nadcapCertNumber || "â€”"}
+                      {v.nadcapCertNumber || "—"}
                     </td>
                     <td className="px-6 py-4 text-slate-600 text-slate-300">
                       {new Date(v.expiresAt).toLocaleDateString()}
@@ -790,7 +790,7 @@ export default function MetrologyTab() {
         </div>
       )}
 
-      {/* â”€â”€ TOOL MODAL â”€â”€ */}
+      {/* ── TOOL MODAL ── */}
       {toolModal.open && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
@@ -1024,7 +1024,7 @@ export default function MetrologyTab() {
         </div>
       )}
 
-      {/* â”€â”€ VENDOR MODAL â”€â”€ */}
+      {/* ── VENDOR MODAL ── */}
       {vendorModal.open && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -1126,7 +1126,7 @@ export default function MetrologyTab() {
                 new Date() && (
                 <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-400 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  This cert is already expired â€” the vendor will be marked
+                  This cert is already expired — the vendor will be marked
                   EXPIRED and dispatch will be blocked.
                 </div>
               )}
@@ -1157,7 +1157,7 @@ export default function MetrologyTab() {
         </div>
       )}
 
-      {/* â”€â”€ ISSUE MODAL â”€â”€ */}
+      {/* ── ISSUE MODAL ── */}
       {issueModal.open && issueModal.tool && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -1184,7 +1184,7 @@ export default function MetrologyTab() {
                   {issueModal.tool.name}
                 </div>
                 <div className="text-xs font-mono text-slate-400 mt-0.5">
-                  {issueModal.tool.serialNumber} Â· {issueModal.tool.toolType}
+                  {issueModal.tool.serialNumber} · {issueModal.tool.toolType}
                 </div>
               </div>
               <div>

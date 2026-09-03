@@ -5,6 +5,7 @@ import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import TallyExportButtons from "@/app/components/TallyExportButtons";
+import PageHeader from "@/app/components/shared/PageHeader";
 import {
   FileText,
   Plus,
@@ -431,25 +432,12 @@ export default function QuotationsClient({
         </div>
       )}
 
-      {/* HEADER SECTION */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-600/30">
-              <FileText className="w-7 h-7" />
-            </span>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Sales Front Door &amp; Quotations
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                BOM-backed smart cost estimating, margin protection, and 1-click
-                shopfloor conversion.
-              </p>
-            </div>
-          </div>
-        </div>
-
+      <PageHeader
+        title="Sales Front Door & Quotations"
+        description="BOM-backed smart cost estimating, margin protection, and 1-click shopfloor conversion."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      >
         <button
           onClick={() => {
             setShowNewModal(true);
@@ -460,7 +448,7 @@ export default function QuotationsClient({
           <Plus className="w-5 h-5" />
           Create New Quotation
         </button>
-      </div>
+      </PageHeader>
 
       {/* SECTION TABS */}
       <div className="max-w-7xl mx-auto flex border-b border-slate-700 space-x-8">
@@ -503,7 +491,7 @@ export default function QuotationsClient({
             Won Bids Value
           </span>
           <span className="text-2xl font-black font-mono text-emerald-400 mt-1 block">
-            â‚¹
+            ₹
             {quotations
               .filter((q) => q.status === "WON" || q.status === "CONVERTED")
               .reduce((sum, q) => sum + q.quotedPrice, 0)
@@ -624,10 +612,10 @@ export default function QuotationsClient({
                           )}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-600 text-slate-300">
-                          â‚¹{q.estimatedCost.toLocaleString("en-IN")}
+                          ₹{q.estimatedCost.toLocaleString("en-IN")}
                         </td>
                         <td className="py-3.5 px-4 font-mono font-bold text-white">
-                          â‚¹{q.quotedPrice.toLocaleString("en-IN")}
+                          ₹{q.quotedPrice.toLocaleString("en-IN")}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
@@ -650,7 +638,7 @@ export default function QuotationsClient({
                         <td className="py-3.5 px-4 text-xs font-mono text-slate-500">
                           {q.validUntil
                             ? new Date(q.validUntil).toLocaleDateString()
-                            : "â€”"}
+                            : "—"}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
@@ -758,7 +746,7 @@ export default function QuotationsClient({
                               ) : (
                                 <Sparkles className="w-3.5 h-3.5" />
                               )}
-                              Convert to WO ðŸš€
+                              Convert to WO 🚀
                             </button>
                           )}
 
@@ -853,21 +841,21 @@ export default function QuotationsClient({
                           {new Date(inv.invoiceDate).toLocaleDateString()}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-300">
-                          â‚¹{inv.taxableValue.toLocaleString("en-IN")}
+                          ₹{inv.taxableValue.toLocaleString("en-IN")}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-emerald-400">
-                          â‚¹{totalTax.toLocaleString("en-IN")}{" "}
+                          ₹{totalTax.toLocaleString("en-IN")}{" "}
                           <span className="text-[10px] text-slate-400 font-sans">
                             ({inv.taxType} {inv.taxRatePct}%)
                           </span>
                         </td>
                         <td className="py-3.5 px-4 font-mono font-extrabold text-white text-base">
-                          â‚¹{inv.totalValue.toLocaleString("en-IN")}
+                          ₹{inv.totalValue.toLocaleString("en-IN")}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-xs text-slate-500">
                           {inv.dueDate
                             ? new Date(inv.dueDate).toLocaleDateString()
-                            : "â€”"}
+                            : "—"}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
@@ -923,7 +911,7 @@ export default function QuotationsClient({
         </div>
       )}
 
-      {/* â”€â”€ NEW QUOTATION & SMART ESTIMATING MODAL â”€â”€ */}
+      {/* ── NEW QUOTATION & SMART ESTIMATING MODAL ── */}
       {showNewModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-6 my-8">
@@ -1069,7 +1057,7 @@ export default function QuotationsClient({
 
                       <div className="col-span-3">
                         <label className="block text-[10px] font-bold uppercase text-slate-400 mb-0.5">
-                          Unit Price (â‚¹)
+                          Unit Price (₹)
                         </label>
                         <input
                           type="number"
@@ -1150,7 +1138,7 @@ export default function QuotationsClient({
                           Estimated Cost (BOM + Rates)
                         </span>
                         <span className="text-lg font-black text-white mt-0.5 block">
-                          â‚¹
+                          ₹
                           {estimateData.estimatedCost?.toLocaleString("en-IN")}
                         </span>
                       </div>
@@ -1161,7 +1149,7 @@ export default function QuotationsClient({
                         </span>
                         <input
                           type="number"
-                          placeholder={`â‚¹${estimateData.quotedPrice}`}
+                          placeholder={`₹${estimateData.quotedPrice}`}
                           value={globalQuotedPrice}
                           onChange={(e) => setGlobalQuotedPrice(e.target.value)}
                           className="w-full bg-slate-800 border border-slate-700 text-white font-black text-sm rounded px-2 py-1 mt-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -1179,7 +1167,7 @@ export default function QuotationsClient({
                               : "text-rose-400"
                           }`}
                         >
-                          â‚¹{estimateData.profit?.toLocaleString("en-IN")}
+                          ₹{estimateData.profit?.toLocaleString("en-IN")}
                         </span>
                       </div>
 
@@ -1206,12 +1194,12 @@ export default function QuotationsClient({
                           <AlertTriangle className="w-7 h-7 text-rose-400 shrink-0" />
                           <div>
                             <strong className="text-base font-black tracking-wide block">
-                              ðŸš¨ BIDDING AT A LOSS!
+                              🚨 BIDDING AT A LOSS!
                             </strong>
                             <span className="text-xs">
-                              Quoted price â‚¹{estimateData.quotedPrice} is
-                              below the estimated cost â‚¹
-                              {estimateData.estimatedCost}. Projected loss: -â‚¹
+                              Quoted price ₹{estimateData.quotedPrice} is
+                              below the estimated cost ₹
+                              {estimateData.estimatedCost}. Projected loss: -₹
                               {Math.abs(estimateData.profit)}.
                             </span>
                           </div>
@@ -1249,7 +1237,7 @@ export default function QuotationsClient({
         </div>
       )}
 
-      {/* â”€â”€ PRINT PROFORMA INVOICE / QUOTE MODAL â”€â”€ */}
+      {/* ── PRINT PROFORMA INVOICE / QUOTE MODAL ── */}
       {showPrintModal && selectedQuote && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-8 shadow-2xl space-y-6 my-8 print:p-0 print:shadow-none print:bg-transparent">
@@ -1257,7 +1245,7 @@ export default function QuotationsClient({
             <div className="flex items-center justify-between border-b pb-4 print:hidden">
               <span className="font-extrabold text-sm text-slate-600 flex items-center gap-2">
                 <Printer className="w-5 h-5 text-blue-600" />
-                Proforma Invoice Preview â€” {selectedQuote.quoteNumber}
+                Proforma Invoice Preview — {selectedQuote.quoteNumber}
               </span>
               <div className="flex items-center gap-3">
                 <PrintButton />
@@ -1342,8 +1330,8 @@ export default function QuotationsClient({
                       <th className="p-3">#</th>
                       <th className="p-3">Product Description / SKU</th>
                       <th className="p-3 text-right">Quantity</th>
-                      <th className="p-3 text-right">Unit Price (â‚¹)</th>
-                      <th className="p-3 text-right">Subtotal (â‚¹)</th>
+                      <th className="p-3 text-right">Unit Price (₹)</th>
+                      <th className="p-3 text-right">Subtotal (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-mono">
@@ -1364,10 +1352,10 @@ export default function QuotationsClient({
                           {l.plannedQty.toLocaleString()} pcs
                         </td>
                         <td className="p-3 text-right text-slate-700">
-                          â‚¹{l.unitPrice?.toLocaleString()}
+                          ₹{l.unitPrice?.toLocaleString()}
                         </td>
                         <td className="p-3 text-right font-bold text-slate-900">
-                          â‚¹{l.subtotal?.toLocaleString()}
+                          ₹{l.subtotal?.toLocaleString()}
                         </td>
                       </tr>
                     ))}
@@ -1401,7 +1389,7 @@ export default function QuotationsClient({
                   <div className="flex justify-between text-slate-600">
                     <span>Subtotal:</span>
                     <span>
-                      â‚¹{selectedQuote.quotedPrice.toLocaleString("en-IN")}
+                      ₹{selectedQuote.quotedPrice.toLocaleString("en-IN")}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-600">
@@ -1411,7 +1399,7 @@ export default function QuotationsClient({
                   <div className="flex justify-between font-black text-sm text-slate-900 border-t border-slate-300 pt-2">
                     <span>Total Order Value:</span>
                     <span className="text-blue-600">
-                      â‚¹{selectedQuote.quotedPrice.toLocaleString("en-IN")}
+                      ₹{selectedQuote.quotedPrice.toLocaleString("en-IN")}
                     </span>
                   </div>
                 </div>
@@ -1463,19 +1451,19 @@ export default function QuotationsClient({
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Invoice Total:</span>
                   <span className="font-bold text-white font-mono">
-                    â‚¹{payInvoice.totalValue.toLocaleString("en-IN")}
+                    ₹{payInvoice.totalValue.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Already Paid:</span>
                   <span className="font-bold text-emerald-600 font-mono">
-                    â‚¹{(payInvoice.paidAmount || 0).toLocaleString("en-IN")}
+                    ₹{(payInvoice.paidAmount || 0).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs font-bold text-white pt-2 border-t border-slate-600">
                   <span>Remaining Due:</span>
                   <span className="font-mono text-rose-600">
-                    â‚¹
+                    ₹
                     {(
                       payInvoice.totalValue - (payInvoice.paidAmount || 0)
                     ).toLocaleString("en-IN")}
@@ -1486,7 +1474,7 @@ export default function QuotationsClient({
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1">
-                    Payment Amount (â‚¹) *
+                    Payment Amount (₹) *
                   </label>
                   <input
                     type="number"

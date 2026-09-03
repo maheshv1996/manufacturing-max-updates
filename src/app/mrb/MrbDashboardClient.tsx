@@ -20,7 +20,6 @@ interface NcrReport {
   defectCategory: string;
   defectDescription: string;
   containmentAction?: string;
-  rootCauseAnalysis?: string;
   why1?: string;
   why2?: string;
   why3?: string;
@@ -29,7 +28,8 @@ interface NcrReport {
   correctiveAction?: string;
   preventiveAction?: string;
   disposition?: string;
-  dispositionNotes?: string;
+  dispositionAuthority?: string;
+  description?: string;
   createdAt: string;
   workOrder?: {
     woNumber: string;
@@ -59,6 +59,7 @@ function MrbDrawer({
     correctiveAction: selectedReport.correctiveAction || "",
     preventiveAction: selectedReport.preventiveAction || "",
     disposition: selectedReport.disposition || "",
+    dispositionAuthority: selectedReport.dispositionAuthority || "",
     status: selectedReport.status,
   });
 
@@ -90,10 +91,10 @@ function MrbDrawer({
           {/* Defect Overview */}
           <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
             <span className="text-xs font-bold uppercase tracking-wider text-rose-400">
-              {selectedReport.defectCategory}
+              {selectedReport.severity || "NCR"} Severity
             </span>
             <p className="text-sm text-slate-200 mt-1">
-              {selectedReport.defectDescription}
+              {selectedReport.description || "Non-conformance report"}
             </p>
           </div>
 
@@ -194,9 +195,29 @@ function MrbDrawer({
               <option value="USE_AS_IS">
                 Use-As-Is (Engineering Concession)
               </option>
-              <option value="RETURN_TO_VENDOR">
-                Return to Vendor (RTV)
+              <option value="RETURN_TO_SUPPLIER">
+                Return to Supplier (RTS)
               </option>
+            </select>
+          </div>
+
+          {/* Disposition Authority */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+              Disposition Authority
+            </label>
+            <select
+              disabled={isClosed}
+              value={form.dispositionAuthority}
+              onChange={(e) =>
+                setForm({ ...form, dispositionAuthority: e.target.value })
+              }
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Select Authority...</option>
+              <option value="QUALITY">Quality (MRB Chair)</option>
+              <option value="ENGINEERING">Engineering</option>
+              <option value="CUSTOMER">Customer</option>
             </select>
           </div>
         </div>
@@ -257,7 +278,7 @@ export default function MrbDashboardClient() {
       const res = await fetch("/api/mrb");
       if (res.ok) {
         const data = await res.json();
-        setReports(data.reports || []);
+        setReports(data.items || data.reports || []);
       }
     } catch (e) {
       logClientError("Failed to load MRB reports", e, "page");
@@ -275,18 +296,23 @@ export default function MrbDashboardClient() {
     payload: any,
     action?: string,
   ) => {
+    if (action === "DISPOSE" && (!payload.disposition || !payload.dispositionAuthority)) {
+      alert("Select a disposition AND its authority before disposing.");
+      return;
+    }
     try {
-      const res = await fetch("/api/mrb", {
+      const res = await fetch(`/api/mrb/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...payload, action }),
+        body: JSON.stringify({ ...payload, action }),
       });
+      const d = await res.json().catch(() => ({}));
       if (res.ok) {
         alert("Report updated successfully");
         setSelectedReport(null);
         fetchReports();
       } else {
-        alert("Failed to update report");
+        alert(d.error || "Failed to update report");
       }
     } catch (e) {
       alert("Error updating report");

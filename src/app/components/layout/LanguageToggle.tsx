@@ -62,8 +62,8 @@ export default function LanguageToggle({
 
   const languages: { code: Language; label: string; native: string }[] = [
     { code: "en", label: "EN", native: "English" },
-    { code: "te", label: "à°¤à±†", native: "à°¤à±†à°²à±à°—à±" },
-    { code: "hi", label: "à¤¹à¤¿", native: "à¤¹à¤¿à¤‚à¤¦à¥€" },
+    { code: "te", label: "తె", native: "తెలుగు" },
+    { code: "hi", label: "हि", native: "हिंदी" },
   ];
 
   return (

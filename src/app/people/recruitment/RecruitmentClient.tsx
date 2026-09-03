@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
+
 
 import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
@@ -362,7 +364,7 @@ export default function RecruitmentClient() {
                       <div>
                         <h3 className="font-bold text-white">{r.title}</h3>
                         <p className="text-xs text-slate-400">
-                          {r.department} Â· {r.location || "Any"}
+                          {r.department} · {r.location || "Any"}
                         </p>
                       </div>
                       <span
@@ -450,8 +452,8 @@ export default function RecruitmentClient() {
                             {c.name}
                           </div>
                           <div className="text-[11px] text-slate-400 truncate">
-                            {c.requisition?.title || "No requisition"} Â·{" "}
-                            {c.source || "â€”"}
+                            {c.requisition?.title || "No requisition"} ·{" "}
+                            {c.source || "—"}
                           </div>
                           <div className="flex flex-wrap gap-1 pt-1">
                             {NEXT_STAGE[c.stage] && (
@@ -559,13 +561,13 @@ export default function RecruitmentClient() {
                         className="hover:bg-slate-800/90/20 transition-colors"
                       >
                         <td className="px-5 py-3 font-bold text-white">
-                          {i.candidate?.name || "â€”"}
+                          {i.candidate?.name || "—"}
                         </td>
                         <td className="px-5 py-3 text-slate-600 text-slate-300">
                           {i.interviewType}
                         </td>
                         <td className="px-5 py-3 text-slate-600 text-slate-300">
-                          {i.panelist || "â€”"}
+                          {i.panelist || "—"}
                         </td>
                         <td className="px-5 py-3 text-slate-600 text-slate-300">
                           {new Date(i.scheduledAt).toLocaleString()}
@@ -578,7 +580,7 @@ export default function RecruitmentClient() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-slate-400 max-w-[220px] truncate">
-                          {i.feedback || "â€”"}
+                          {i.feedback || "—"}
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex gap-2">
@@ -650,11 +652,18 @@ export default function RecruitmentClient() {
                         key={c.id}
                         className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 shadow-sm space-y-3"
                       >
+      <PageHeader
+        title="Recruitment"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-bold text-white">{c.name}</h3>
                             <p className="text-xs text-slate-400">
-                              {c.requisition?.title || "No requisition"} Â·
+                              {c.requisition?.title || "No requisition"} ·
                               Joined{" "}
                               {new Date(c.appliedAt).toLocaleDateString()}
                             </p>

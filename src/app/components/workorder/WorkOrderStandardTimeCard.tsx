@@ -50,7 +50,7 @@ export default async function WorkOrderStandardTimeCard({ wo }: { wo: any }) {
             </h2>
             <p className="text-xs text-slate-400">
               {sku
-                ? `Product ${sku} â€” SAM rollup vs shop-floor run time`
+                ? `Product ${sku} — SAM rollup vs shop-floor run time`
                 : "No product SKU on this work order"}
             </p>
           </div>
@@ -104,7 +104,7 @@ export default async function WorkOrderStandardTimeCard({ wo }: { wo: any }) {
             Actual / unit
           </div>
           <div className="text-xl font-black font-mono text-white">
-            {actualPerUnit != null ? fmt(actualPerUnit) : "â€”"}{" "}
+            {actualPerUnit != null ? fmt(actualPerUnit) : "—"}{" "}
             <span className="text-xs font-sans font-semibold text-slate-400">
               min
             </span>
@@ -119,7 +119,7 @@ export default async function WorkOrderStandardTimeCard({ wo }: { wo: any }) {
           >
             {efficiency !== null
               ? `${efficiency >= 100 ? "+" : ""}${fmt(efficiency - 100)}%`
-              : "â€”"}
+              : "—"}
           </div>
         </div>
       </div>
@@ -152,13 +152,13 @@ export default async function WorkOrderStandardTimeCard({ wo }: { wo: any }) {
                     {t.operationName}
                   </td>
                   <td className="px-4 py-2.5 text-slate-400">
-                    {t.department || "â€”"}
+                    {t.department || "—"}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-right">
                     {fmt(t.standardTimeMin)}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-right">
-                    {t.measuredTimeMin != null ? fmt(t.measuredTimeMin) : "â€”"}
+                    {t.measuredTimeMin != null ? fmt(t.measuredTimeMin) : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-slate-400">
                     {t.sampleSize || 0}
@@ -172,7 +172,7 @@ export default async function WorkOrderStandardTimeCard({ wo }: { wo: any }) {
 
       {studies.length === 0 && (
         <p className="text-xs text-slate-400 italic">
-          No time studies recorded for this product yet â€” add them in Time
+          No time studies recorded for this product yet — add them in Time
           Study to unlock the rollup.
         </p>
       )}

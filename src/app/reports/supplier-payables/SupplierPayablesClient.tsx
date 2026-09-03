@@ -94,7 +94,7 @@ export default function SupplierPayablesClient({
                   Total Value Purchased
                 </p>
                 <p className="text-2xl font-black font-mono mt-1 text-slate-900">
-                  â‚¹{totalPurchased.toLocaleString("en-IN")}
+                  ₹{totalPurchased.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="border border-emerald-400/30 bg-emerald-500/10 rounded-lg p-4">
@@ -102,7 +102,7 @@ export default function SupplierPayablesClient({
                   Total Paid
                 </p>
                 <p className="text-2xl font-black font-mono mt-1 text-emerald-200">
-                  â‚¹{totalPaid.toLocaleString("en-IN")}
+                  ₹{totalPaid.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="border border-rose-400/30 bg-rose-500/10 rounded-lg p-4">
@@ -110,7 +110,7 @@ export default function SupplierPayablesClient({
                   Total Outstanding
                 </p>
                 <p className="text-2xl font-black font-mono mt-1 text-rose-200">
-                  â‚¹{totalPayable.toLocaleString("en-IN")}
+                  ₹{totalPayable.toLocaleString("en-IN")}
                 </p>
               </div>
             </div>
@@ -124,13 +124,13 @@ export default function SupplierPayablesClient({
                       Supplier
                     </th>
                     <th className="border border-slate-300 px-3 py-2 font-bold uppercase text-right">
-                      Purchased (â‚¹)
+                      Purchased (₹)
                     </th>
                     <th className="border border-slate-300 px-3 py-2 font-bold uppercase text-right">
-                      Paid (â‚¹)
+                      Paid (₹)
                     </th>
                     <th className="border border-slate-300 px-3 py-2 font-bold uppercase text-right bg-slate-200">
-                      Balance (â‚¹)
+                      Balance (₹)
                     </th>
                   </tr>
                 </thead>

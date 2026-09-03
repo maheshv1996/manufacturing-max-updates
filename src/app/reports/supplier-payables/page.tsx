@@ -2,8 +2,12 @@ export const maxDuration = 60;
 import { prisma } from "@/lib/prisma";
 import SupplierPayablesClient from "./SupplierPayablesClient";
 import { getUserFromHeaders, can } from "@/lib/permissions";
+import { getSettings } from "@/lib/settings";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function SupplierPayablesReportPage() {
   const headersList = await headers();
@@ -45,16 +49,12 @@ export default async function SupplierPayablesReportPage() {
     };
   });
 
-  const branding = await (prisma as any).appSettings.findUnique({
-    where: { id: "default" },
-    select: {
-      companyName: true,
-      companyAddress: true,
-      companyGstin: true,
-    },
-  });
+  const settings = await getSettings();
 
   return (
-    <SupplierPayablesClient suppliers={supplierBalances} branding={branding} />
+    <SupplierPayablesClient
+      suppliers={supplierBalances}
+      branding={settings.branding}
+    />
   );
 }

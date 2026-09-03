@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Loader2, Star, Plus } from "lucide-react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState, useEffect, useCallback } from "react";
+import { Loader2, Star, Plus,
+  FileText
+} from "lucide-react";
 
 export default function ScorecardsClient() {
   const [scorecards, setScorecards] = useState<any[]>([]);
@@ -76,6 +80,13 @@ export default function ScorecardsClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Scorecards"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-amber-300 font-semibold">

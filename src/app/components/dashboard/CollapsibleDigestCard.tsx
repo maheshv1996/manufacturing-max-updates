@@ -58,7 +58,7 @@ export default function CollapsibleDigestCard({
             className="hidden sm:block text-xs font-semibold text-accent-400 hover:underline var-accent-text"
             onClick={(e) => e.stopPropagation()}
           >
-            Full digest â†’
+            Full digest →
           </Link>
           <div className="text-slate-400">
             {isExpanded ? (
@@ -108,7 +108,7 @@ export default function CollapsibleDigestCard({
             <p className="text-sm font-bold text-white mt-1">
               {digest.bestMachine ? (
                 <>
-                  ðŸ¥‡ {digest.bestMachine.name}{" "}
+                  🥇 {digest.bestMachine.name}{" "}
                   <span className="text-emerald-600 font-medium ml-1">
                     {digest.bestMachine.oee.toFixed(1)}%
                   </span>
@@ -125,7 +125,7 @@ export default function CollapsibleDigestCard({
             </p>
             <p className="text-sm font-bold text-rose-400 mt-1">
               {digest.attentionNeeded.length > 0 ? (
-                <>âš ï¸ {digest.attentionNeeded.join(", ")}</>
+                <>⚠️ {digest.attentionNeeded.join(", ")}</>
               ) : (
                 <span className="text-emerald-600">
                   All machines hitting targets

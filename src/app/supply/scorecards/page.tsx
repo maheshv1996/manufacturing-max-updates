@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import SupplierScorecardsClient from "./SupplierScorecardsClient";
 import { Star } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Supplier Scorecards" };
 
 export default async function SupplierScorecardsPage() {

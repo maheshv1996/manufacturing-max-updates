@@ -106,7 +106,7 @@ export default function MyRoutineCard({
             My Daily Routine
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Guided workflow for today â€¢ Resets daily
+            Guided workflow for today • Resets daily
           </p>
         </div>
 
@@ -154,7 +154,7 @@ export default function MyRoutineCard({
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {step.timeLabel && (
                     <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-slate-800/60 text-slate-300 rounded">
-                      â± {step.timeLabel}
+                      ⏱ {step.timeLabel}
                     </span>
                   )}
                 </div>

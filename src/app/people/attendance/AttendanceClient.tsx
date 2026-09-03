@@ -12,6 +12,7 @@ import {
   Timer,
 } from "lucide-react";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 import SourceRecordEditModal from "@/app/components/modals/SourceRecordEditModal";
 import OverrideBadgeModal from "@/app/components/modals/OverrideBadgeModal";
 
@@ -121,6 +122,13 @@ export default function AttendanceClient() {
 
   return (
     <div className="space-y-10">
+      <PageHeader
+        title="Attendance & Time Office"
+        description="Daily clock-ins, shift rosters, leave approvals and monthly statutory registers."
+        icon={<Clock className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       {/* 0. LEAVE MANAGEMENT */}
       {(pendingLeaves.length > 0 || activeLeavesToday.length > 0) && (
         <section className="space-y-6">
@@ -143,7 +151,7 @@ export default function AttendanceClient() {
                           {l.user.name}
                         </div>
                         <div className="text-sm text-slate-400">
-                          {l.type} â€¢ {l.days} Days (
+                          {l.type} • {l.days} Days (
                           {new Date(l.fromDate).toLocaleDateString()} to{" "}
                           {new Date(l.toDate).toLocaleDateString()})
                         </div>
@@ -288,7 +296,7 @@ export default function AttendanceClient() {
                               </span>
                             )}
                             {isAbsent && (
-                              <span>Assigned shift â€” No clock-in</span>
+                              <span>Assigned shift — No clock-in</span>
                             )}
                             {op.status === "ON_LEAVE" && (
                               <span>On Approved Leave</span>
@@ -592,11 +600,11 @@ export default function AttendanceClient() {
           <div>
             <h2 className="text-xl font-extrabold text-white flex items-center gap-3">
               <Timer className="w-6 h-6 text-amber-500" />
-              Overtime â€” This Month
+              Overtime — This Month
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              OT computed as hours beyond {otData?.threshold ?? 9}h/day â€¢
-              Multiplier: Ã—{otData?.multiplier ?? 2} â€¢ Labor Rate: â‚¹
+              OT computed as hours beyond {otData?.threshold ?? 9}h/day •
+              Multiplier: ×{otData?.multiplier ?? 2} • Labor Rate: ₹
               {otData?.laborRate ?? 150}/hr
             </p>
           </div>
@@ -662,7 +670,7 @@ export default function AttendanceClient() {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 font-bold text-white font-mono">
-                      â‚¹{op.estimatedOtPay.toLocaleString("en-IN")}
+                      ₹{op.estimatedOtPay.toLocaleString("en-IN")}
                     </td>
                     <td className="py-3.5 px-4">
                       {op.aboveStatutoryLimit ? (

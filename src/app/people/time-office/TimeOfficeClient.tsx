@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState, useEffect, useCallback } from "react";
 import {
   Loader2,
   UserCircle,
@@ -9,6 +11,7 @@ import {
   UserX,
   Timer,
   CalendarDays,
+  Users
 } from "lucide-react";
 
 const FLAG_STYLE: Record<string, string> = {
@@ -114,6 +117,13 @@ export default function TimeOfficeClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Time Office"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-indigo-300 font-semibold">

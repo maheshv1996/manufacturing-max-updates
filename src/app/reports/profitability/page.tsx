@@ -134,7 +134,7 @@ export default async function JobProfitabilityReportPage({
                 Total Revenue
               </span>
               <p className="text-2xl font-black text-white font-mono">
-                â‚¹{totalRevenue.toLocaleString()}
+                ₹{totalRevenue.toLocaleString()}
               </p>
               <p className="text-[10px] text-slate-400">
                 Total Billed & Quoted
@@ -146,7 +146,7 @@ export default async function JobProfitabilityReportPage({
                 Total Factory Cost
               </span>
               <p className="text-2xl font-black text-white font-mono">
-                â‚¹{totalCost.toLocaleString()}
+                ₹{totalCost.toLocaleString()}
               </p>
               <p className="text-[10px] text-slate-400">
                 Mat + Lab + Mac + Scrap
@@ -166,7 +166,7 @@ export default async function JobProfitabilityReportPage({
               <p
                 className={`text-2xl font-black font-mono ${netProfit < 0 ? "text-rose-400" : "text-emerald-400"}`}
               >
-                â‚¹{netProfit.toLocaleString()}
+                ₹{netProfit.toLocaleString()}
               </p>
               <p className="text-[10px] text-slate-400">
                 Overall Margin: {overallMarginPct}%
@@ -186,7 +186,7 @@ export default async function JobProfitabilityReportPage({
               </div>
               <p className="text-[10px] text-slate-400">
                 {lossCount > 0
-                  ? `âš ï¸ ${lossCount} Loss-making job(s) flagged`
+                  ? `⚠️ ${lossCount} Loss-making job(s) flagged`
                   : "All jobs profitable"}
               </p>
             </div>
@@ -209,9 +209,9 @@ export default async function JobProfitabilityReportPage({
                     <th className="p-3">Customer</th>
                     <th className="p-3">Product</th>
                     <th className="p-3 text-right">Good Qty</th>
-                    <th className="p-3 text-right">Revenue (â‚¹)</th>
-                    <th className="p-3 text-right">Total Cost (â‚¹)</th>
-                    <th className="p-3 text-right">Profit / Loss (â‚¹)</th>
+                    <th className="p-3 text-right">Revenue (₹)</th>
+                    <th className="p-3 text-right">Total Cost (₹)</th>
+                    <th className="p-3 text-right">Profit / Loss (₹)</th>
                     <th className="p-3 text-right">Margin %</th>
                   </tr>
                 </thead>
@@ -243,10 +243,10 @@ export default async function JobProfitabilityReportPage({
                         {item.goodQuantity.toLocaleString()}
                       </td>
                       <td className="p-3 text-right font-bold text-white">
-                        â‚¹{item.revenue.toLocaleString()}
+                        ₹{item.revenue.toLocaleString()}
                       </td>
                       <td className="p-3 text-right text-slate-400">
-                        â‚¹{item.totalCost.toLocaleString()}
+                        ₹{item.totalCost.toLocaleString()}
                       </td>
                       <td
                         className={`p-3 text-right font-bold ${
@@ -255,7 +255,7 @@ export default async function JobProfitabilityReportPage({
                             : "text-emerald-400"
                         }`}
                       >
-                        {item.isLossMaker ? "-" : "+"}â‚¹
+                        {item.isLossMaker ? "-" : "+"}₹
                         {Math.abs(item.profit).toLocaleString()}
                       </td>
                       <td className="p-3 text-right">
@@ -293,17 +293,17 @@ export default async function JobProfitabilityReportPage({
                       TOTAL PLANT SUMMARY ({costingList.length} Work Orders)
                     </td>
                     <td className="p-3 text-right text-white font-mono text-sm">
-                      â‚¹{totalRevenue.toLocaleString()}
+                      ₹{totalRevenue.toLocaleString()}
                     </td>
                     <td className="p-3 text-right text-slate-400 font-mono text-sm">
-                      â‚¹{totalCost.toLocaleString()}
+                      ₹{totalCost.toLocaleString()}
                     </td>
                     <td
                       className={`p-3 text-right font-mono text-sm ${
                         netProfit < 0 ? "text-rose-400" : "text-emerald-400"
                       }`}
                     >
-                      {netProfit < 0 ? "-" : "+"}â‚¹
+                      {netProfit < 0 ? "-" : "+"}₹
                       {Math.abs(netProfit).toLocaleString()}
                     </td>
                     <td className="p-3 text-right font-mono text-sm text-white">
@@ -318,7 +318,7 @@ export default async function JobProfitabilityReportPage({
           {/* REPORT FOOTER */}
           <div className="pt-4 border-t border-slate-700 text-[10px] text-slate-400 flex items-center justify-between">
             <span>
-              Confidential Financial Document â€” For Internal Factory Executive
+              Confidential Financial Document — For Internal Factory Executive
               Review Only.
             </span>
             <span>Page 1 of 1</span>

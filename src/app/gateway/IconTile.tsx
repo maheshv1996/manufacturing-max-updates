@@ -114,11 +114,11 @@ export default function IconTile({
           strokeWidth={1.8}
         />
       </span>
-      <span className="text-sm font-semibold text-white leading-tight">
+      <span className="text-sm font-bold text-white leading-tight">
         {label}
       </span>
       {sub && (
-        <span className="text-[11px] text-white/50 leading-snug -mt-2 line-clamp-2">
+        <span className="text-[11px] text-slate-300 font-medium leading-snug -mt-2 line-clamp-2">
           {sub}
         </span>
       )}

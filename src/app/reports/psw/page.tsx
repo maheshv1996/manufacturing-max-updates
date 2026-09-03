@@ -31,7 +31,7 @@ export default async function PswPickerPage() {
             Part Submission Warrant (PSW)
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            AIAG PSW form per PPAP submission â€” 18-element status and customer
+            AIAG PSW form per PPAP submission — 18-element status and customer
             sign-off blocks.
           </p>
         </div>
@@ -75,12 +75,12 @@ export default async function PswPickerPage() {
                       ({s.product?.sku})
                     </span>
                   </td>
-                  <td className="px-5 py-3">{s.customerName || "â€”"}</td>
+                  <td className="px-5 py-3">{s.customerName || "—"}</td>
                   <td className="px-5 py-3">
                     <span
                       className={`text-xs font-bold px-2 py-0.5 rounded ${s.status === "APPROVED" ? "bg-emerald-500/10 text-emerald-400" : s.status === "REJECTED" ? "bg-rose-500/10 text-rose-400" : s.status === "SUBMITTED" ? "bg-amber-500/10 text-amber-400" : "bg-slate-500/10 text-slate-400"}`}
                     >
-                      {s.status} Â· {pct}%
+                      {s.status} · {pct}%
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">

@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import MsdsClient from "./MsdsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Chemical / MSDS Register" };
 
 export default async function Page() {

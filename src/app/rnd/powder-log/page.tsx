@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import PowderLogClient from "./PowderLogClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "3D Metal Powder Lifecycle & Sieve Log | ManufacturingMax",
 };

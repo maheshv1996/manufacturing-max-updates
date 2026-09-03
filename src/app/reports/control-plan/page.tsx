@@ -32,8 +32,8 @@ export default async function ControlPlanPage() {
               Control Plan
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {plans.length} characteristic
-              row(s) Â· {active} active
+              Generated: {now.toLocaleString()} · {plans.length} characteristic
+              row(s) · {active} active
             </p>
           </div>
         </div>
@@ -76,25 +76,25 @@ export default async function ControlPlanPage() {
                 </td>
                 <td className="p-3">
                   {cp.product
-                    ? `${cp.product.sku} Â· ${cp.product.name}`
-                    : "â€”"}
+                    ? `${cp.product.sku} · ${cp.product.name}`
+                    : "—"}
                 </td>
-                <td className="p-3">{cp.processStep || "â€”"}</td>
+                <td className="p-3">{cp.processStep || "—"}</td>
                 <td className="p-3 font-medium">{cp.characteristic}</td>
                 <td className="p-3 font-mono">
                   {cp.specMin !== null && cp.specMin !== undefined
-                    ? `${cp.specMin} â€“ ${cp.specMax ?? "âˆž"}`
-                    : "â€”"}
+                    ? `${cp.specMin} – ${cp.specMax ?? "∞"}`
+                    : "—"}
                 </td>
-                <td className="p-3">{cp.measurementMethod || "â€”"}</td>
+                <td className="p-3">{cp.measurementMethod || "—"}</td>
                 <td className="p-3">
                   {cp.sampleSize ? `${cp.sampleSize} pcs` : ""}
                   {cp.sampleSize && cp.frequency ? " / " : ""}
                   {cp.frequency || ""}
                 </td>
-                <td className="p-3">{cp.controlMethod || "â€”"}</td>
-                <td className="p-3">{cp.reactionPlan || "â€”"}</td>
-                <td className="p-3">{cp.responsible || "â€”"}</td>
+                <td className="p-3">{cp.controlMethod || "—"}</td>
+                <td className="p-3">{cp.reactionPlan || "—"}</td>
+                <td className="p-3">{cp.responsible || "—"}</td>
                 <td className="p-3 font-bold">{cp.status}</td>
               </tr>
             ))}
@@ -103,7 +103,7 @@ export default async function ControlPlanPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-4 print:text-gray-500">
-        Manufacturing MAX Â· Control Plan Â· IATF 16949 / AS9100 Evidence Â·
+        Manufacturing MAX · Control Plan · IATF 16949 / AS9100 Evidence ·
         Confidential
       </p>
     </main>

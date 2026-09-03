@@ -88,7 +88,7 @@ export default function PpeClient() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-lime-300 font-semibold">
-            <HardHat className="w-4 h-4" /> M24 â€” PPE Issue Register
+            <HardHat className="w-4 h-4" /> M24 — PPE Issue Register
           </div>
           <h1 className="text-2xl font-bold text-white mt-1">
             Personal Protective Equipment
@@ -155,7 +155,7 @@ export default function PpeClient() {
               <span className="text-white font-semibold">{u.name}</span>
               <span className="text-slate-400">
                 {" "}
-                Â· {u.issues} items ({u.active} active)
+                · {u.issues} items ({u.active} active)
               </span>
               <div className="text-lime-300/80 mt-0.5">
                 {u.categories.join(", ")}
@@ -196,12 +196,12 @@ export default function PpeClient() {
                 className="border-b border-slate-700/40 last:border-0"
               >
                 <td className="p-3 text-slate-300">{i.issueNumber}</td>
-                <td className="p-3 text-white">{i.user?.name || "â€”"}</td>
+                <td className="p-3 text-white">{i.user?.name || "—"}</td>
                 <td className="p-3 text-slate-200">{i.itemName}</td>
                 <td className="p-3 text-slate-300">
                   {i.category.replace(/_/g, " ")}
                 </td>
-                <td className="p-3 text-slate-300">Ã—{i.quantity}</td>
+                <td className="p-3 text-slate-300">×{i.quantity}</td>
                 <td className="p-3 text-slate-300">
                   {new Date(i.issuedAt).toLocaleDateString()}
                 </td>
@@ -245,7 +245,7 @@ export default function PpeClient() {
               onChange={(e) => setForm({ ...form, userId: e.target.value })}
               className="w-full rounded-xl bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-lime-500"
             >
-              <option value="">Select employeeâ€¦</option>
+              <option value="">Select employee…</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}

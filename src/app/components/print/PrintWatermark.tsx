@@ -26,7 +26,7 @@ export default function PrintWatermark({
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs font-mono font-bold tracking-widest uppercase text-gray-700">
-            {plantName} â€¢ AS9100D / IATF 16949
+            {plantName} • AS9100D / IATF 16949
           </div>
           <h1 className="text-2xl font-black uppercase tracking-tight mt-0.5">
             {documentTitle}

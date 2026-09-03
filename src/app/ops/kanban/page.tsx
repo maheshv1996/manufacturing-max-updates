@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import KanbanBoardClient from "./KanbanBoardClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Shopfloor Visual Kanban Board | ManufacturingMax",
 };

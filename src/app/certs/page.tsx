@@ -88,8 +88,8 @@ export default async function CertsPage() {
             </h1>
             <p className="text-sm text-slate-400 mt-0.5">
               {settings.requireMillCerts
-                ? "âœˆ Aerospace Mode ACTIVE â€” No cert, no metal."
-                : "General mode â€” certs are optional."}
+                ? "✈ Aerospace Mode ACTIVE — No cert, no metal."
+                : "General mode — certs are optional."}
             </p>
           </div>
         </div>
@@ -151,7 +151,7 @@ export default async function CertsPage() {
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
             <p className="text-sm font-extrabold text-amber-300">
-              âš  {expiringSoon.length} Cert(s) Expiring Within 30 Days
+              ⚠ {expiringSoon.length} Cert(s) Expiring Within 30 Days
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -166,9 +166,9 @@ export default async function CertsPage() {
                   className="flex items-center gap-2 px-3 py-2 bg-amber-100 dark:bg-amber-900/60 rounded-xl text-xs font-bold text-amber-200 animate-pulse"
                 >
                   <span className="font-mono">{c.heatNumber}</span>
-                  <span className="text-amber-500">Â·</span>
+                  <span className="text-amber-500">·</span>
                   <span>{c.rawMaterial?.name}</span>
-                  <span className="text-amber-500">Â·</span>
+                  <span className="text-amber-500">·</span>
                   <span>{daysLeft}d left</span>
                 </div>
               );
@@ -182,7 +182,7 @@ export default async function CertsPage() {
         <div className="bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-2xl p-4 flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
           <p className="text-sm font-bold text-rose-300">
-            ðŸ”´ {uncertifiedCount} uncertified IN batch(es) detected. Issuance
+            🔴 {uncertifiedCount} uncertified IN batch(es) detected. Issuance
             is BLOCKED for these materials until certs are attached.
           </p>
         </div>
@@ -243,7 +243,7 @@ export default async function CertsPage() {
                       {cert.heatNumber}
                     </td>
                     <td className="p-4 text-slate-600 text-slate-300">
-                      {cert.certNumber || "â€”"}
+                      {cert.certNumber || "—"}
                     </td>
                     <td className="p-4 font-sans">
                       <p className="font-bold text-white">
@@ -254,7 +254,7 @@ export default async function CertsPage() {
                       </p>
                     </td>
                     <td className="p-4 font-sans text-slate-600 text-slate-300">
-                      {cert.supplier?.name || "â€”"}
+                      {cert.supplier?.name || "—"}
                     </td>
                     <td className="p-4">
                       <span
@@ -266,7 +266,7 @@ export default async function CertsPage() {
                       </span>
                     </td>
                     <td className="p-4 text-slate-400">
-                      {cert.specGrade || "â€”"}
+                      {cert.specGrade || "—"}
                     </td>
                     <td className="p-4 text-slate-400">
                       {new Date(cert.uploadedAt).toLocaleDateString()}
@@ -286,7 +286,7 @@ export default async function CertsPage() {
                           {isExpired
                             ? " EXPIRED"
                             : isExpiring
-                              ? " âš  SOON"
+                              ? " ⚠ SOON"
                               : ""}
                         </span>
                       ) : (

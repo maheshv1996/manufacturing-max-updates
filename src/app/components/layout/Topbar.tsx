@@ -21,6 +21,7 @@ import {
   HelpCircle,
   Sparkles,
   Brain,
+  Settings,
 } from "lucide-react";
 import InstallPrompt from "@/app/components/layout/InstallPrompt";
 import OfflineSyncBadge from "@/app/components/layout/OfflineSyncBadge";
@@ -276,6 +277,14 @@ export default function Topbar({ user }: TopbarProps) {
             <HelpCircle className="w-5 h-5" />
           </button>
 
+          <Link
+            href="/system/admin"
+            className="p-1.5 text-text-2 hover:text-white hover:bg-surface-3 rounded-control transition-colors cursor-pointer"
+            title="System & AI Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </Link>
+
           <SoundToggle />
 
           <div className="relative">
@@ -381,6 +390,14 @@ export default function Topbar({ user }: TopbarProps) {
                 </div>
 
                 <div className="py-1">
+                  <Link
+                    href="/system/admin"
+                    onClick={() => setShowAccountMenu(false)}
+                    className="w-full text-left px-4 py-2 text-sm text-text-2 hover:bg-surface-3 hover:text-text-1 flex items-center gap-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    System & AI Settings
+                  </Link>
                   <button
                     onClick={() => {
                       setShowAccountMenu(false);

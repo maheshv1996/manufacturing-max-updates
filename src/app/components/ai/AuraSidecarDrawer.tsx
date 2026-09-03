@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain,
@@ -10,6 +10,7 @@ import {
   Volume2,
   VolumeX,
   Send,
+  Settings,
 } from "lucide-react";
 import { soundFx } from "@/lib/soundFx";
 
@@ -19,6 +20,18 @@ export default function AuraSidecarDrawer() {
   const [messages, setMessages] = useState<{ role: "aura" | "user"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const pathname = usePathname();
+  const router = useRouter();
+
+  if (
+    pathname === "/" ||
+    pathname === "/onboarding" ||
+    pathname?.startsWith("/onboarding/") ||
+    pathname === "/login" ||
+    pathname === "/landing" ||
+    pathname === "/terminal"
+  ) {
+    return null;
+  }
 
   const getContextAdvice = () => {
     if (pathname?.includes("/quality") || pathname?.includes("/fai")) {
@@ -194,14 +207,26 @@ export default function AuraSidecarDrawer() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => {
+                      setIsOpen(false);
+                      router.push("/system/ai");
+                    }}
+                    className="p-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 text-white/70 hover:text-cyan-300 transition-all cursor-pointer border border-white/10 hover:border-cyan-400/40"
+                    title="Open AI Settings (Gemini, Groq, Ollama)"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => setVoiceActive(!voiceActive)}
                     className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all cursor-pointer border border-white/10"
+                    title={voiceActive ? "Mute voice" : "Unmute voice"}
                   >
                     {voiceActive ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-white/40" />}
                   </button>
                   <button
                     onClick={() => setIsOpen(false)}
                     className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all cursor-pointer border border-white/10"
+                    title="Close"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -227,15 +252,42 @@ export default function AuraSidecarDrawer() {
                           <span>AURA INTELLIGENCE</span>
                         </div>
                       )}
-                      <p>{m.text}</p>
+                      <p className="whitespace-pre-wrap">{m.text}</p>
+                      {m.role === "aura" && m.text.includes("AI Settings") && (
+                        <div className="mt-3 pt-2.5 border-t border-white/10">
+                          <button
+                            onClick={() => {
+                              setIsOpen(false);
+                              router.push("/system/ai");
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-bold text-xs transition-all shadow-xs cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                            <span>Configure AI Settings →</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
 
                 <div className="pt-2 space-y-2">
-                  <span className="text-[10px] font-mono font-bold text-white/50 uppercase">
-                    Suggested Co-Pilot Prompts:
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-white/50 uppercase">
+                      Suggested Co-Pilot Prompts:
+                    </span>
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        router.push("/system/ai");
+                      }}
+                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Configure AI & LLM Engine"
+                    >
+                      <Settings className="w-3 h-3" />
+                      <span>AI Settings</span>
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {context.quickActions.map((qa, i) => (
                       <button

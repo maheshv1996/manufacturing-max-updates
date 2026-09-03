@@ -43,7 +43,7 @@ export default async function CalibrationRegisterPage() {
               Calibration Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {enriched.length} calibrated
+              Generated: {now.toLocaleString()} · {enriched.length} calibrated
               tool(s) on record
             </p>
           </div>
@@ -98,7 +98,7 @@ export default async function CalibrationRegisterPage() {
                   {t.serialNumber}
                 </td>
                 <td className="p-3 text-slate-400 print:text-gray-600">
-                  {t.certNumber || "â€”"}
+                  {t.certNumber || "—"}
                 </td>
                 <td className="p-3 text-slate-400 print:text-gray-600">
                   {new Date(t.calibratedAt).toLocaleDateString()}
@@ -130,7 +130,7 @@ export default async function CalibrationRegisterPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Calibration Register Â· AS9100 / Nadcap Evidence Â·
+        Manufacturing MAX · Calibration Register · AS9100 / Nadcap Evidence ·
         Confidential
       </p>
     </main>

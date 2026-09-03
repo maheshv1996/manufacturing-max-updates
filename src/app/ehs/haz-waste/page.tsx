@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import HazWasteClient from "./HazWasteClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Hazardous Waste Manifests" };
 
 export default async function Page() {

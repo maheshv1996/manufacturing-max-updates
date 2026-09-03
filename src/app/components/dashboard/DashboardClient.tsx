@@ -359,7 +359,7 @@ export default function DashboardClient({
               </div>
               <div>
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-rose-200 flex items-center gap-2">
-                  <span>Inventory Alerts â€” Critical Low Stock</span>
+                  <span>Inventory Alerts — Critical Low Stock</span>
                   <span className="px-2 py-0.5 bg-rose-600 text-white rounded-full text-[10px] font-black">
                     {lowStockAlerts.length} Item(s)
                   </span>
@@ -464,17 +464,17 @@ export default function DashboardClient({
                   <span>
                     Revenue:{" "}
                     <strong className="text-blue-400">
-                      â‚¹{financialSummary.revenue.toLocaleString()}
+                      ₹{financialSummary.revenue.toLocaleString()}
                     </strong>
                   </span>
-                  <span className="text-slate-700">â€¢</span>
+                  <span className="text-slate-700">•</span>
                   <span>
                     Cost:{" "}
                     <strong className="text-slate-600 text-slate-300">
-                      â‚¹{financialSummary.cost.toLocaleString()}
+                      ₹{financialSummary.cost.toLocaleString()}
                     </strong>
                   </span>
-                  <span className="text-slate-700">â€¢</span>
+                  <span className="text-slate-700">•</span>
                   <span>
                     Margin:{" "}
                     <span
@@ -519,7 +519,7 @@ export default function DashboardClient({
                     <p className="text-xl font-black text-white font-mono mt-0.5">
                       Total Outstanding:{" "}
                       <span className="text-blue-400">
-                        â‚¹
+                        ₹
                         {receivablesSummary.totalOutstanding.toLocaleString(
                           "en-IN",
                         )}
@@ -542,7 +542,7 @@ export default function DashboardClient({
                     0 - 30 Days
                   </span>
                   <span className="font-mono font-bold text-slate-200 mt-1">
-                    â‚¹{receivablesSummary.bucket0_30.toLocaleString("en-IN")}
+                    ₹{receivablesSummary.bucket0_30.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-600/50 flex flex-col justify-between">
@@ -550,7 +550,7 @@ export default function DashboardClient({
                     31 - 60 Days
                   </span>
                   <span className="font-mono font-bold text-slate-200 mt-1">
-                    â‚¹{receivablesSummary.bucket31_60.toLocaleString("en-IN")}
+                    ₹{receivablesSummary.bucket31_60.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/40 flex flex-col justify-between">
@@ -558,7 +558,7 @@ export default function DashboardClient({
                     61 - 90 Days
                   </span>
                   <span className="font-mono font-bold text-amber-400 mt-1">
-                    â‚¹{receivablesSummary.bucket61_90.toLocaleString("en-IN")}
+                    ₹{receivablesSummary.bucket61_90.toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div
@@ -577,7 +577,7 @@ export default function DashboardClient({
                   <span
                     className={`font-mono font-bold mt-1 ${receivablesSummary.bucket90Plus > 0 ? "text-rose-300" : "text-slate-200"}`}
                   >
-                    â‚¹{receivablesSummary.bucket90Plus.toLocaleString("en-IN")}
+                    ₹{receivablesSummary.bucket90Plus.toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -598,7 +598,7 @@ export default function DashboardClient({
                     <p className="text-xl font-black text-white font-mono mt-0.5">
                       Total Outstanding:{" "}
                       <span className="text-rose-400">
-                        â‚¹
+                        ₹
                         {payablesSummary.totalOutstanding.toLocaleString(
                           "en-IN",
                         )}
@@ -641,17 +641,17 @@ export default function DashboardClient({
                   <span>
                     Total:{" "}
                     <strong className="text-cyan-400">
-                      â‚¹
+                      ₹
                       {energySummary.totalCost.toLocaleString("en-IN", {
                         maximumFractionDigits: 0,
                       })}
                     </strong>
                   </span>
-                  <span className="text-slate-700">â€¢</span>
+                  <span className="text-slate-700">•</span>
                   <span>
                     Per Machine Hr:{" "}
                     <strong className="text-slate-600 text-slate-300">
-                      â‚¹
+                      ₹
                       {energySummary.perMachineHour.toLocaleString("en-IN", {
                         maximumFractionDigits: 1,
                       })}
@@ -755,7 +755,7 @@ export default function DashboardClient({
                 <p className="text-sm font-medium text-rose-600/80 text-rose-300/80 mt-0.5">
                   {complianceFlags.length} item
                   {complianceFlags.length === 1 ? "" : "s"} need attention
-                  across the organisation â€” permits, backups, spares,
+                  across the organisation — permits, backups, spares,
                   contracts.
                 </p>
               </div>

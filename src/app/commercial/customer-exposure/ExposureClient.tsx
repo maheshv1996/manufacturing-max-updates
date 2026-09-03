@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   Loader2,
   ShieldAlert,
   TrendingUp,
   AlertTriangle,
   Wallet,
+  FileText
 } from "lucide-react";
 
 type Warning = "NONE" | "ATTENTION" | "CRITICAL";
@@ -105,6 +108,13 @@ export default function ExposureClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Customer Exposure"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       {msg && <p className="text-sm text-emerald-300 font-semibold">{msg}</p>}
 
       {/* KPI strip */}

@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState } from "react";
 import { format } from "date-fns";
-import { DollarSign, History, Check } from "lucide-react";
+import { DollarSign, History, Check,
+  FileText
+} from "lucide-react";
 import RecordSupplierPaymentModal from "./RecordSupplierPaymentModal";
 import { useRouter } from "next/navigation";
 import TallyExportButtons from "@/app/components/TallyExportButtons";
@@ -35,6 +39,13 @@ export default function CommercialDeskClient({
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Desk"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       {/* Payables Summary Banner */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 shadow-sm">
@@ -42,7 +53,7 @@ export default function CommercialDeskClient({
             Total Purchased Value
           </p>
           <p className="text-2xl font-black mt-1 font-mono text-white">
-            â‚¹{totalPurchased.toLocaleString("en-IN")}
+            ₹{totalPurchased.toLocaleString("en-IN")}
           </p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-5 shadow-sm">
@@ -50,7 +61,7 @@ export default function CommercialDeskClient({
             Total Paid
           </p>
           <p className="text-2xl font-black mt-1 font-mono text-emerald-400">
-            â‚¹{totalPaid.toLocaleString("en-IN")}
+            ₹{totalPaid.toLocaleString("en-IN")}
           </p>
         </div>
         <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-xl p-5 shadow-sm">
@@ -58,7 +69,7 @@ export default function CommercialDeskClient({
             Outstanding Payables
           </p>
           <p className="text-2xl font-black mt-1 font-mono text-rose-400">
-            â‚¹{totalPayable.toLocaleString("en-IN")}
+            ₹{totalPayable.toLocaleString("en-IN")}
           </p>
         </div>
       </div>
@@ -81,13 +92,13 @@ export default function CommercialDeskClient({
                   Supplier
                 </th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">
-                  Purchased (â‚¹)
+                  Purchased (₹)
                 </th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">
-                  Paid (â‚¹)
+                  Paid (₹)
                 </th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">
-                  Balance Payable (â‚¹)
+                  Balance Payable (₹)
                 </th>
                 <th className="px-4 py-3 font-bold uppercase tracking-wider">
                   Last Payment
@@ -205,11 +216,11 @@ export default function CommercialDeskClient({
                         <span>
                           {format(new Date(payment.paymentDate), "MMM d, yyyy")}
                         </span>
-                        <span>â€¢</span>
+                        <span>•</span>
                         <span>{payment.method}</span>
                         {payment.reference && (
                           <>
-                            <span>â€¢</span>
+                            <span>•</span>
                             <span>Ref: {payment.reference}</span>
                           </>
                         )}
@@ -217,7 +228,7 @@ export default function CommercialDeskClient({
                     </div>
                   </div>
                   <div className="font-mono font-bold text-white">
-                    â‚¹{payment.amount.toLocaleString("en-IN")}
+                    ₹{payment.amount.toLocaleString("en-IN")}
                   </div>
                 </div>
               ))}

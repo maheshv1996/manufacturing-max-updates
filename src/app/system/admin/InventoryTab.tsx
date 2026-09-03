@@ -336,11 +336,11 @@ export default function InventoryTab() {
                   <td className="p-4 font-sans">
                     <p className="font-bold text-white text-sm">{mat.name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      SKU: {mat.sku} â€¢ Unit: {mat.unit}
+                      SKU: {mat.sku} • Unit: {mat.unit}
                     </p>
                   </td>
                   <td className="p-4 font-bold text-slate-200">
-                    â‚¹{mat.unitCost.toLocaleString()}
+                    ₹{mat.unitCost.toLocaleString()}
                   </td>
                   <td className="p-4 text-right font-black text-sm text-white">
                     {mat.currentStock.toLocaleString()} {mat.unit}
@@ -349,7 +349,7 @@ export default function InventoryTab() {
                     {mat.minStock.toLocaleString()} {mat.unit}
                   </td>
                   <td className="p-4 text-right font-bold text-emerald-400">
-                    â‚¹{valuation.toLocaleString()}
+                    ₹{valuation.toLocaleString()}
                   </td>
                   <td className="p-4 text-center font-sans">
                     <span
@@ -372,7 +372,7 @@ export default function InventoryTab() {
                       )}
                     </span>
                   </td>
-                  {/* Cert status chip â€” show if requireMillCerts ON or if cert exists */}
+                  {/* Cert status chip — show if requireMillCerts ON or if cert exists */}
                   <td className="p-4 text-center font-sans">
                     {(() => {
                       const inTxs =
@@ -388,13 +388,13 @@ export default function InventoryTab() {
                       if (hasCert)
                         return (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-300 text-[10px] font-bold">
-                            âœ“ CERT Â· {latestCert?.heatNumber}
+                            ✓ CERT · {latestCert?.heatNumber}
                           </span>
                         );
                       if (hasAnyCert)
                         return (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-300 text-[10px] font-bold">
-                            âš  PARTIAL
+                            ⚠ PARTIAL
                           </span>
                         );
                       return (
@@ -405,7 +405,7 @@ export default function InventoryTab() {
                               : "bg-slate-800/60 text-slate-500"
                           }`}
                         >
-                          {requireMillCerts ? "ðŸ”´ NO CERT" : "â€”"}
+                          {requireMillCerts ? "🔴 NO CERT" : "—"}
                         </span>
                       );
                     })()}
@@ -467,7 +467,7 @@ export default function InventoryTab() {
                 <th className="p-3">Material</th>
                 <th className="p-3">Type</th>
                 <th className="p-3 text-right">Quantity</th>
-                <th className="p-3 text-right">Unit Cost (â‚¹)</th>
+                <th className="p-3 text-right">Unit Cost (₹)</th>
                 <th className="p-3">Batch / Lot #</th>
                 <th className="p-3">Reference</th>
                 <th className="p-3 text-right">Actions</th>
@@ -490,7 +490,7 @@ export default function InventoryTab() {
                       {new Date(tx.at).toLocaleString()}
                     </td>
                     <td className="p-3 font-bold font-sans">
-                      {tx.rawMaterial?.name || "â€”"}
+                      {tx.rawMaterial?.name || "—"}
                     </td>
                     <td className="p-3">
                       <span
@@ -506,12 +506,12 @@ export default function InventoryTab() {
                       </span>
                     </td>
                     <td className="p-3 text-right font-bold">{tx.qty}</td>
-                    <td className="p-3 text-right">â‚¹{tx.unitCost || 0}</td>
+                    <td className="p-3 text-right">₹{tx.unitCost || 0}</td>
                     <td className="p-3 text-slate-400 text-[11px]">
-                      {tx.batchNo || "â€”"}
+                      {tx.batchNo || "—"}
                     </td>
                     <td className="p-3 text-slate-400 text-[11px]">
-                      {tx.reference || "â€”"}
+                      {tx.reference || "—"}
                     </td>
                     <td className="p-3 text-right">
                       <SourceRecordEditModal
@@ -522,7 +522,7 @@ export default function InventoryTab() {
                           { key: "qty", label: "Quantity", type: "number" },
                           {
                             key: "unitCost",
-                            label: "Unit Cost (â‚¹)",
+                            label: "Unit Cost (₹)",
                             type: "number",
                           },
                           {
@@ -618,7 +618,7 @@ export default function InventoryTab() {
                 >
                   {materials.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.sku}) â€” Stock: {m.currentStock} {m.unit}
+                      {m.name} ({m.sku}) — Stock: {m.currentStock} {m.unit}
                     </option>
                   ))}
                 </select>
@@ -646,22 +646,22 @@ export default function InventoryTab() {
                 <>
                   <div>
                     <label className="block font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Unit Cost (â‚¹)
+                      Unit Cost (₹)
                     </label>
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Unit cost in â‚¹"
+                      placeholder="Unit cost in ₹"
                       value={formUnitCost}
                       onChange={(e) => setFormUnitCost(e.target.value)}
                       className="w-full bg-slate-800/60 border border-slate-600 text-white rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     />
                   </div>
 
-                  {/* â”€â”€â”€ MILL CERT SECTION â”€â”€â”€ */}
+                  {/* ─── MILL CERT SECTION ─── */}
                   <div className="border-t border-dashed border-amber-300 dark:border-amber-800 pt-4 space-y-3">
                     <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">
-                      âœˆ Mill Certificate{" "}
+                      ✈ Mill Certificate{" "}
                       {requireMillCerts ? "(REQUIRED)" : "(Optional)"}
                     </p>
 
@@ -769,7 +769,7 @@ export default function InventoryTab() {
                     >
                       {workOrders.map((wo) => (
                         <option key={wo.id} value={wo.id}>
-                          {wo.woNumber} â€” {wo.customerName || "Order"} (
+                          {wo.woNumber} — {wo.customerName || "Order"} (
                           {wo.status})
                         </option>
                       ))}
@@ -793,7 +793,7 @@ export default function InventoryTab() {
                       return (
                         <div className="p-3 bg-rose-50 dark:bg-rose-950 border border-rose-300 dark:border-rose-800 rounded-xl">
                           <p className="text-xs font-extrabold text-rose-300 flex items-center gap-2">
-                            ðŸ”´ ISSUE BLOCKED â€” NO CERT ON FILE
+                            🔴 ISSUE BLOCKED — NO CERT ON FILE
                           </p>
                           <p className="text-[11px] text-rose-400 mt-1">
                             This material has an uncertified batch. Aerospace

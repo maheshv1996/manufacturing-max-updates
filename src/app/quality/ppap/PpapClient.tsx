@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -13,6 +15,7 @@ import {
   Pencil,
   FileCheck2,
   ListChecks,
+  ShieldCheck
 } from "lucide-react";
 
 type Submission = any;
@@ -218,7 +221,7 @@ export default function PpapClient() {
           <h2 className="text-xl font-bold text-white">PPAP & Control Plans</h2>
           <p className="text-slate-400 text-sm">
             Production Part Approval Process (AIAG 18 elements) and live Control
-            Plans per product â€” the IATF/AS9100 evidence package.
+            Plans per product — the IATF/AS9100 evidence package.
           </p>
         </div>
         <div className="flex gap-2">
@@ -315,7 +318,7 @@ export default function PpapClient() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-slate-600 text-slate-300">
-                    {s.customerName || "â€”"}
+                    {s.customerName || "—"}
                   </td>
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 font-black">
@@ -413,18 +416,18 @@ export default function PpapClient() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-slate-600 text-slate-300">
-                    {cp.processStep || "â€”"}
+                    {cp.processStep || "—"}
                   </td>
                   <td className="px-5 py-3 font-medium text-white">
                     {cp.characteristic}
                   </td>
                   <td className="px-5 py-3 font-mono text-xs text-slate-600 text-slate-300">
                     {cp.specMin !== null && cp.specMin !== undefined
-                      ? `${cp.specMin} â€“ ${cp.specMax ?? "âˆž"}`
-                      : "â€”"}
+                      ? `${cp.specMin} – ${cp.specMax ?? "∞"}`
+                      : "—"}
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-600 text-slate-300">
-                    {cp.measurementMethod || "â€”"}
+                    {cp.measurementMethod || "—"}
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-600 text-slate-300">
                     {cp.sampleSize ? `${cp.sampleSize} pcs` : ""}
@@ -462,18 +465,18 @@ export default function PpapClient() {
         </div>
       )}
 
-      {/* PPAP DETAIL DRAWER â€” 18 elements */}
+      {/* PPAP DETAIL DRAWER — 18 elements */}
       {detail && (
         <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/50">
           <div className="w-full max-w-2xl h-full bg-slate-800/60 overflow-y-auto shadow-2xl">
             <div className="sticky top-0 bg-slate-800/80 border-b border-slate-700 backdrop-blur-sm px-6 py-4 flex items-center justify-between z-10">
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  {detail.ppapNumber} â€” {detail.product?.name}
+                  {detail.ppapNumber} — {detail.product?.name}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {detail.customerName || "No customer"} Â· Level{" "}
-                  {detail.submissionLevel} Â· Rev {detail.revision}
+                  {detail.customerName || "No customer"} · Level{" "}
+                  {detail.submissionLevel} · Rev {detail.revision}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -593,7 +596,7 @@ export default function PpapClient() {
                     >
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.sku} Â· {p.name}
+                          {p.sku} · {p.name}
                         </option>
                       ))}
                     </select>
@@ -670,7 +673,7 @@ export default function PpapClient() {
                       >
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.sku} Â· {p.name}
+                            {p.sku} · {p.name}
                           </option>
                         ))}
                       </select>
@@ -693,7 +696,7 @@ export default function PpapClient() {
                       onChange={(e) =>
                         setForm({ ...form, characteristic: e.target.value })
                       }
-                      placeholder="e.g. Bore diameter Ã˜25 Â± 0.02"
+                      placeholder="e.g. Bore diameter Ø25 ± 0.02"
                     />
                   </Field>
                   <div className="grid sm:grid-cols-4 gap-4">
@@ -850,6 +853,13 @@ function Field({
 }) {
   return (
     <div>
+      <PageHeader
+        title="Ppap"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
         {label}
         {required && <span className="text-rose-500"> *</span>}

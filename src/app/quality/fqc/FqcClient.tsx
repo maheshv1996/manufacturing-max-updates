@@ -8,6 +8,7 @@ import {
   PackageCheck,
   FileCheck2,
 } from "lucide-react";
+import PageHeader from "@/app/components/shared/PageHeader";
 import { Button } from "@/app/components/ui";
 
 export default function FqcClient() {
@@ -79,6 +80,13 @@ export default function FqcClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Final QC & Packing Gate (FQC)"
+        description="Final inspection, packing and data-package sign-off before dispatch — gate-pass requires all three checks."
+        icon={<PackageCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <div className="grid grid-cols-3 gap-4">
         {[
           ["complete", "Checklists complete", "text-emerald-300"],

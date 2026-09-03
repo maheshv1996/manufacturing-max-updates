@@ -182,7 +182,7 @@ export default function ComplaintsClient({ canEdit }: ComplaintsClientProps) {
                       <SlaChips complaint={complaint} />
                     </div>
                     <div className="text-sm text-slate-500">
-                      {complaint.customerName} â€¢{" "}
+                      {complaint.customerName} •{" "}
                       {format(new Date(complaint.raisedAt), "MMM d, yyyy")}
                     </div>
                   </div>

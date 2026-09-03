@@ -68,7 +68,7 @@ export default function WorkOrderFinancialCard({
                 },
                 {
                   key: "quotedPrice",
-                  label: "Quoted Price (â‚¹)",
+                  label: "Quoted Price (₹)",
                   type: "number",
                 },
                 {
@@ -117,7 +117,7 @@ export default function WorkOrderFinancialCard({
             Quoted Revenue
           </span>
           <span className="text-xl font-extrabold font-mono text-white mt-1 block">
-            â‚¹{costing.revenue.toLocaleString("en-IN")}
+            ₹{costing.revenue.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -128,16 +128,16 @@ export default function WorkOrderFinancialCard({
               entityType="WO_COSTING"
               entityId={wo.id}
               field="totalCost"
-              fieldLabel="Total Job Cost (â‚¹)"
+              fieldLabel="Total Job Cost (₹)"
               currentCalculatedValue={costing.totalCost}
               existingOverride={costOverride}
-              unit="â‚¹"
+              unit="₹"
               userRole={userRole}
               onOverrideSaved={fetchOverrides}
             />
           </span>
           <span className="text-xl font-extrabold font-mono text-white mt-1 block">
-            â‚¹{displayTotalCost.toLocaleString("en-IN")}
+            ₹{displayTotalCost.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -150,7 +150,7 @@ export default function WorkOrderFinancialCard({
               displayProfit >= 0 ? "text-emerald-400" : "text-rose-400"
             }`}
           >
-            â‚¹{displayProfit.toLocaleString("en-IN")}
+            ₹{displayProfit.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -194,7 +194,7 @@ export default function WorkOrderFinancialCard({
             <div
               style={{ width: `${matPct}%` }}
               className="bg-blue-500 h-full flex items-center justify-center transition-all"
-              title={`Material: â‚¹${costing.materialCost} (${matPct}%)`}
+              title={`Material: ₹${costing.materialCost} (${matPct}%)`}
             >
               {Number(matPct) > 10 ? `${matPct}%` : ""}
             </div>
@@ -203,7 +203,7 @@ export default function WorkOrderFinancialCard({
             <div
               style={{ width: `${labPct}%` }}
               className="bg-amber-500 h-full flex items-center justify-center transition-all"
-              title={`Labor: â‚¹${costing.laborCost} (${labPct}%)`}
+              title={`Labor: ₹${costing.laborCost} (${labPct}%)`}
             >
               {Number(labPct) > 10 ? `${labPct}%` : ""}
             </div>
@@ -212,7 +212,7 @@ export default function WorkOrderFinancialCard({
             <div
               style={{ width: `${macPct}%` }}
               className="bg-purple-500 h-full flex items-center justify-center transition-all"
-              title={`Machine: â‚¹${costing.machineCost} (${macPct}%)`}
+              title={`Machine: ₹${costing.machineCost} (${macPct}%)`}
             >
               {Number(macPct) > 10 ? `${macPct}%` : ""}
             </div>
@@ -221,7 +221,7 @@ export default function WorkOrderFinancialCard({
             <div
               style={{ width: `${scrPct}%` }}
               className="bg-rose-500 h-full flex items-center justify-center transition-all"
-              title={`Scrap Loss: â‚¹${costing.scrapLoss} (${scrPct}%)`}
+              title={`Scrap Loss: ₹${costing.scrapLoss} (${scrPct}%)`}
             >
               {Number(scrPct) > 10 ? `${scrPct}%` : ""}
             </div>
@@ -230,7 +230,7 @@ export default function WorkOrderFinancialCard({
             <div
               style={{ width: `${engPct}%` }}
               className="bg-cyan-500 h-full flex items-center justify-center transition-all"
-              title={`Energy: â‚¹${costing.energyCost || 0} (${engPct}%)`}
+              title={`Energy: ₹${costing.energyCost || 0} (${engPct}%)`}
             >
               {Number(engPct) > 10 ? `${engPct}%` : ""}
             </div>
@@ -241,28 +241,28 @@ export default function WorkOrderFinancialCard({
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-blue-500" />
             Material:{" "}
-            <strong>â‚¹{costing.materialCost.toLocaleString("en-IN")}</strong>
+            <strong>₹{costing.materialCost.toLocaleString("en-IN")}</strong>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-amber-500" />
             Labor:{" "}
-            <strong>â‚¹{costing.laborCost.toLocaleString("en-IN")}</strong>
+            <strong>₹{costing.laborCost.toLocaleString("en-IN")}</strong>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-purple-500" />
             Machine:{" "}
-            <strong>â‚¹{costing.machineCost.toLocaleString("en-IN")}</strong>
+            <strong>₹{costing.machineCost.toLocaleString("en-IN")}</strong>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-rose-500" />
             Scrap Loss:{" "}
-            <strong>â‚¹{costing.scrapLoss.toLocaleString("en-IN")}</strong>
+            <strong>₹{costing.scrapLoss.toLocaleString("en-IN")}</strong>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-cyan-500" />
             Energy:{" "}
             <strong>
-              â‚¹{(costing.energyCost || 0).toLocaleString("en-IN")}
+              ₹{(costing.energyCost || 0).toLocaleString("en-IN")}
             </strong>
           </div>
         </div>

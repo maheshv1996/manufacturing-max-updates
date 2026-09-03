@@ -5,6 +5,9 @@ import { FileUp } from "lucide-react";
 import PageHeader from "@/app/components/shared/PageHeader";
 import ImportWizardClient from "./ImportWizardClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ImportPage() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);

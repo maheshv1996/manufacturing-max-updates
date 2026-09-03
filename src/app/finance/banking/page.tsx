@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import BankingClient from "./BankingClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Bank Guarantees & Letters of Credit Tracker | ManufacturingMax",
 };

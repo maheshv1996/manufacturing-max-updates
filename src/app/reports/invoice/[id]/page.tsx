@@ -34,6 +34,8 @@ export default async function InvoicePrintPage({
         workOrder: {
           include: { product: true },
         },
+        salesOrder: { select: { orderNumber: true } },
+        lines: { orderBy: { lineNo: "asc" } },
       },
     }),
     getSettings(),
@@ -43,11 +45,19 @@ export default async function InvoicePrintPage({
     notFound();
   }
 
+  const gl = await (prisma as any).journalEntry.findFirst({
+    where: { source: "INVOICE", sourceId: invoice.id },
+    select: { entryNumber: true },
+  });
+  const printableInvoice = JSON.parse(
+    JSON.stringify({ ...invoice, glRef: gl?.entryNumber || null }),
+  );
+
   const totalWords = numberToIndianWords(invoice.totalValue);
 
   return (
     <InvoicePrintClient
-      invoice={JSON.parse(JSON.stringify(invoice))}
+      invoice={printableInvoice}
       branding={settings.branding}
       totalWords={totalWords}
     />

@@ -39,17 +39,36 @@ export default function PurchasingTab({
   // Modal States
   const [showNewPOModal, setShowNewPOModal] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
-  const [selectedMaterialId, setSelectedMaterialId] = useState("");
-  const [poQtyInput, setPoQtyInput] = useState("");
-  const [poUnitCostInput, setPoUnitCostInput] = useState("");
+  const [poLines, setPoLines] = useState<any[]>([
+    { rawMaterialId: "", qty: "", unitCost: "" },
+  ]);
   const [poExpectedDateInput, setPoExpectedDateInput] = useState("");
   const [submittingPO, setSubmittingPO] = useState(false);
 
   // Receive Modal States
   const [receiveTargetPO, setReceiveTargetPO] = useState<any | null>(null);
+  const [receiveLineId, setReceiveLineId] = useState("");
   const [receiveQtyInput, setReceiveQtyInput] = useState("");
   const [batchNoInput, setBatchNoInput] = useState("");
   const [submittingReceive, setSubmittingReceive] = useState(false);
+
+  const updatePoLine = (i: number, patch: any) =>
+    setPoLines((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addPoLine = () =>
+    setPoLines((rows) => [
+      ...rows,
+      { rawMaterialId: "", qty: "", unitCost: "" },
+    ]);
+  const removePoLine = (i: number) =>
+    setPoLines((rows) =>
+      rows.length > 1 ? rows.filter((_, idx) => idx !== i) : rows,
+    );
+
+  const resetPoForm = () => {
+    setSelectedSupplierId("");
+    setPoLines([{ rawMaterialId: "", qty: "", unitCost: "" }]);
+    setPoExpectedDateInput("");
+  };
 
   const fetchData = async () => {
     try {
@@ -77,12 +96,9 @@ export default function PurchasingTab({
         (m: any) => m.id === prefillMaterialId,
       );
       if (mat) {
-        setSelectedMaterialId(mat.id);
         if (mat.supplierId) {
           setSelectedSupplierId(mat.supplierId);
         }
-        setPoQtyInput(String(mat.minStock * 2 || 100));
-        setPoUnitCostInput(String(mat.unitCost || 0));
 
         // Default expected date = today + (supplier default lead days or 7)
         const leadDays = mat.supplier?.defaultLeadDays || 7;
@@ -90,38 +106,60 @@ export default function PurchasingTab({
         exp.setDate(exp.getDate() + leadDays);
         setPoExpectedDateInput(exp.toISOString().split("T")[0]);
 
+        setPoLines([
+          {
+            rawMaterialId: mat.id,
+            qty: String(mat.minStock * 2 || 100),
+            unitCost: String(mat.unitCost || 0),
+          },
+        ]);
         setShowNewPOModal(true);
       }
     }
   }, [prefillMaterialId, data.rawMaterials]);
 
-  const handleMaterialChange = (matId: string) => {
-    setSelectedMaterialId(matId);
+  const handleRowMaterialChange = (i: number, matId: string) => {
+    updatePoLine(i, { rawMaterialId: matId });
     const mat = data.rawMaterials.find((m: any) => m.id === matId);
     if (mat) {
-      if (mat.supplierId) {
+      if (mat.supplierId && !selectedSupplierId) {
         setSelectedSupplierId(mat.supplierId);
       }
-      setPoUnitCostInput(String(mat.unitCost || 0));
-      if (!poQtyInput) {
-        setPoQtyInput(String(mat.minStock * 2 || 100));
+      const row = poLines[i] || {};
+      const patch: any = { unitCost: String(mat.unitCost || 0) };
+      if (!row.qty) patch.qty = String(mat.minStock * 2 || 100);
+      updatePoLine(i, patch);
+      if (i === 0 && !poExpectedDateInput) {
+        const leadDays = mat.supplier?.defaultLeadDays || 7;
+        const exp = new Date();
+        exp.setDate(exp.getDate() + leadDays);
+        setPoExpectedDateInput(exp.toISOString().split("T")[0]);
       }
-      const leadDays = mat.supplier?.defaultLeadDays || 7;
-      const exp = new Date();
-      exp.setDate(exp.getDate() + leadDays);
-      setPoExpectedDateInput(exp.toISOString().split("T")[0]);
     }
   };
 
+  const poItemsFromForm = () =>
+    poLines
+      .filter((r: any) => r.rawMaterialId)
+      .map((r: any) => ({
+        rawMaterialId: r.rawMaterialId,
+        qty: Number(r.qty),
+        unitCost: Number(r.unitCost),
+      }));
+
   const handleCreatePO = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (
-      !selectedSupplierId ||
-      !selectedMaterialId ||
-      !poQtyInput ||
-      !poUnitCostInput
-    ) {
-      alert("Please fill in all required fields.");
+    const items = poItemsFromForm();
+    if (!selectedSupplierId || items.length === 0) {
+      alert("Please choose a supplier and at least one material line.");
+      return;
+    }
+    if (items.some((it) => !Number.isFinite(it.qty) || it.qty <= 0)) {
+      alert("Every material line needs a positive quantity.");
+      return;
+    }
+    if (items.some((it) => !Number.isFinite(it.unitCost) || it.unitCost < 0)) {
+      alert("Every material line needs a valid unit cost.");
       return;
     }
 
@@ -133,9 +171,7 @@ export default function PurchasingTab({
         body: JSON.stringify({
           action: "CREATE_PO",
           supplierId: selectedSupplierId,
-          rawMaterialId: selectedMaterialId,
-          qty: poQtyInput,
-          unitCost: poUnitCostInput,
+          items,
           expectedDate: poExpectedDateInput,
         }),
       });
@@ -143,6 +179,7 @@ export default function PurchasingTab({
       if (res.ok) {
         setShowNewPOModal(false);
         if (onClearPrefill) onClearPrefill();
+        resetPoForm();
         fetchData();
       } else {
         const err = await res.json();
@@ -156,16 +193,55 @@ export default function PurchasingTab({
     }
   };
 
+  const remainingOf = (line: any) =>
+    line
+      ? Math.max(0, Number(line.qty) - Number(line.receivedQty || 0))
+      : Math.max(0, Number(receiveTargetPO?.qty || 0) - Number(receiveTargetPO?.receivedQty || 0));
+
+  const receiveRemaining = () => {
+    const ls =
+      receiveTargetPO?.lines && receiveTargetPO.lines.length
+        ? receiveTargetPO.lines
+        : null;
+    const t = ls
+      ? ls.find((l: any) => l.id === receiveLineId) || ls[0]
+      : null;
+    return remainingOf(t);
+  };
+
+  const receiveLinesOf = (po: any) =>
+    po.lines && po.lines.length ? po.lines : null;
+
   const handleOpenReceiveModal = (po: any) => {
     setReceiveTargetPO(po);
-    const remaining = po.qty - po.receivedQty;
-    setReceiveQtyInput(String(remaining > 0 ? remaining : 0));
+    const lines = receiveLinesOf(po);
+    const target =
+      lines && lines.length
+        ? lines.find((l: any) => remainingOf(l) > 0) || lines[0]
+        : null;
+    setReceiveLineId(target ? target.id : "");
+    setReceiveQtyInput(String(remainingOf(target)));
     setBatchNoInput(`BATCH-${po.poNumber}-${Date.now().toString().slice(-4)}`);
   };
 
   const handleConfirmReceive = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!receiveTargetPO || !receiveQtyInput) return;
+
+    const lines = receiveLinesOf(receiveTargetPO);
+    const target =
+      lines && lines.length
+        ? lines.find((l: any) => l.id === receiveLineId) || lines[0]
+        : null;
+    if (lines && lines.length > 1 && !target) {
+      alert("Choose which PO line you are receiving.");
+      return;
+    }
+    const remaining = remainingOf(target);
+    if (Number(receiveQtyInput) > remaining) {
+      alert(`You can receive at most ${remaining} more on this line.`);
+      return;
+    }
 
     try {
       setSubmittingReceive(true);
@@ -175,6 +251,7 @@ export default function PurchasingTab({
         body: JSON.stringify({
           action: "RECEIVE_PO",
           poId: receiveTargetPO.id,
+          ...(target ? { poLineId: target.id } : {}),
           receiveQty: receiveQtyInput,
           batchNo: batchNoInput,
         }),
@@ -348,11 +425,7 @@ export default function PurchasingTab({
             <button
               onClick={() => {
                 if (onClearPrefill) onClearPrefill();
-                setSelectedMaterialId("");
-                setSelectedSupplierId("");
-                setPoQtyInput("");
-                setPoUnitCostInput("");
-                setPoExpectedDateInput("");
+                resetPoForm();
                 setShowNewPOModal(true);
               }}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center gap-2 cursor-pointer"
@@ -380,7 +453,17 @@ export default function PurchasingTab({
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {data.purchaseOrders.map((po: any) => {
-                const totalVal = po.qty * po.unitCost;
+                const lines = po.lines && po.lines.length ? po.lines : null;
+                const multi = !!lines && lines.length > 1;
+                const totalVal = lines
+                  ? lines.reduce(
+                      (s: number, l: any) => s + l.qty * l.unitCost,
+                      0,
+                    )
+                  : po.qty * po.unitCost;
+                const orderedQty = lines
+                  ? lines.reduce((s: number, l: any) => s + l.qty, 0)
+                  : po.qty;
                 const statusBadge =
                   po.status === "RECEIVED"
                     ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
@@ -403,17 +486,25 @@ export default function PurchasingTab({
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-semibold text-white">
-                        {po.rawMaterial?.name}
+                        {lines
+                          ? lines[0]?.rawMaterial?.name
+                          : po.rawMaterial?.name}
+                        {multi ? ` +${lines.length - 1} more` : ""}
                       </div>
                       <div className="text-xs font-mono text-slate-400">
-                        {po.rawMaterial?.sku}
+                        {multi
+                          ? `${lines.length} line items`
+                          : (lines && lines[0]?.rawMaterial?.sku) ||
+                            po.rawMaterial?.sku}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono font-bold text-slate-200">
-                      {po.qty} {po.rawMaterial?.unit}
+                      {orderedQty}{" "}
+                      {(lines && lines[0]?.rawMaterial?.unit) ||
+                        po.rawMaterial?.unit}
                     </td>
                     <td className="px-6 py-4 font-mono font-bold text-cyan-400">
-                      {po.receivedQty} / {po.qty}
+                      {po.receivedQty} / {orderedQty}
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -496,8 +587,7 @@ export default function PurchasingTab({
 
       {/* 3. NEW PO MODAL */}
       {showNewPOModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">            <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 space-y-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
@@ -526,25 +616,6 @@ export default function PurchasingTab({
             <form onSubmit={handleCreatePO} className="space-y-4">
               <div>
                 <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
-                  Select Raw Material *
-                </label>
-                <select
-                  value={selectedMaterialId}
-                  onChange={(e) => handleMaterialChange(e.target.value)}
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-sm text-white focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">-- Choose Material --</option>
-                  {data.rawMaterials.map((m: any) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.sku}) • Stock: {m.currentStock} {m.unit}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
                   Select Supplier *
                 </label>
                 <select
@@ -562,36 +633,97 @@ export default function PurchasingTab({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
-                    Order Quantity *
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold uppercase text-slate-300">
+                    Material Lines *
                   </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="1"
-                    value={poQtyInput}
-                    onChange={(e) => setPoQtyInput(e.target.value)}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
-                  />
+                  <button
+                    type="button"
+                    onClick={addPoLine}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold rounded-lg border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    + Add Another Material
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
-                    Unit Cost (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={poUnitCostInput}
-                    onChange={(e) => setPoUnitCostInput(e.target.value)}
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
-                  />
+                <div className="space-y-2 max-h-[38vh] overflow-y-auto pr-1">
+                  {poLines.map((row: any, i: number) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-[1fr_84px_104px_auto] gap-2 items-start"
+                    >
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                          Material {i + 1}
+                        </label>
+                        <select
+                          value={row.rawMaterialId}
+                          onChange={(e) =>
+                            handleRowMaterialChange(i, e.target.value)
+                          }
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">-- Choose --</option>
+                          {data.rawMaterials.map((m: any) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.sku}) • Stock {m.currentStock} {m.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                          Qty
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="1"
+                          value={row.qty}
+                          onChange={(e) =>
+                            updatePoLine(i, { qty: e.target.value })
+                          }
+                          placeholder="0"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                          Rate ₹
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={row.unitCost}
+                          onChange={(e) =>
+                            updatePoLine(i, { unitCost: e.target.value })
+                          }
+                          placeholder="0"
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="pt-5">
+                        <button
+                          type="button"
+                          onClick={() => removePoLine(i)}
+                          disabled={poLines.length <= 1}
+                          title="Remove line"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+                <p className="text-[11px] text-slate-500">
+                  Order value: ₹
+                  {poItemsFromForm()
+                    .reduce((s, it) => s + it.qty * it.unitCost, 0)
+                    .toLocaleString()}{" "}
+                  — the approval chain applies above ₹50,000.
+                </p>
               </div>
 
               <div>
@@ -657,6 +789,33 @@ export default function PurchasingTab({
             </div>
 
             <form onSubmit={handleConfirmReceive} className="space-y-4">
+              {receiveTargetPO.lines && receiveTargetPO.lines.length > 1 && (
+                <div>
+                  <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
+                    Receive Against Line *
+                  </label>
+                  <select
+                    value={receiveLineId}
+                    onChange={(e) => {
+                      setReceiveLineId(e.target.value);
+                      const ls = receiveTargetPO.lines || [];
+                      const l = ls.find(
+                        (x: any) => x.id === e.target.value,
+                      );
+                      setReceiveQtyInput(String(remainingOf(l || null)));
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    {receiveTargetPO.lines.map((l: any) => (
+                      <option key={l.id} value={l.id}>
+                        {l.rawMaterial?.name || l.rawMaterialId} · {l.qty}{" "}
+                        {l.rawMaterial?.unit || "units"} ordered ·{" "}
+                        {l.receivedQty || 0} received · {remainingOf(l)} open
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-extrabold uppercase text-slate-300 mb-1">
                   Quantity Received Now *
@@ -665,15 +824,14 @@ export default function PurchasingTab({
                   type="number"
                   step="any"
                   min="0.1"
-                  max={receiveTargetPO.qty - receiveTargetPO.receivedQty}
+                  max={receiveRemaining()}
                   value={receiveQtyInput}
                   onChange={(e) => setReceiveQtyInput(e.target.value)}
                   required
                   className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Remaining expected:{" "}
-                  {receiveTargetPO.qty - receiveTargetPO.receivedQty}{" "}
+                  Remaining expected: {receiveRemaining()}{" "}
                   {receiveTargetPO.rawMaterial?.unit}
                 </p>
               </div>

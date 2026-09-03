@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import MarketingClient from "./MarketingClient";
 import { Megaphone } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Marketing & Branding" };
 
 export default async function MarketingPage() {

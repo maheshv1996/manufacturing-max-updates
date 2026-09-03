@@ -61,12 +61,17 @@ function LoginContent() {
       setSubmitting(true);
       setErrorMsg(null);
 
+      const targetRedirect = searchParams.get("redirectTo");
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username,
+          password,
+          requestedPath: targetRedirect || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -77,7 +82,7 @@ function LoginContent() {
         );
       }
 
-      router.push(data.redirectTo || "/");
+      router.push(targetRedirect || data.redirectTo || "/command");
       router.refresh();
     } catch (err) {
       logClientError("Login error:", err, "page");
@@ -235,14 +240,19 @@ function LoginContent() {
                   setSubmitting(true);
                   setErrorMsg(null);
                   try {
+                    const targetRedirect = searchParams.get("redirectTo");
                     const res = await fetch("/api/auth/login", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ username: "admin", password: "factory123" }),
+                      body: JSON.stringify({
+                        username: "admin",
+                        password: "factory123",
+                        requestedPath: targetRedirect || undefined,
+                      }),
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || "Login failed");
-                    router.push(data.redirectTo || "/onboarding");
+                    router.push(targetRedirect || data.redirectTo || "/command");
                     router.refresh();
                   } catch (err: any) {
                     setErrorMsg(err.message || "Failed to auto-login");

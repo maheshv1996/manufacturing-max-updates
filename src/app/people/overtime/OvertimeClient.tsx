@@ -1,9 +1,13 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, X, Clock, CheckCircle2, XCircle, Wallet } from "lucide-react";
+import { Loader2, X, Clock, CheckCircle2, XCircle, Wallet,
+  Users
+} from "lucide-react";
 
 export default function OvertimeClient() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -96,6 +100,13 @@ export default function OvertimeClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Overtime"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-indigo-300 font-semibold">

@@ -51,7 +51,7 @@ export default async function MaterialCertsReport() {
               Material Certs & Heat Number Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {certs.length} certifications
+              Generated: {now.toLocaleString()} · {certs.length} certifications
               on file
             </p>
           </div>
@@ -97,7 +97,7 @@ export default async function MaterialCertsReport() {
                     {cert.heatNumber}
                   </td>
                   <td className="p-3 text-slate-600 text-slate-300 print:text-gray-700">
-                    {cert.certNumber || "â€”"}
+                    {cert.certNumber || "—"}
                   </td>
                   <td className="p-3 font-sans">
                     <p className="font-bold text-white print:text-black">
@@ -108,16 +108,16 @@ export default async function MaterialCertsReport() {
                     </p>
                   </td>
                   <td className="p-3 font-sans text-slate-600 text-slate-300 print:text-gray-700">
-                    {cert.supplier?.name || "â€”"}
+                    {cert.supplier?.name || "—"}
                   </td>
                   <td className="p-3 text-slate-400 print:text-gray-600 text-[10px]">
-                    {cert.inventoryTransaction?.batchNo || "â€”"}
+                    {cert.inventoryTransaction?.batchNo || "—"}
                   </td>
                   <td className="p-3 text-slate-600 text-slate-300 print:text-gray-700">
                     {certTypeLabel(cert.certType)}
                   </td>
                   <td className="p-3 text-slate-400 print:text-gray-600">
-                    {cert.specGrade || "â€”"}
+                    {cert.specGrade || "—"}
                   </td>
                   <td className="p-3 text-slate-400 print:text-gray-600">
                     {new Date(cert.uploadedAt).toLocaleDateString()}
@@ -132,10 +132,10 @@ export default async function MaterialCertsReport() {
                         }
                       >
                         {new Date(cert.expiresAt).toLocaleDateString()}
-                        {isExpired ? " âš  EXPIRED" : ""}
+                        {isExpired ? " ⚠ EXPIRED" : ""}
                       </span>
                     ) : (
-                      <span className="text-slate-400">â€”</span>
+                      <span className="text-slate-400">—</span>
                     )}
                   </td>
                 </tr>
@@ -146,7 +146,7 @@ export default async function MaterialCertsReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Mill Certs Register Â· Confidential
+        Manufacturing MAX · Mill Certs Register · Confidential
       </p>
     </main>
   );

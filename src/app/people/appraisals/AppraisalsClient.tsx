@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Award, Loader2, Star, Printer } from "lucide-react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
+import { Award, Loader2, Star, Printer,
+  Users
+} from "lucide-react";
 import { Button, Input } from "@/app/components/ui";
 
 interface Row {
@@ -94,6 +98,13 @@ export default function AppraisalsClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Appraisals"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       {msg && <p className="text-sm text-emerald-300 font-semibold">{msg}</p>}
 
       {/* Period picker */}

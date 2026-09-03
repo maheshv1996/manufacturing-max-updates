@@ -16,7 +16,7 @@ function getStatusBadge(
   const pct = Number(oeeValue.toFixed(1));
   if (pct >= thresholds.good) {
     return {
-      label: `Good (â‰¥${thresholds.good}%)`,
+      label: `Good (≥${thresholds.good}%)`,
       colorClass:
         "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 text-emerald-300 dark:border-emerald-800",
       dotClass: "bg-emerald-500",
@@ -24,7 +24,7 @@ function getStatusBadge(
     };
   } else if (pct >= thresholds.warning) {
     return {
-      label: `Warning (${thresholds.warning}â€“${thresholds.good - 1}%)`,
+      label: `Warning (${thresholds.warning}–${thresholds.good - 1}%)`,
       colorClass:
         "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 text-amber-300 dark:border-amber-800",
       dotClass: "bg-amber-500",

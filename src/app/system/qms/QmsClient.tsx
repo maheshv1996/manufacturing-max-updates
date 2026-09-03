@@ -230,7 +230,7 @@ export default function QmsClient() {
         { value: "", label: "Select audit" },
         ...audits.map((a) => ({
           value: a.id,
-          label: `${a.auditNumber} â€” ${a.title}`,
+          label: `${a.auditNumber} — ${a.title}`,
         })),
       ],
     },
@@ -374,10 +374,10 @@ export default function QmsClient() {
                       {a.auditType}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {a.auditor || "â€”"}
+                      {a.auditor || "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {a.auditeeDept || "â€”"}
+                      {a.auditeeDept || "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
                       {new Date(a.scheduledDate).toLocaleDateString()}
@@ -397,7 +397,7 @@ export default function QmsClient() {
                           {a.result}
                         </span>
                       ) : (
-                        "â€”"
+                        "—"
                       )}
                     </td>
                     <td className="px-5 py-3 font-bold text-slate-300">
@@ -515,15 +515,15 @@ export default function QmsClient() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-slate-400 max-w-[220px] truncate">
-                      {f.correctiveAction || "â€”"}
+                      {f.correctiveAction || "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {f.ncrId ? "Linked" : "â€”"}
+                      {f.ncrId ? "Linked" : "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-400">
                       {f.dueDate
                         ? new Date(f.dueDate).toLocaleDateString()
-                        : "â€”"}
+                        : "—"}
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex gap-2">
@@ -572,7 +572,7 @@ export default function QmsClient() {
           <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
               <h3 className="text-lg font-bold text-white">
-                Complete Audit â€” {completeModal.auditNumber}
+                Complete Audit — {completeModal.auditNumber}
               </h3>
               <button
                 onClick={() => setCompleteModal(null)}

@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, FileText, Plus } from "lucide-react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
+import { Loader2, FileText, Plus,
+  ShieldCheck
+} from "lucide-react";
 import { Button, Input, Select } from "@/app/components/ui";
 
 const DOC_TYPES = ["POLICY", "PROCEDURE", "WORK_INSTRUCTION", "FORM", "RECORD"];
@@ -88,6 +92,13 @@ export default function QmsDocsClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Qms Docs"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           ["total", "Documents", "text-white"],

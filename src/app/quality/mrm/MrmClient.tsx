@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -18,6 +20,7 @@ import {
   Flag,
   ChevronDown,
   ChevronUp,
+  ShieldCheck
 } from "lucide-react";
 
 type Meeting = any;
@@ -462,6 +465,13 @@ export default function MrmClient() {
                                 key={a.id}
                                 className="flex items-center gap-2 rounded-lg bg-slate-900/50 border border-slate-700/40 px-3 py-2"
                               >
+      <PageHeader
+        title="Mrm"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
                                 <span
                                   className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${PRIO_CLS[a.priority] || PRIO_CLS.MEDIUM}`}
                                 >

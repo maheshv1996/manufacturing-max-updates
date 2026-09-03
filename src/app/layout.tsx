@@ -121,15 +121,17 @@ export default async function RootLayout({
         className="min-h-full bg-bg text-text-1 font-sans flex"
         style={{ backgroundColor: "#0b0c0e", color: "#f9fafb" }}
       >
-        <AppShell
-          user={user}
-          branding={branding}
-          activeDepartments={settings.activeDepartments}
-          onboardingComplete={settings.onboardingComplete}
-          onboardingSkipped={settings.onboardingSkipped}
-        >
-          <ErrorBoundary>{children}</ErrorBoundary>
-        </AppShell>
+        <ErrorBoundary>
+          <AppShell
+            user={user}
+            branding={branding}
+            activeDepartments={settings.activeDepartments}
+            onboardingComplete={settings.onboardingComplete}
+            onboardingSkipped={settings.onboardingSkipped}
+          >
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </AppShell>
+        </ErrorBoundary>
         <ToastContainer />
       </body>
     </html>

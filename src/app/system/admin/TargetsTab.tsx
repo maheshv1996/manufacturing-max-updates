@@ -216,14 +216,14 @@ export default function TargetsTab() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-700">
               <div>
                 <label className="block text-sm font-bold text-slate-200 mb-1">
-                  Labor Rate (â‚¹ / Hour)
+                  Labor Rate (₹ / Hour)
                 </label>
                 <p className="text-xs text-slate-500 mb-2">
                   Standard hourly labor rate applied across logged operator work
                   hours. (Default: 150)
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-400">â‚¹</span>
+                  <span className="text-sm font-bold text-slate-400">₹</span>
                   <input
                     type="number"
                     min="0"
@@ -239,14 +239,14 @@ export default function TargetsTab() {
 
               <div>
                 <label className="block text-sm font-bold text-slate-200 mb-1">
-                  Machine Operating Rate (â‚¹ / Hour)
+                  Machine Operating Rate (₹ / Hour)
                 </label>
                 <p className="text-xs text-slate-500 mb-2">
                   Standard hourly machine run cost applied across station
                   operating hours. (Default: 300)
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-400">â‚¹</span>
+                  <span className="text-sm font-bold text-slate-400">₹</span>
                   <input
                     type="number"
                     min="0"
@@ -288,11 +288,11 @@ export default function TargetsTab() {
                   OT Pay Multiplier
                 </label>
                 <p className="text-xs text-slate-500 mb-2">
-                  OT pay = OT hours Ã— labor rate Ã— this multiplier. (Default:
+                  OT pay = OT hours × labor rate × this multiplier. (Default:
                   2)
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-400">Ã—</span>
+                  <span className="text-sm font-bold text-slate-400">×</span>
                   <input
                     type="number"
                     min="1"
@@ -334,8 +334,8 @@ export default function TargetsTab() {
             <tr className="border-b border-slate-700 text-slate-500">
               <th className="pb-3 font-medium">Machine</th>
               <th className="pb-3 font-medium">OEE Target (%)</th>
-              <th className="pb-3 font-medium">Good Threshold (â‰¥)</th>
-              <th className="pb-3 font-medium">Warning Threshold (â‰¥)</th>
+              <th className="pb-3 font-medium">Good Threshold (≥)</th>
+              <th className="pb-3 font-medium">Warning Threshold (≥)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 divide-slate-800">

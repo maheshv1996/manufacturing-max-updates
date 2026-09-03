@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import NcrEscalationsClient from "./NcrEscalationsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "NCR Auto-Escalation & 8D Sentinel | ManufacturingMax",
 };

@@ -44,7 +44,7 @@ export default async function DashboardPage(props: {
   const user = getUserFromHeaders(headersList);
 
   if (!user || (!user.isOwner && !can(user, "ops.view"))) {
-    redirect("/login");
+    redirect("/login?redirectTo=/command");
   }
 
   const searchParams = await props.searchParams;

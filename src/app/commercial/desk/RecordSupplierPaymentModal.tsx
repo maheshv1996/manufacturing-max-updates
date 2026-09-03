@@ -80,13 +80,13 @@ export default function RecordSupplierPaymentModal({
               Balance Payable:
             </span>
             <span className="font-mono font-black text-lg text-slate-200">
-              â‚¹{supplier.balancePayable.toLocaleString("en-IN")}
+              ₹{supplier.balancePayable.toLocaleString("en-IN")}
             </span>
           </div>
 
           <div>
             <label className="block text-sm font-bold text-slate-300 mb-1">
-              Payment Amount (â‚¹) *
+              Payment Amount (₹) *
             </label>
             <input
               type="number"

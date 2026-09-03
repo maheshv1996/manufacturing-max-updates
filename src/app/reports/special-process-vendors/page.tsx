@@ -44,8 +44,8 @@ export default async function SpecialProcessVendorsPage() {
               Approved Special Process Vendors
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {enriched.length} vendor(s)
-              on record Â· Nadcap evidence list
+              Generated: {now.toLocaleString()} · {enriched.length} vendor(s)
+              on record · Nadcap evidence list
             </p>
           </div>
         </div>
@@ -92,11 +92,11 @@ export default async function SpecialProcessVendorsPage() {
                   </span>
                 </td>
                 <td className="p-3 text-slate-600 text-slate-300 print:text-gray-700">
-                  {v.nadcapCertNumber || "â€”"}
+                  {v.nadcapCertNumber || "—"}
                 </td>
                 <td className="p-3 text-slate-600 text-slate-300 print:text-gray-700">
                   {new Date(v.expiresAt).toLocaleDateString()}
-                  {v.status === "EXPIRED" ? " âš " : ""}
+                  {v.status === "EXPIRED" ? " ⚠" : ""}
                 </td>
                 <td className="p-3">
                   <span
@@ -116,8 +116,8 @@ export default async function SpecialProcessVendorsPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Approved Special Process Vendor List Â· Nadcap
-        Audit Evidence Â· Confidential
+        Manufacturing MAX · Approved Special Process Vendor List · Nadcap
+        Audit Evidence · Confidential
       </p>
     </main>
   );

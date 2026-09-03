@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
+import { ShieldCheck } from "lucide-react";
+
 import { useState, useEffect } from "react";
 
 interface FurnaceSurvey {
@@ -31,6 +34,13 @@ export default function PyrometryClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Pyrometry"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       {/* Header Banner */}
       <div className="p-6 rounded-3xl bg-gradient-to-r from-orange-950/40 via-red-950/30 to-amber-950/40 border border-orange-500/20 backdrop-blur-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">

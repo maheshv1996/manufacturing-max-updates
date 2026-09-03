@@ -46,8 +46,8 @@ export default async function AuditRegisterReport() {
               Internal Audit Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {audits.length} audits Â·{" "}
-              {openFindings.length} open findings Â· {criticalFindings.length}{" "}
+              Generated: {now.toLocaleString()} · {audits.length} audits ·{" "}
+              {openFindings.length} open findings · {criticalFindings.length}{" "}
               critical
             </p>
           </div>
@@ -114,7 +114,7 @@ export default async function AuditRegisterReport() {
                   colSpan={11}
                   className="p-6 text-center text-slate-400 italic"
                 >
-                  No audits scheduled yet â€” create them in QMS Audits.
+                  No audits scheduled yet — create them in QMS Audits.
                 </td>
               </tr>
             )}
@@ -130,8 +130,8 @@ export default async function AuditRegisterReport() {
                   </td>
                   <td className="p-3 font-mono">{a.standard}</td>
                   <td className="p-3">{a.auditType}</td>
-                  <td className="p-3">{a.auditor || "â€”"}</td>
-                  <td className="p-3">{a.auditeeDept || "â€”"}</td>
+                  <td className="p-3">{a.auditor || "—"}</td>
+                  <td className="p-3">{a.auditeeDept || "—"}</td>
                   <td className="p-3">
                     {new Date(a.scheduledDate).toLocaleDateString()}
                   </td>
@@ -142,7 +142,7 @@ export default async function AuditRegisterReport() {
                       {a.status}
                     </span>
                   </td>
-                  <td className="p-3">{a.result || "â€”"}</td>
+                  <td className="p-3">{a.result || "—"}</td>
                   <td className="p-3 text-right font-mono">
                     {findings.length}
                   </td>
@@ -160,8 +160,8 @@ export default async function AuditRegisterReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Internal Audit Register Â· ISO 9001 / AS9100 QMS
-        Evidence Â· Confidential
+        Manufacturing MAX · Internal Audit Register · ISO 9001 / AS9100 QMS
+        Evidence · Confidential
       </p>
     </main>
   );

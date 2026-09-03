@@ -43,21 +43,43 @@ export default async function PORegisterReportPage({
     include: {
       supplier: true,
       rawMaterial: true,
+      lines: {
+        include: { rawMaterial: true },
+        orderBy: { lineNo: "asc" },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
+  const poValue = (p: any) =>
+    p.lines && p.lines.length
+      ? p.lines.reduce(
+          (s: number, l: any) => s + Number(l.qty) * Number(l.unitCost),
+          0,
+        )
+      : p.qty * p.unitCost;
+  const poOrderedQty = (p: any) =>
+    p.lines && p.lines.length
+      ? p.lines.reduce((s: number, l: any) => s + Number(l.qty), 0)
+      : p.qty;
+  const poOpenValue = (p: any) =>
+    p.lines && p.lines.length
+      ? p.lines.reduce(
+          (s: number, l: any) =>
+            s +
+            (Number(l.qty) - Number(l.receivedQty || 0)) * Number(l.unitCost),
+          0,
+        )
+      : (p.qty - p.receivedQty) * p.unitCost;
+
   const totalPOs = purchaseOrders.length;
   const totalValue = purchaseOrders
     .filter((p: any) => p.status !== "CANCELLED")
-    .reduce((sum: number, p: any) => sum + p.qty * p.unitCost, 0);
+    .reduce((sum: number, p: any) => sum + poValue(p), 0);
 
   const openValue = purchaseOrders
     .filter((p: any) => p.status === "ORDERED" || p.status === "PARTIAL")
-    .reduce(
-      (sum: number, p: any) => sum + (p.qty - p.receivedQty) * p.unitCost,
-      0,
-    );
+    .reduce((sum: number, p: any) => sum + poOpenValue(p), 0);
 
   const receivedPOs = purchaseOrders.filter(
     (p: any) => p.status === "RECEIVED",
@@ -108,15 +130,15 @@ export default async function PORegisterReportPage({
         {/* PRINT BRANDING HEADER */}
         <div className="hidden print:block border-b border-slate-300 pb-4 mb-6">
           <h1 className="text-2xl font-bold text-slate-900">
-            Manufacturing Max â€” Enterprise MES
+            Manufacturing Max — Enterprise MES
           </h1>
           <h2 className="text-lg font-bold text-slate-700">
             Purchase Order Register &amp; Procurement Ledger
           </h2>
           <p className="text-xs text-slate-500">
             Generated on {new Date().toLocaleString()}{" "}
-            {selectedSupplier ? `â€¢ Supplier: ${selectedSupplier.name}` : ""}{" "}
-            {status && status !== "ALL" ? `â€¢ Status: ${status}` : ""}
+            {selectedSupplier ? `• Supplier: ${selectedSupplier.name}` : ""}{" "}
+            {status && status !== "ALL" ? `• Status: ${status}` : ""}
           </p>
         </div>
 
@@ -177,7 +199,7 @@ export default async function PORegisterReportPage({
               Total Commitment Value
             </span>
             <span className="text-xl font-black text-white">
-              â‚¹{totalValue.toLocaleString()}
+              ₹{totalValue.toLocaleString()}
             </span>
           </div>
 
@@ -186,7 +208,7 @@ export default async function PORegisterReportPage({
               Open Pending Value
             </span>
             <span className="text-xl font-black text-amber-400">
-              â‚¹{openValue.toLocaleString()}
+              ₹{openValue.toLocaleString()}
             </span>
           </div>
 
@@ -230,6 +252,8 @@ export default async function PORegisterReportPage({
                   </tr>
                 ) : (
                   purchaseOrders.map((po: any) => {
+                    const lines = po.lines && po.lines.length ? po.lines : null;
+                    const multi = !!lines && lines.length > 1;
                     const statusBadge =
                       po.status === "RECEIVED"
                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 text-emerald-300"
@@ -248,19 +272,28 @@ export default async function PORegisterReportPage({
                           {new Date(po.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-200">
-                          {po.supplier?.name || "â€”"}
+                          {po.supplier?.name || "—"}
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-200">
-                          {po.rawMaterial?.name}
+                          {(lines && lines[0]?.rawMaterial?.name) ||
+                            po.rawMaterial?.name}
+                          {multi ? ` +${lines.length - 1} more` : ""}
                         </td>
                         <td className="px-4 py-3 font-mono text-right font-bold">
-                          {po.qty} {po.rawMaterial?.unit}
+                          {multi
+                            ? lines.reduce(
+                                (s: number, l: any) => s + Number(l.qty),
+                                0,
+                              )
+                            : po.qty}{" "}
+                          {(lines && lines[0]?.rawMaterial?.unit) ||
+                            po.rawMaterial?.unit}
                         </td>
                         <td className="px-4 py-3 font-mono text-right text-slate-500">
-                          â‚¹{po.unitCost}
+                          {multi ? "—" : `₹${po.unitCost}`}
                         </td>
                         <td className="px-4 py-3 font-mono text-right font-bold text-white">
-                          â‚¹{(po.qty * po.unitCost).toLocaleString()}
+                          ₹{poValue(po).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
@@ -272,10 +305,10 @@ export default async function PORegisterReportPage({
                         <td className="px-4 py-3 font-mono text-slate-500">
                           {po.expectedDate
                             ? new Date(po.expectedDate).toLocaleDateString()
-                            : "â€”"}
+                            : "—"}
                         </td>
                         <td className="px-4 py-3 font-mono text-right font-bold text-cyan-400">
-                          {po.receivedQty} / {po.qty}
+                          {po.receivedQty} / {multi ? poOrderedQty(po) : po.qty}
                         </td>
                       </tr>
                     );

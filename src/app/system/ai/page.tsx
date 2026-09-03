@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import AiSettingsClient from "./AiSettingsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Free AI & LLM Engine Studio | ManufacturingMax",
 };
@@ -14,6 +17,9 @@ export default async function AiSettingsPage() {
   const requiredPerm = permissionForPath("/system/ai");
 
   if (!user.isOwner && requiredPerm && !can(user, requiredPerm)) {
+    if (!user.id && !user.isOwner) {
+      redirect("/login?redirectTo=/system/ai");
+    }
     redirect("/");
   }
 

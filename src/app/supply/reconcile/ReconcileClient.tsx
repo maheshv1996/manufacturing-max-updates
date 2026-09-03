@@ -275,7 +275,7 @@ export default function ReconcileClient({
                 : "bg-emerald-600 text-white border-emerald-500"
             }`}
           >
-            {targetMissed ? "Target Missed âš ï¸" : "Target Met âœ“"}
+            {targetMissed ? "Target Missed ⚠️" : "Target Met ✓"}
           </span>
         </div>
       </div>
@@ -326,7 +326,7 @@ export default function ReconcileClient({
                 >
                   <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                     <span className="font-bold text-white text-sm">
-                      ðŸ“ {c.machine?.name}
+                      📍 {c.machine?.name}
                     </span>
                     <span className="px-2.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-black uppercase">
                       Delta: {delta} pcs
@@ -347,7 +347,7 @@ export default function ReconcileClient({
                         Incoming ({c.incomingUser?.name || "Op 2"})
                       </span>
                       <strong className="text-rose-400 text-sm">
-                        {c.inCount ?? "â€”"} units
+                        {c.inCount ?? "—"} units
                       </strong>
                     </div>
                   </div>
@@ -484,7 +484,7 @@ export default function ReconcileClient({
                       })}
                     </td>
                     <td className="px-6 py-4 font-semibold text-white">
-                      {log.machine?.name || "â€”"}
+                      {log.machine?.name || "—"}
                     </td>
                     <td className="px-6 py-4">
                       {log.type === "PRODUCTION" ? (
@@ -682,7 +682,7 @@ export default function ReconcileClient({
                   Incoming Count ({resolvingCount.incomingUser?.name || "Op 2"}
                   ):
                 </strong>{" "}
-                {resolvingCount.inCount ?? "â€”"} units
+                {resolvingCount.inCount ?? "—"} units
               </div>
             </div>
 

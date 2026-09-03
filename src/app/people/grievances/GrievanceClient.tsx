@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState, useEffect, useCallback } from "react";
 import {
   Loader2,
   Siren,
@@ -8,6 +10,7 @@ import {
   AlertTriangle,
   Plus,
   MessageSquareWarning,
+  Users
 } from "lucide-react";
 
 const STAGE_STYLE: Record<string, string> = {
@@ -178,6 +181,13 @@ export default function GrievanceClient() {
               key={g.id}
               className={`rounded-2xl border p-4 space-y-3 ${overdue ? "bg-red-950/30 border-red-700/50" : "bg-slate-800/60 border-slate-700/60"}`}
             >
+      <PageHeader
+        title="Grievances"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-white">

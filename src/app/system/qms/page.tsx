@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import QmsClient from "./QmsClient";
 import { ClipboardCheck } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "QMS Internal Audits" };
 
 export default async function QmsPage() {

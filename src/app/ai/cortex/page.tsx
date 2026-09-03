@@ -1,5 +1,5 @@
 ﻿import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AGENT_REGISTRY } from "@/app/api/ai/agents/route";
@@ -7,12 +7,13 @@ import { SAMPLE_CONFLICTS } from "@/app/api/ai/cortex/route";
 import CortexClient from "./CortexClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function CortexPage() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
 
-  if (!user) {
+  if (!user.id || (!user.isOwner && !can(user, "ops.view") && !can(user, "system.view"))) {
     redirect("/login");
   }
 

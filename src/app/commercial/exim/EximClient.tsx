@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   Ship,
   Plus,
@@ -12,6 +14,7 @@ import {
   MapPin,
   FileCheck2,
   ChevronRight,
+  FileText
 } from "lucide-react";
 import {
   Card,
@@ -666,6 +669,13 @@ function ModalPanel({
       className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
+      <PageHeader
+        title="Exim"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       <div
         className="h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700/60 bg-slate-900/95 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Topbar from "./Topbar";
+import Sidebar from "./Sidebar";
 import ServiceWorkerRegister from "./ServiceWorkerRegister";
 import OfflineToastNotifier from "./OfflineToastNotifier";
 import ServerHealthBanner from "./ServerHealthBanner";
@@ -22,6 +23,7 @@ export default function AppShell({
   children,
   user,
   branding: _branding,
+  activeDepartments = null,
   onboardingComplete = false,
   onboardingSkipped = false,
 }: {
@@ -52,6 +54,8 @@ export default function AppShell({
     pathname === "/landing" ||
     pathname === "/terminal" ||
     pathname === "/" ||
+    pathname === "/onboarding" ||
+    pathname?.startsWith("/onboarding/") ||
     pathname?.startsWith("/track/");
 
   // First-run wizard: OWNER/ADMIN users are routed to /onboarding until they
@@ -120,9 +124,23 @@ export default function AppShell({
       <GlossaryModal />
       <SessionInactivityGuard />
       <InvestorDemoModal />
-      <AuraSidecarDrawer />
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      {!isExcluded && (
+        <>
+          <AuraSidecarDrawer />
+          <Sidebar
+            user={user}
+            branding={_branding}
+            activeDepartments={activeDepartments}
+          />
+        </>
+      )}
+
+      <div
+        className={`flex-1 flex flex-col min-h-screen min-w-0 max-w-full overflow-x-hidden ${
+          !isExcluded ? "md:pl-[64px]" : ""
+        }`}
+      >
         {!isExcluded && <Topbar user={user} />}
 
         {isExcluded ? (
@@ -134,7 +152,7 @@ export default function AppShell({
               initial={reducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, ease: PREMIUM_EASE }}
-              className="flex-1 p-6 print:!p-0 print:!transform-none print:!animate-none"
+              className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full overflow-x-hidden print:!p-0 print:!transform-none print:!animate-none"
             >
               {children}
             </motion.main>

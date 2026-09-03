@@ -70,7 +70,7 @@ export default async function ComplianceDigestReport() {
               Daily Compliance Digest
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {criticalCount} critical Â·{" "}
+              Generated: {now.toLocaleString()} · {criticalCount} critical ·{" "}
               {warningCount} warning
             </p>
           </div>
@@ -107,7 +107,7 @@ export default async function ComplianceDigestReport() {
             {expiredTools + expiredVendors}
           </div>
           <div className="text-[11px] text-orange-500/80 mt-1">
-            {expiredTools} tools Â· {expiredVendors} vendors
+            {expiredTools} tools · {expiredVendors} vendors
           </div>
         </div>
         <div className="p-4 rounded-xl border bg-indigo-100 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800">
@@ -118,7 +118,7 @@ export default async function ComplianceDigestReport() {
             {openNcrCount + pendingEcoCount}
           </div>
           <div className="text-[11px] text-indigo-500/80 mt-1">
-            {openNcrCount} open NCRs Â· {pendingEcoCount} draft ECOs
+            {openNcrCount} open NCRs · {pendingEcoCount} draft ECOs
           </div>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default async function ComplianceDigestReport() {
       {/* Flags by category */}
       {flags.length === 0 ? (
         <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-10 text-center text-slate-400">
-          No compliance flags today â€” everything is green across the corporate
+          No compliance flags today — everything is green across the corporate
           registers.
         </div>
       ) : (
@@ -223,7 +223,7 @@ export default async function ComplianceDigestReport() {
           </div>
           {logs.length === 0 ? (
             <div className="text-sm text-slate-400 italic">
-              No dispatches yet â€” use &quot;Dispatch to Owner&quot; above.
+              No dispatches yet — use &quot;Dispatch to Owner&quot; above.
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -244,8 +244,8 @@ export default async function ComplianceDigestReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Daily Compliance Digest Â· Action required list for
-        management review Â· Confidential
+        Manufacturing MAX · Daily Compliance Digest · Action required list for
+        management review · Confidential
       </p>
     </main>
   );

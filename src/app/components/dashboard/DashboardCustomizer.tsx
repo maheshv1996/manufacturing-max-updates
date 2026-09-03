@@ -200,13 +200,13 @@ export default function DashboardCustomizer({
                       onClick={() => handleMoveCard(idx, -1)}
                       disabled={idx === 0}
                     >
-                      â–²
+                      ▲
                     </button>
                     <button
                       onClick={() => handleMoveCard(idx, 1)}
                       disabled={idx === cards.length - 1}
                     >
-                      â–¼
+                      ▼
                     </button>
                   </div>
                   <input

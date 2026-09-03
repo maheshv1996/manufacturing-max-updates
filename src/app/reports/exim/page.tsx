@@ -30,7 +30,7 @@ export default async function EximReport() {
               EXIM Shipment Register (Import / Export)
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {shipments.length}{" "}
+              Generated: {now.toLocaleString()} · {shipments.length}{" "}
               shipment(s) on record
             </p>
           </div>
@@ -78,10 +78,10 @@ export default async function EximReport() {
                   {s.port}
                 </td>
                 <td className="p-3 text-slate-400 print:text-gray-600">
-                  {s.invoiceNumber || "â€”"}
+                  {s.invoiceNumber || "—"}
                 </td>
                 <td className="p-3 font-sans text-slate-600 text-slate-300 print:text-gray-700">
-                  {s.customerName || "â€”"}
+                  {s.customerName || "—"}
                 </td>
                 <td className="p-3 text-right">
                   {s.customsValue.toLocaleString("en-IN")}
@@ -110,8 +110,8 @@ export default async function EximReport() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· EXIM Shipment Register Â· Customs / DGFT Audit
-        Evidence Â· Confidential
+        Manufacturing MAX · EXIM Shipment Register · Customs / DGFT Audit
+        Evidence · Confidential
       </p>
     </main>
   );

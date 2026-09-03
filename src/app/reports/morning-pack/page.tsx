@@ -65,7 +65,8 @@ export default async function MorningMeetingPackPage() {
   ]);
 
   const allOperators = await (prisma as any).user.findMany({
-    where: { role: "OPERATOR" },
+    where: { role: { name: "Operator" } },
+    include: { role: true },
   });
 
   // Plant Stats
@@ -94,12 +95,12 @@ export default async function MorningMeetingPackPage() {
 
   downtimeLogs.forEach((log: any) => {
     let dur = 0;
-    if (log.endTime)
-      dur = Math.round(
-        (log.endTime.getTime() - log.startTime.getTime()) / (1000 * 60),
-      );
-    else
-      dur = Math.round((now.getTime() - log.startTime.getTime()) / (1000 * 60));
+    const start = log.startTime ? new Date(log.startTime).getTime() : NaN;
+    const end = log.endTime ? new Date(log.endTime).getTime() : NaN;
+    if (Number.isFinite(start) && Number.isFinite(end))
+      dur = Math.round((end - start) / (1000 * 60));
+    else if (Number.isFinite(start))
+      dur = Math.round((now.getTime() - start) / (1000 * 60));
     if (dur < 0) dur = 0;
 
     totalDowntimeMin += dur;
@@ -258,10 +259,10 @@ export default async function MorningMeetingPackPage() {
                       {wo.product?.name} ({wo.product?.sku})
                     </td>
                     <td className="p-2.5 text-right font-mono">
-                      {wo.plannedQuantity.toLocaleString()}
+                      {(wo.plannedQuantity || 0).toLocaleString()}
                     </td>
                     <td className="p-2.5 text-right font-mono font-bold text-blue-600">
-                      {woGood.toLocaleString()}
+                      {(woGood || 0).toLocaleString()}
                     </td>
                     <td className="p-2.5 text-right font-mono font-bold">
                       {compPct.toFixed(1)}%

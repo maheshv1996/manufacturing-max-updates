@@ -1,28 +1,19 @@
-import { getUserFromHeaders, can } from "@/lib/permissions";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Rocket } from "lucide-react";
-import PageHeader from "@/app/components/shared/PageHeader";
+import { getSettings } from "@/lib/settings";
 import OnboardingWizard from "./OnboardingWizard";
 
-export default async function OnboardingPage() {
-  const headersList = await headers();
-  const user = getUserFromHeaders(headersList);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-  if (!user.isOwner && !can(user, "system.edit")) {
-    redirect("/");
+export default async function OnboardingPage(props: {
+  searchParams?: Promise<{ reset?: string; guided?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const settings = await getSettings();
+
+  if (settings.onboardingComplete && searchParams?.reset !== "true") {
+    redirect("/command");
   }
 
-  return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
-      <PageHeader
-        title="Welcome to Manufacturing Max"
-        description="Four quick steps to set up your workspace — company identity, departments, your team, and starter data."
-        icon={<Rocket className="h-6 w-6" />}
-        iconTone="blue"
-        badge={{ label: "FIRST RUN", tone: "new" }}
-      />
-      <OnboardingWizard />
-    </div>
-  );
+  return <OnboardingWizard />;
 }

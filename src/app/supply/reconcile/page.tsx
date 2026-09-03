@@ -5,6 +5,9 @@ import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import ReconcileClient from "./ReconcileClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "Shift Reconciliation | Manufacturing Max",
 };

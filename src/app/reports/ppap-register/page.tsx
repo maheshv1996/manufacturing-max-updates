@@ -43,8 +43,8 @@ export default async function PpapRegisterPage() {
               PPAP Submission Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {submissions.length}{" "}
-              submission(s) Â· {approved} approved
+              Generated: {now.toLocaleString()} · {submissions.length}{" "}
+              submission(s) · {approved} approved
             </p>
           </div>
         </div>
@@ -89,10 +89,10 @@ export default async function PpapRegisterPage() {
                   <td className="p-3 font-mono font-bold">{s.ppapNumber}</td>
                   <td className="p-3">
                     {s.product
-                      ? `${s.product.sku} Â· ${s.product.name}`
-                      : "â€”"}
+                      ? `${s.product.sku} · ${s.product.name}`
+                      : "—"}
                   </td>
-                  <td className="p-3">{s.customerName || "â€”"}</td>
+                  <td className="p-3">{s.customerName || "—"}</td>
                   <td className="p-3">{s.revision}</td>
                   <td className="p-3">{s.submissionLevel}</td>
                   <td className="p-3">
@@ -102,12 +102,12 @@ export default async function PpapRegisterPage() {
                     {STATUS_LABELS[s.status] || s.status}
                   </td>
                   <td className="p-3">
-                    {s.submittedAt ? s.submittedAt.toLocaleDateString() : "â€”"}
+                    {s.submittedAt ? s.submittedAt.toLocaleDateString() : "—"}
                   </td>
                   <td className="p-3">
                     {s.dispositionAt
-                      ? `${s.status} Â· ${s.dispositionAt.toLocaleDateString()}${s.dispositionBy ? ` by ${s.dispositionBy}` : ""}`
-                      : "â€”"}
+                      ? `${s.status} · ${s.dispositionAt.toLocaleDateString()}${s.dispositionBy ? ` by ${s.dispositionBy}` : ""}`
+                      : "—"}
                   </td>
                 </tr>
               );
@@ -117,8 +117,8 @@ export default async function PpapRegisterPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-4 print:text-gray-500">
-        Manufacturing MAX Â· PPAP Register (AIAG 18-Element) Â· IATF 16949 /
-        AS9100 Evidence Â· Confidential
+        Manufacturing MAX · PPAP Register (AIAG 18-Element) · IATF 16949 /
+        AS9100 Evidence · Confidential
       </p>
     </main>
   );

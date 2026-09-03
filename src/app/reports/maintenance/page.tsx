@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import { prisma } from "@/lib/prisma";
+import PrintButton from "@/app/components/print/PrintButton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -127,26 +128,7 @@ export default async function MaintenanceRegisterPage() {
         `}</style>
       </head>
       <body>
-        <button
-          className="no-print"
-          onClick={() => window.print()}
-          style={{
-            position: "fixed",
-            top: 16,
-            right: 16,
-            zIndex: 99,
-            padding: "8px 20px",
-            background: "#1d4ed8",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            fontWeight: 700,
-            cursor: "pointer",
-            fontSize: 13,
-          }}
-        >
-          🖨 Print / PDF
-        </button>
+        <PrintButton />
 
         {/* Header */}
         <div className="header-table">

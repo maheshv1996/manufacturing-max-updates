@@ -91,7 +91,7 @@ export default async function StockRegisterReportPage({
         {/* PRINT BRANDING HEADER */}
         <div className="hidden print:block border-b border-slate-300 pb-4 mb-6">
           <h1 className="text-2xl font-bold text-slate-900">
-            Manufacturing Max â€” Enterprise MES
+            Manufacturing Max — Enterprise MES
           </h1>
           <h2 className="text-lg font-bold text-slate-700">
             Raw Material Stock Register &amp; Batch Traceability Ledger
@@ -99,7 +99,7 @@ export default async function StockRegisterReportPage({
           <p className="text-xs text-slate-500">
             Generated on {new Date().toLocaleString()}{" "}
             {selectedMaterial
-              ? `â€¢ Filtered Material: ${selectedMaterial.name} (${selectedMaterial.sku})`
+              ? `• Filtered Material: ${selectedMaterial.name} (${selectedMaterial.sku})`
               : ""}
           </p>
         </div>
@@ -158,7 +158,7 @@ export default async function StockRegisterReportPage({
               Total Issued Value
             </span>
             <p className="text-2xl font-black text-white font-mono">
-              â‚¹{totalValueIssued.toLocaleString()}
+              ₹{totalValueIssued.toLocaleString()}
             </p>
           </div>
         </div>
@@ -222,11 +222,11 @@ export default async function StockRegisterReportPage({
                           {tx.batchNo}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[11px]">â€”</span>
+                        <span className="text-slate-400 text-[11px]">—</span>
                       )}
                     </td>
                     <td className="p-4 font-sans text-slate-300">
-                      <p className="font-bold">{tx.reference || "â€”"}</p>
+                      <p className="font-bold">{tx.reference || "—"}</p>
                       {tx.workOrder && (
                         <p className="text-[11px] text-blue-400 font-mono">
                           {tx.workOrder.woNumber} (
@@ -235,10 +235,10 @@ export default async function StockRegisterReportPage({
                       )}
                     </td>
                     <td className="p-4 text-right text-slate-600 text-slate-300">
-                      â‚¹{(tx.unitCost || 0).toLocaleString()}
+                      ₹{(tx.unitCost || 0).toLocaleString()}
                     </td>
                     <td className="p-4 text-right font-bold text-white">
-                      â‚¹{totalValue.toLocaleString()}
+                      ₹{totalValue.toLocaleString()}
                     </td>
                     <td className="p-4 text-right font-sans text-slate-500">
                       {tx.actorName}

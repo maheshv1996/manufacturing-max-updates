@@ -3,11 +3,17 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import AdminClient from "./AdminClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AdminPage() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
 
   if (!user.isOwner && !can(user, "system.edit")) {
+    if (!user.id && !user.isOwner) {
+      redirect("/login?redirectTo=/system/admin");
+    }
     redirect("/");
   }
 

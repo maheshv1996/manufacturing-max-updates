@@ -1,12 +1,23 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
+
 import Link from "next/link";
 import DynamicRegister from "@/app/components/shared/DynamicRegister";
-import { BadgeIndianRupee, FileSignature } from "lucide-react";
+import {BadgeIndianRupee, FileSignature,
+  Users
+} from "lucide-react";
 
 export default function StatutoryPageClient() {
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="Statutory"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       <div className="flex justify-end">
         <Link
           href="/reports/pf-esi-challan"

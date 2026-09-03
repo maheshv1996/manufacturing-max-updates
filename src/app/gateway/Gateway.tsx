@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -20,18 +20,20 @@ import {
   Cpu,
   ShieldCheck,
   Brain,
+  Settings,
+  LayoutDashboard,
+  Search,
+  X,
 } from "lucide-react";
 import { DEPARTMENTS, type Department } from "@/lib/departments";
 import IconTile from "./IconTile";
-import ScrambleHeadline from "./ScrambleHeadline";
 import InvestorDemoModal from "@/app/components/shared/InvestorDemoModal";
+import AuraIntroModal from "@/app/components/shared/AuraIntroModal";
 
 const ThreeHero = dynamic(() => import("@/app/components/shared/ThreeHero"), {
   ssr: false,
   loading: () => null,
 });
-
-const HEADLINE = "THE DIGITAL NERVOUS SYSTEM OF YOUR FACTORY";
 
 type View =
   | { name: "home" }
@@ -50,6 +52,17 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
     null,
   );
   const [dynamicDepts, setDynamicDepts] = useState<Department[]>(DEPARTMENTS);
+  const [showAuraIntro, setShowAuraIntro] = useState(false);
+
+  useEffect(() => {
+    // Auto-launch AURA introduction tour on first visit or if forced via ?intro=true / ?tour=true
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceIntro = urlParams.get("intro") === "true" || urlParams.get("tour") === "true";
+    const introDone = localStorage.getItem("mfg_aura_intro_completed");
+    if (forceIntro || !introDone) {
+      setShowAuraIntro(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -97,9 +110,26 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
       .catch(() => {});
   }, []);
 
-  const visibleDepartments = activeDepartments
-    ? dynamicDepts.filter((d) => activeDepartments.includes(d.id))
-    : dynamicDepts;
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const visibleDepartments = useMemo(() => {
+    const base = activeDepartments
+      ? dynamicDepts.filter((d) => activeDepartments.includes(d.id))
+      : dynamicDepts;
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.toLowerCase().trim();
+    return base.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.short.toLowerCase().includes(q) ||
+        d.desc.toLowerCase().includes(q) ||
+        d.functions.some(
+          (f) =>
+            f.name.toLowerCase().includes(q) ||
+            f.desc.toLowerCase().includes(q),
+        ),
+    );
+  }, [activeDepartments, dynamicDepts, searchQuery]);
 
   const openDept = (d: Department) => {
     setView({ name: "dept", dept: d });
@@ -186,11 +216,34 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => router.push("/command")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="Live Plant Command Center"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Command Center</span>
+            </button>
+            <button
               onClick={() => router.push("/ai/cortex")}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold transition-all shadow-sm cursor-pointer"
             >
               <Brain className="w-3.5 h-3.5 text-indigo-300" />
               <span>Master Brain AI Cortex</span>
+            </button>
+            <button
+              onClick={() => setShowAuraIntro(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Meet AURA & Tour Software</span>
+            </button>
+            <button
+              onClick={() => router.push("/system/admin")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="System Administration & AI Settings"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-300" />
+              <span>Settings</span>
             </button>
             {user ? (
               <div className="flex items-center gap-2">
@@ -210,7 +263,15 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                   Sign out
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <button
+                onClick={() => router.push("/login")}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600/80 hover:bg-blue-600 text-white text-xs font-bold transition-all shadow-sm border border-blue-500/50 cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -226,17 +287,24 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                 transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-6xl text-center"
               >
-                <ScrambleHeadline
-                  text={HEADLINE}
-                  enabled={view.name === "home"}
-                />
-                {/* Investor Demo CTA & Live Factory Ticker */}
+                {/* Hero CTAs & Live Factory Ticker */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.4, delay: 0.15 }}
-                  className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-3"
+                  className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap"
                 >
+                  <button
+                    onClick={() => router.push("/command")}
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-extrabold text-xs shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-emerald-400/40"
+                  >
+                    <LayoutDashboard className="w-4 h-4 text-emerald-200" />
+                    <span>Enter Command Center</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] uppercase font-mono">
+                      Live
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => router.push("/ai/cortex")}
                     className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-extrabold text-xs shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-indigo-400/40"
@@ -249,19 +317,17 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                   </button>
 
                   <button
-                    onClick={() =>
-                      window.dispatchEvent(new Event("open-investor-modal"))
-                    }
-                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-extrabold text-xs shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-cyan-400/30"
+                    onClick={() => setShowAuraIntro(true)}
+                    className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-teal-600 via-cyan-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white font-extrabold text-xs shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-cyan-400/40"
                   >
                     <Sparkles className="w-4 h-4 text-cyan-200" />
-                    <span>Launch Investor Presentation & ROI Simulator</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] uppercase font-mono">
-                      Live
+                    <span>Meet AURA & Software Tour</span>
+                    <span className="px-2 py-0.5 rounded-full bg-cyan-400/20 text-[10px] uppercase font-mono text-cyan-200">
+                      Intro & LLM
                     </span>
                   </button>
 
-                  <div className="hidden lg:flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-mono text-white/80">
+                  <div className="hidden xl:flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[11px] font-mono text-white/80">
                     <span className="flex items-center gap-1 text-emerald-400">
                       <TrendingUp className="w-3.5 h-3.5" /> 87.4% OEE
                     </span>
@@ -276,26 +342,59 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                   </div>
                 </motion.div>
 
-                <motion.div
-                  className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3, staggerChildren: 0.06 }}
-                >
-                  {visibleDepartments.map((d, i) => (
-                    <motion.div key={d.id}>
-                      <IconTile
-                        icon={d.icon}
-                        label={d.short}
-                        sub={d.desc.split("—")[0].trim()}
-                        gradient={d.gradient}
-                        glow={d.glow}
-                        index={i}
-                        onClick={() => openDept(d)}
-                      />
-                    </motion.div>
-                  ))}
-                </motion.div>
+                {/* Search Bar for Departments */}
+                <div className="relative max-w-md mx-auto mb-8">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search 17 departments, tools & functions... (e.g. Quality, CNC, Settings)"
+                    className="w-full bg-white/5 border border-white/15 focus:border-cyan-400/60 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all backdrop-blur-md"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {visibleDepartments.length === 0 ? (
+                  <div className="py-12 text-center text-white/50">
+                    <p className="text-sm">No departments or functions matching &quot;{searchQuery}&quot;</p>
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="mt-3 text-xs text-cyan-400 hover:underline cursor-pointer"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <motion.div
+                    className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2, staggerChildren: 0.04 }}
+                  >
+                    {visibleDepartments.map((d, i) => (
+                      <motion.div key={d.id}>
+                        <IconTile
+                          icon={d.icon}
+                          label={d.short}
+                          sub={d.desc.split("—")[0].trim()}
+                          gradient={d.gradient}
+                          glow={d.glow}
+                          index={i}
+                          onClick={() => openDept(d)}
+                        />
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
               </motion.div>
             )}
 
@@ -349,7 +448,9 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                         glow={view.dept.glow}
                         size="md"
                         index={i}
-                        onClick={() => openLogin(view.dept, fn)}
+                        onClick={() =>
+                          user ? router.push(fn.href) : openLogin(view.dept, fn)
+                        }
                       />
                     </motion.div>
                   ))}
@@ -489,7 +590,7 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                           whileTap={{ scale: 0.98 }}
                           type="submit"
                           disabled={submitting}
-                          className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-600/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                          className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-600/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
                         >
                           {submitting ? (
                             <span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -498,6 +599,17 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
                           )}
                           {submitting ? "Signing in…" : "Enter department"}
                         </motion.button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUsername("admin");
+                            setPassword("factory123");
+                          }}
+                          className="w-full mt-2.5 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs border border-white/10 transition-colors text-center cursor-pointer font-medium"
+                        >
+                          ⚡ Fill Admin Credentials (admin / factory123)
+                        </button>
                       </form>
 
                       <div className="mt-5 text-center">
@@ -524,6 +636,10 @@ export default function Gateway({ initialUser }: { initialUser: any }) {
       </div>
 
       <InvestorDemoModal />
+      <AuraIntroModal
+        isOpen={showAuraIntro}
+        onClose={() => setShowAuraIntro(false)}
+      />
     </div>
   );
 }

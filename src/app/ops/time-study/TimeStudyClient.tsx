@@ -30,7 +30,7 @@ const FIELDS: Field[] = [
   { key: "department", label: "Department" },
   {
     key: "standardTimeMin",
-    label: "Standard Time (min / unit) â€” SAM",
+    label: "Standard Time (min / unit) — SAM",
     type: "number",
   },
   {
@@ -44,7 +44,7 @@ const FIELDS: Field[] = [
 
 const fmt = (v: number | null | undefined) =>
   v === null || v === undefined || isNaN(Number(v))
-    ? "â€”"
+    ? "—"
     : Number(v).toFixed(2);
 
 export default function TimeStudyClient() {
@@ -126,7 +126,7 @@ export default function TimeStudyClient() {
           Standard Allowed Minutes (SAM) per operation. The{" "}
           <strong className="text-white">Actual</strong> column is computed live
           from shop-floor production logs for the product&apos;s work orders
-          (last 90 days) â€” <strong className="text-white">variance</strong>{" "}
+          (last 90 days) — <strong className="text-white">variance</strong>{" "}
           compares actual vs standard (negative = ahead of standard).
         </div>
       </div>
@@ -191,10 +191,10 @@ export default function TimeStudyClient() {
                       {s.operationName}
                     </td>
                     <td className="px-5 py-3 font-mono text-slate-600 text-slate-300">
-                      {s.productSku || "â€”"}
+                      {s.productSku || "—"}
                     </td>
                     <td className="px-5 py-3 text-slate-600 text-slate-300">
-                      {s.department || "â€”"}
+                      {s.department || "—"}
                     </td>
                     <td className="px-5 py-3 font-mono text-right font-black text-white">
                       {fmt(s.standardTimeMin)}
@@ -207,7 +207,7 @@ export default function TimeStudyClient() {
                     </td>
                     <td className="px-5 py-3">
                       {s.variancePct == null ? (
-                        <span className="text-slate-400">â€”</span>
+                        <span className="text-slate-400">—</span>
                       ) : (
                         <span
                           className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${

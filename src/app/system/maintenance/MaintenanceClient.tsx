@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import SourceRecordEditModal from "@/app/components/modals/SourceRecordEditModal";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Machine {
   id: string;
@@ -71,7 +71,7 @@ interface MaintenanceTool {
   lastChangedAt: string;
 }
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function ageLabel(dt: string) {
   const ms = Date.now() - new Date(dt).getTime();
@@ -145,7 +145,7 @@ function LifeBar({ pct }: { pct: number }) {
   );
 }
 
-// â”€â”€â”€ Close Job Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Close Job Modal ───────────────────────────────────────────────────────────
 
 function CloseJobModal({
   job,
@@ -188,7 +188,7 @@ function CloseJobModal({
           <div>
             <h2 className="font-bold text-white text-lg">Close Job</h2>
             <p className="text-sm text-slate-400 mt-0.5">
-              {job.machine.name} â€” {job.description.slice(0, 60)}â€¦
+              {job.machine.name} — {job.description.slice(0, 60)}…
             </p>
           </div>
           <button
@@ -240,7 +240,7 @@ function CloseJobModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold text-slate-300 mb-1.5">
-                Cost (â‚¹)
+                Cost (₹)
               </label>
               <input
                 type="number"
@@ -298,7 +298,7 @@ function CloseJobModal({
   );
 }
 
-// â”€â”€â”€ Add PM Rule Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Add PM Rule Modal ──────────────────────────────────────────────────────
 
 function AddPMRuleModal({
   machines,
@@ -345,7 +345,7 @@ function AddPMRuleModal({
             >
               {machines.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.code} â€” {m.name}
+                  {m.code} — {m.name}
                 </option>
               ))}
             </select>
@@ -401,7 +401,7 @@ function AddPMRuleModal({
   );
 }
 
-// â”€â”€â”€ Add Tool Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Add Tool Modal ──────────────────────────────────────────────────────────
 
 function AddToolModal({
   machines,
@@ -497,7 +497,7 @@ function AddToolModal({
                 onChange={(e) => setMachineId(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-500 bg-slate-800/60 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">â€” Unassigned â€”</option>
+                <option value="">— Unassigned —</option>
                 {machines.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.code}
@@ -545,7 +545,7 @@ function AddToolModal({
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function MaintenanceClient({
   role,
@@ -582,7 +582,7 @@ export default function MaintenanceClient({
     setTimeout(() => setToast(null), 3500);
   };
 
-  // â”€â”€ Fetch helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fetch helpers ────────────────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     setLoadingJobs(true);
     const r = await fetch("/api/maintenance/jobs");
@@ -626,7 +626,7 @@ export default function MaintenanceClient({
     fetchMachines();
   }, [fetchJobs, fetchPM, fetchTools, fetchMachines]);
 
-  // â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Actions ──────────────────────────────────────────────────────────────────
 
   const handleStartJob = async (job: MaintenanceJob) => {
     const r = await fetch(`/api/maintenance/jobs/${job.id}`, {
@@ -635,7 +635,7 @@ export default function MaintenanceClient({
       body: JSON.stringify({ action: "START" }),
     });
     if (r.ok) {
-      showToast("Job started â€” moved to In Progress");
+      showToast("Job started — moved to In Progress");
       fetchJobs();
     } else {
       const d = await r.json();
@@ -670,7 +670,7 @@ export default function MaintenanceClient({
       method: "POST",
     });
     if (r.ok) {
-      showToast("PM marked done â€” timer reset");
+      showToast("PM marked done — timer reset");
       fetchPM();
     } else {
       showToast("Failed to mark PM done", "err");
@@ -723,7 +723,7 @@ export default function MaintenanceClient({
     }
   };
 
-  // â”€â”€ Filtered jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Filtered jobs ────────────────────────────────────────────────────────────
   const filteredJobs = jobs.filter((j) => j.status === tab);
   const openCount = jobs.filter((j) => j.status === "OPEN").length;
   const inProgCount = jobs.filter((j) => j.status === "IN_PROGRESS").length;
@@ -731,7 +731,7 @@ export default function MaintenanceClient({
   const overdueCount = pmRules.filter((r) => r.isOverdue).length;
   const replaceCount = tools.filter((t) => t.toolStatus === "REPLACE").length;
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -746,7 +746,7 @@ export default function MaintenanceClient({
                 Maintenance
               </h1>
               <p className="text-sm text-slate-400 font-medium">
-                Job cards Â· Preventive maintenance Â· Tool life tracking
+                Job cards · Preventive maintenance · Tool life tracking
               </p>
             </div>
           </div>
@@ -754,12 +754,12 @@ export default function MaintenanceClient({
             {/* Summary chips */}
             {overdueCount > 0 && (
               <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 text-amber-300 border border-amber-200 dark:border-amber-800">
-                âš  {overdueCount} PM overdue
+                ⚠ {overdueCount} PM overdue
               </span>
             )}
             {replaceCount > 0 && (
               <span className="px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 text-red-300 border border-red-200 dark:border-red-800">
-                ðŸ”´ {replaceCount} tool REPLACE
+                🔴 {replaceCount} tool REPLACE
               </span>
             )}
             <button
@@ -776,7 +776,7 @@ export default function MaintenanceClient({
           </div>
         </header>
 
-        {/* â”€â”€ JOBS BOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── JOBS BOARD ──────────────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -913,7 +913,7 @@ export default function MaintenanceClient({
                       <div className="flex gap-4">
                         {job.costRupees != null && (
                           <span>
-                            â‚¹{job.costRupees.toLocaleString("en-IN")}
+                            ₹{job.costRupees.toLocaleString("en-IN")}
                           </span>
                         )}
                         {job.laborHours != null && (
@@ -995,7 +995,7 @@ export default function MaintenanceClient({
                           },
                           {
                             key: "costRupees",
-                            label: "Cost (â‚¹)",
+                            label: "Cost (₹)",
                             type: "number",
                           },
                           {
@@ -1024,7 +1024,7 @@ export default function MaintenanceClient({
           )}
         </section>
 
-        {/* â”€â”€ PM RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── PM RULES ──────────────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1095,7 +1095,7 @@ export default function MaintenanceClient({
                           ? `${rule.intervalDays}d`
                           : rule.intervalRunHours
                             ? `${rule.intervalRunHours}h run`
-                            : "â€”"}
+                            : "—"}
                       </td>
                       <td className="px-5 py-4 text-slate-400">
                         {rule.lastDoneAt ? (
@@ -1125,7 +1125,7 @@ export default function MaintenanceClient({
                             )}
                           </span>
                         ) : (
-                          "â€”"
+                          "—"
                         )}
                       </td>
                       {isElevated && (
@@ -1146,7 +1146,7 @@ export default function MaintenanceClient({
           )}
         </section>
 
-        {/* â”€â”€ TOOLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── TOOLS ──────────────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1232,7 +1232,7 @@ export default function MaintenanceClient({
                             </span>
                           </>
                         ) : (
-                          <span className="text-slate-400">â€”</span>
+                          <span className="text-slate-400">—</span>
                         )}
                       </td>
                       <td className="px-5 py-4 min-w-[160px]">
@@ -1292,7 +1292,7 @@ export default function MaintenanceClient({
         </section>
       </div>
 
-      {/* â”€â”€ MODALS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── MODALS ──────────────────────────────────────────────────────────── */}
       {closeTarget && (
         <CloseJobModal
           job={closeTarget}

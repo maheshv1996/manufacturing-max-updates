@@ -138,7 +138,7 @@ export default async function PfEsiChallanPage(props: {
               PF / ESI Payment Challan
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Statutory contribution payment form â€” print or save as PDF for
+              Statutory contribution payment form — print or save as PDF for
               bank submission.
             </p>
           </div>
@@ -196,7 +196,7 @@ export default async function PfEsiChallanPage(props: {
                   {challanNo}
                 </div>
                 <div className="text-[11px] text-slate-300 print:text-gray-300">
-                  {month} Â· Generated {now.toLocaleDateString()}
+                  {month} · Generated {now.toLocaleDateString()}
                 </div>
               </div>
             </div>
@@ -212,7 +212,7 @@ export default async function PfEsiChallanPage(props: {
                   {branding.companyAddress}
                 </div>
                 <div className="text-[11px] text-slate-400 print:text-gray-600">
-                  GSTIN: {branding.companyGstin || "â€”"}
+                  GSTIN: {branding.companyGstin || "—"}
                 </div>
               </div>
               <div>
@@ -220,7 +220,7 @@ export default async function PfEsiChallanPage(props: {
                   PF Account No.
                 </div>
                 <div className="font-mono font-bold text-white print:text-black">
-                  {pfAccount || "â€”"}
+                  {pfAccount || "—"}
                 </div>
               </div>
               <div>
@@ -228,7 +228,7 @@ export default async function PfEsiChallanPage(props: {
                   ESI Code
                 </div>
                 <div className="font-mono font-bold text-white print:text-black">
-                  {esiAccount || "â€”"}
+                  {esiAccount || "—"}
                 </div>
               </div>
             </div>
@@ -238,14 +238,14 @@ export default async function PfEsiChallanPage(props: {
           <div className={sectionBox}>
             <div className="px-4 py-2.5 bg-blue-50 dark:bg-blue-950/40 print:bg-gray-100 border-b border-slate-600 print:border-gray-300">
               <h3 className="text-sm font-black uppercase tracking-wider text-blue-400 print:text-gray-700">
-                Provident Fund (PF) â€” {month}
+                Provident Fund (PF) — {month}
               </h3>
             </div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-600 print:border-gray-300">
                   <th className={th}>Description</th>
-                  <th className={`${th} text-right`}>Amount (â‚¹)</th>
+                  <th className={`${th} text-right`}>Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 divide-slate-800 print:divide-gray-200">
@@ -285,14 +285,14 @@ export default async function PfEsiChallanPage(props: {
           <div className={sectionBox}>
             <div className="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 print:bg-gray-100 border-b border-slate-600 print:border-gray-300">
               <h3 className="text-sm font-black uppercase tracking-wider text-emerald-400 print:text-gray-700">
-                Employees&apos; State Insurance (ESI) â€” {month}
+                Employees&apos; State Insurance (ESI) — {month}
               </h3>
             </div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-600 print:border-gray-300">
                   <th className={th}>Description</th>
-                  <th className={`${th} text-right`}>Amount (â‚¹)</th>
+                  <th className={`${th} text-right`}>Amount (₹)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 divide-slate-800 print:divide-gray-200">
@@ -338,7 +338,7 @@ export default async function PfEsiChallanPage(props: {
                   Grand Total Payable
                 </div>
                 <div className="text-3xl font-black font-mono text-white print:text-black mt-1">
-                  â‚¹ {fmt(grandTotal)}
+                  ₹ {fmt(grandTotal)}
                 </div>
                 <div className="text-xs text-slate-400 print:text-gray-600 mt-2">
                   Rupees {numberToWordsIndian(grandTotal)} Only
@@ -347,7 +347,7 @@ export default async function PfEsiChallanPage(props: {
               <div className="px-4 py-4 flex flex-col justify-between gap-4">
                 <div className="text-xs text-slate-400 print:text-gray-600">
                   {employeeCount} employee{employeeCount === 1 ? "" : "s"}{" "}
-                  covered Â· {month} contribution period Â· Mode: Online / Bank
+                  covered · {month} contribution period · Mode: Online / Bank
                   Challan
                 </div>
                 <div className="grid grid-cols-2 gap-6 pt-2">
@@ -366,11 +366,11 @@ export default async function PfEsiChallanPage(props: {
             </div>
           </div>
 
-          {/* ANNEXURE â€” PER EMPLOYEE */}
+          {/* ANNEXURE — PER EMPLOYEE */}
           <div className={sectionBox}>
             <div className="px-4 py-2.5 bg-slate-800/60 print:bg-gray-100 border-b border-slate-600 print:border-gray-300">
               <h3 className="text-sm font-black uppercase tracking-wider text-slate-300 print:text-gray-700">
-                Annexure â€” Employee-wise Contribution ({month})
+                Annexure — Employee-wise Contribution ({month})
               </h3>
             </div>
             <div className="overflow-x-auto print:overflow-visible">
@@ -396,8 +396,8 @@ export default async function PfEsiChallanPage(props: {
                       >
                         {r.employeeName}
                       </td>
-                      <td className={td}>{r.employeeCode || "â€”"}</td>
-                      <td className={td}>{r.pfNumber || "â€”"}</td>
+                      <td className={td}>{r.employeeCode || "—"}</td>
+                      <td className={td}>{r.pfNumber || "—"}</td>
                       <td className={`${td} text-right`}>{fmt(r.pfWage)}</td>
                       <td className={`${td} text-right`}>
                         {fmt(r.pfEmployee)}
@@ -420,8 +420,8 @@ export default async function PfEsiChallanPage(props: {
           </div>
 
           <p className="text-[10px] text-slate-400 print:text-gray-400">
-            Manufacturing MAX Â· PF &amp; ESI Statutory Payment Challan Â·{" "}
-            {branding.companyName} Â· Confidential
+            Manufacturing MAX · PF &amp; ESI Statutory Payment Challan ·{" "}
+            {branding.companyName} · Confidential
           </p>
         </div>
       )}

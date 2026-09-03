@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import TimeStudyClient from "./TimeStudyClient";
 import { Timer } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Time Study (Industrial Engineering)" };
 
 export default async function TimeStudyPage() {

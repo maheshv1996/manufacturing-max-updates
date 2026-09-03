@@ -1,9 +1,13 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
-import { Ruler, Plus, Loader2, X, Trash2, FlaskConical } from "lucide-react";
+import { Ruler, Plus, Loader2, X, Trash2, FlaskConical,
+  ShieldCheck
+} from "lucide-react";
 import { computeGrr, grrVerdictLabel } from "@/lib/grr";
 
 type Study = any;
@@ -105,7 +109,7 @@ export default function GrrClient() {
       }));
     if (measurements.length < 8) {
       setError(
-        "Enter at least 8 measurements (min 2 appraisers Ã— 2 parts Ã— 2 trials).",
+        "Enter at least 8 measurements (min 2 appraisers × 2 parts × 2 trials).",
       );
       setLiveResult(null);
       return;
@@ -178,7 +182,7 @@ export default function GrrClient() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white">
-            Gage R&R â€” Measurement System Analysis
+            Gage R&R — Measurement System Analysis
           </h2>
           <p className="text-slate-400 text-sm">
             Repeatability & reproducibility studies on calibrated tooling (AIAG
@@ -240,21 +244,21 @@ export default function GrrClient() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-600 text-slate-300">
-                    {s.appraisers} appr Ã— {s.parts} parts Ã— {s.trials} trials
+                    {s.appraisers} appr × {s.parts} parts × {s.trials} trials
                   </td>
                   <td className="px-5 py-3">
                     <span
                       className={`text-sm font-black font-mono ${s.result?.grrPct <= 10 ? "text-emerald-500" : s.result?.grrPct <= 30 ? "text-amber-500" : "text-rose-500"}`}
                     >
-                      {s.result?.grrPct ?? s.grrPct ?? "â€”"}%
+                      {s.result?.grrPct ?? s.grrPct ?? "—"}%
                     </span>
                   </td>
                   <td className="px-5 py-3 text-xs font-mono text-slate-500">
-                    EV {s.result?.ev ?? s.ev ?? "â€”"} / AV{" "}
-                    {s.result?.av ?? s.av ?? "â€”"}
+                    EV {s.result?.ev ?? s.ev ?? "—"} / AV{" "}
+                    {s.result?.av ?? s.av ?? "—"}
                   </td>
                   <td className="px-5 py-3 font-mono">
-                    {s.result?.ndc ?? s.ndc ?? "â€”"}
+                    {s.result?.ndc ?? s.ndc ?? "—"}
                   </td>
                   <td className="px-5 py-3">
                     <span
@@ -389,7 +393,7 @@ export default function GrrClient() {
                           colSpan={nTrials}
                           className="p-1 text-[10px] font-mono text-slate-500 border border-slate-700"
                         >
-                          T1 Â· T2 Â· T3
+                          T1 · T2 · T3
                         </th>
                       ))}
                     </tr>
@@ -531,7 +535,7 @@ function Stat({
         {label}
       </div>
       <div className={`text-lg font-black font-mono ${accent || "text-white"}`}>
-        {value ?? "â€”"}
+        {value ?? "—"}
       </div>
     </div>
   );
@@ -546,6 +550,13 @@ function Field({
 }) {
   return (
     <div>
+      <PageHeader
+        title="Grr"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
         {label}
       </label>

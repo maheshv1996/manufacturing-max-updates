@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { DEPARTMENTS } from "@/lib/departments";
 import { cn } from "@/lib/designTokens";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { motion } from "framer-motion";
@@ -66,9 +67,13 @@ export default function Sidebar({
   )?.id;
 
   return (
-    <aside className="w-[64px] fixed inset-y-0 left-0 bg-surface-2 border-r border-border flex flex-col z-20 no-print">
+    <aside className="w-[64px] fixed inset-y-0 left-0 bg-surface-2 border-r border-border hidden md:flex flex-col z-30 no-print">
       {/* Brand mark */}
-      <div className="h-14 shrink-0 flex items-center justify-center border-b border-border">
+      <Link
+        href="/"
+        title="Return to Gateway"
+        className="h-14 shrink-0 flex items-center justify-center border-b border-border hover:bg-surface-3 transition-colors cursor-pointer"
+      >
         {branding?.logoUrl ? (
           <img
             src={branding.logoUrl}
@@ -79,12 +84,12 @@ export default function Sidebar({
         ) : (
           <div
             title={branding?.appName || "MfgMax"}
-            className="flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-md"
+            className="flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-700 text-white shadow-md hover:scale-105 transition-transform"
           >
             <Factory className="h-5 w-5" />
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Department tiles */}
       <nav className="flex-1 py-3 px-2 flex flex-col gap-1.5 overflow-y-auto">

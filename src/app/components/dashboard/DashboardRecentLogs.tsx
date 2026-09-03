@@ -84,7 +84,7 @@ export default function DashboardRecentLogs() {
                       : `Downtime: ${log.reason?.description || "Uncategorized"}`}
                   </div>
                   <div className="text-sm text-slate-400">
-                    {time} â€¢ {log.machine?.name} â€¢{" "}
+                    {time} • {log.machine?.name} •{" "}
                     {log.operator?.name || "Unknown Op"}
                     {log.status === "DRAFT" && (
                       <span className="ml-2 text-xs font-bold text-amber-500 uppercase">

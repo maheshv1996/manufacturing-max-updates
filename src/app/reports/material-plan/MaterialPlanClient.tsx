@@ -324,7 +324,7 @@ export default function MaterialPlanClient({
                 Estimated Shortage Cost
               </span>
               <p className="text-2xl font-black text-amber-400 font-mono">
-                â‚¹{totalShortageCost.toLocaleString()}
+                ₹{totalShortageCost.toLocaleString()}
               </p>
               <p className="text-[11px] text-slate-400">
                 Total PO value required
@@ -393,7 +393,7 @@ export default function MaterialPlanClient({
                       </td>
                       <td className="py-3.5 px-4 text-xs">
                         <div className="font-medium text-slate-200">
-                          {mat.supplier?.name || "â€”"}
+                          {mat.supplier?.name || "—"}
                         </div>
                         <div className="text-[11px] text-slate-500 font-mono">
                           Lead: {mat.supplier?.defaultLeadDays || 7}d
@@ -422,15 +422,15 @@ export default function MaterialPlanClient({
                           : "0"}
                       </td>
                       <td className="py-3.5 px-4 font-mono text-slate-400 text-right">
-                        â‚¹{mat.unitCost.toLocaleString()}
+                        ₹{mat.unitCost.toLocaleString()}
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-right">
                         {mat.shortageValue > 0 ? (
                           <span className="text-rose-400 font-extrabold">
-                            â‚¹{mat.shortageValue.toLocaleString()}
+                            ₹{mat.shortageValue.toLocaleString()}
                           </span>
                         ) : (
-                          <span className="text-slate-400">â‚¹0</span>
+                          <span className="text-slate-400">₹0</span>
                         )}
                       </td>
                     </tr>
@@ -486,7 +486,7 @@ export default function MaterialPlanClient({
                           {wo.woNumber} ({wo.product})
                         </span>
                         <span>
-                          {wo.plannedQty} pcs Ã— BOM ={" "}
+                          {wo.plannedQty} pcs × BOM ={" "}
                           <strong className="text-white">
                             {wo.required} {mat.unit}
                           </strong>

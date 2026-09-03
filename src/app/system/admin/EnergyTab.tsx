@@ -69,9 +69,9 @@ export default function EnergyTab({
               <tr>
                 <th className="px-4 py-3 rounded-tl-lg">Date</th>
                 <th className="px-4 py-3 text-right">Consumed (kWh)</th>
-                <th className="px-4 py-3 text-right">Unit Rate (â‚¹/kWh)</th>
+                <th className="px-4 py-3 text-right">Unit Rate (₹/kWh)</th>
                 <th className="px-4 py-3 text-right rounded-tr-lg">
-                  Total Cost (â‚¹)
+                  Total Cost (₹)
                 </th>
               </tr>
             </thead>
@@ -100,10 +100,10 @@ export default function EnergyTab({
                       })}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-500">
-                      â‚¹{r.unitCostPerKwh.toFixed(2)}
+                      ₹{r.unitCostPerKwh.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-rose-400 font-bold">
-                      â‚¹
+                      ₹
                       {r.totalCost.toLocaleString(undefined, {
                         maximumFractionDigits: 2,
                       })}
@@ -154,7 +154,7 @@ export default function EnergyTab({
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Unit Rate (â‚¹/kWh)
+                  Unit Rate (₹/kWh)
                 </label>
                 <input
                   type="number"
@@ -169,7 +169,7 @@ export default function EnergyTab({
                 <div className="flex justify-between items-center text-sm font-bold text-slate-300">
                   <span>Total Calculated Cost:</span>
                   <span className="text-lg text-rose-400 font-black">
-                    â‚¹{totalCost.toFixed(2)}
+                    ₹{totalCost.toFixed(2)}
                   </span>
                 </div>
               </div>

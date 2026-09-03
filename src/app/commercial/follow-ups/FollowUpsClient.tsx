@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   BellRing,
   PhoneCall,
@@ -9,6 +11,7 @@ import {
   TrendingDown,
   Trophy,
   Filter,
+  FileText
 } from "lucide-react";
 import { Button, Input, Select } from "@/app/components/ui";
 import { WIN_LOSS_REASONS } from "@/lib/winLoss";
@@ -162,6 +165,13 @@ export default function FollowUpsClient() {
               );
               return (
                 <div key={s.stage} className="relative">
+      <PageHeader
+        title="Follow Ups"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
                   <div className="rounded-xl bg-slate-900/70 border border-slate-700 p-3 h-full">
                     <p
                       className={`text-lg font-black ${s.stage === "LOST" ? "text-rose-400" : s.stage === "WON" || s.stage === "CONVERTED" ? "text-emerald-400" : "text-slate-300"}`}

@@ -55,8 +55,8 @@ export default async function GrnRegisterPage() {
               Goods Receipt & 3-Way Match Register
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Generated: {now.toLocaleString()} Â· {grns.length} GRN(s) Â·{" "}
-              {invoices.length} invoice(s) Â· {matched} matched Â· {mismatched}{" "}
+              Generated: {now.toLocaleString()} · {grns.length} GRN(s) ·{" "}
+              {invoices.length} invoice(s) · {matched} matched · {mismatched}{" "}
               mismatched
             </p>
           </div>
@@ -108,7 +108,7 @@ export default async function GrnRegisterPage() {
                 <td className="p-3 font-mono">
                   {g.receivedQty} {g.rawMaterial?.unit}
                 </td>
-                <td className="p-3 font-mono">{g.batchNo || "â€”"}</td>
+                <td className="p-3 font-mono">{g.batchNo || "—"}</td>
                 <td className="p-3">{g.inspectionStatus}</td>
                 <td className="p-3 font-bold">
                   {MATCH_LABELS[g.matchStatus] || g.matchStatus}
@@ -154,8 +154,8 @@ export default async function GrnRegisterPage() {
               <tr key={inv.id} className="align-top">
                 <td className="p-3 font-mono font-bold">{inv.invoiceNumber}</td>
                 <td className="p-3">{inv.supplier?.name}</td>
-                <td className="p-3 font-mono">{inv.po?.poNumber || "â€”"}</td>
-                <td className="p-3 font-mono">{inv.grn?.grnNumber || "â€”"}</td>
+                <td className="p-3 font-mono">{inv.po?.poNumber || "—"}</td>
+                <td className="p-3 font-mono">{inv.grn?.grnNumber || "—"}</td>
                 <td className="p-3 font-mono">{inv.amount}</td>
                 <td className="p-3 font-mono">{inv.taxAmount}</td>
                 <td className="p-3 font-mono font-bold">{inv.totalAmount}</td>
@@ -168,8 +168,8 @@ export default async function GrnRegisterPage() {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-4 print:text-gray-500">
-        Manufacturing MAX Â· GRN & 3-Way Match Register (PO â‡„ GRN â‡„ Invoice)
-        Â· Accounts Payable Control Evidence Â· Confidential
+        Manufacturing MAX · GRN & 3-Way Match Register (PO ⇄ GRN ⇄ Invoice)
+        · Accounts Payable Control Evidence · Confidential
       </p>
     </main>
   );

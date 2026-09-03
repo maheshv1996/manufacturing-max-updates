@@ -116,10 +116,10 @@ export default async function QualityCalendarReport(props: {
           <CalendarDays className="w-7 h-7 text-indigo-600 print:hidden" />
           <div>
             <h1 className="text-2xl font-extrabold text-white print:text-black">
-              Annual Quality Calendar â€” {year}
+              Annual Quality Calendar — {year}
             </h1>
             <p className="text-xs text-slate-500 print:text-gray-600 mt-0.5">
-              Audits Â· Calibration due dates Â· PM schedule Â· Statutory
+              Audits · Calibration due dates · PM schedule · Statutory
               filings
             </p>
           </div>
@@ -173,14 +173,14 @@ export default async function QualityCalendarReport(props: {
                   <span className="font-mono text-indigo-400">
                     {a.auditNumber}
                   </span>{" "}
-                  Â· {a.title}
+                  · {a.title}
                 </td>
                 {MONTHS.map((_, i) => (
                   <Cell
                     key={i}
                     idx={monthOf(a.scheduledDate) === i ? i : null}
                     cls="bg-indigo-500/60 print:bg-gray-300"
-                    title={`${a.auditNumber} â€” ${new Date(a.scheduledDate).toLocaleDateString()}`}
+                    title={`${a.auditNumber} — ${new Date(a.scheduledDate).toLocaleDateString()}`}
                   />
                 ))}
               </tr>
@@ -224,24 +224,24 @@ export default async function QualityCalendarReport(props: {
             {pmRows.map((j: any) => (
               <tr key={j.id}>
                 <td className="p-3 text-slate-300 print:text-gray-700">
-                  PM Â·{" "}
+                  PM ·{" "}
                   <span className="font-semibold text-white print:text-black">
                     {j.machine?.name || j.machine?.code || j.machineId}
                   </span>{" "}
-                  Â· {j.priority}
+                  · {j.priority}
                 </td>
                 {MONTHS.map((_, i) => (
                   <Cell
                     key={i}
                     idx={monthOf(j.openedAt) === i ? i : null}
                     cls="bg-emerald-500/60 print:bg-gray-300"
-                    title={`PM ${j.machine?.name || ""} â€” ${new Date(j.openedAt).toLocaleDateString()}`}
+                    title={`PM ${j.machine?.name || ""} — ${new Date(j.openedAt).toLocaleDateString()}`}
                   />
                 ))}
               </tr>
             ))}
 
-            {/* STATUTORY â€” PF/ESI */}
+            {/* STATUTORY — PF/ESI */}
             {statutoryMonths.map((ym: string) => {
               const idx = monthIdx(ym);
               return (
@@ -262,7 +262,7 @@ export default async function QualityCalendarReport(props: {
               );
             })}
 
-            {/* STATUTORY â€” GST */}
+            {/* STATUTORY — GST */}
             {gstMonths.map((ym: string) => {
               const idx = monthIdx(ym);
               return (
@@ -287,8 +287,8 @@ export default async function QualityCalendarReport(props: {
       </div>
 
       <p className="text-[10px] text-slate-400 mt-6 print:mt-4 print:text-gray-400">
-        Manufacturing MAX Â· Annual Quality Calendar Â· {year} Â· Audits,
-        calibration, PM and statutory schedule Â· Confidential
+        Manufacturing MAX · Annual Quality Calendar · {year} · Audits,
+        calibration, PM and statutory schedule · Confidential
       </p>
     </main>
   );

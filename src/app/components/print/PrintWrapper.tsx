@@ -146,7 +146,7 @@ export default function PrintWrapper({
         {/* PRINT FOOTER */}
         <footer className="border-t border-slate-300 pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-500 font-medium">
           <div>Generated at: {generatedAt || "N/A"}</div>
-          <div>Official Plant Document â€¢ Confidential</div>
+          <div>Official Plant Document • Confidential</div>
           <div>{branding.appName} MES</div>
         </footer>
       </div>

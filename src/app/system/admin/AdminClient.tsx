@@ -792,10 +792,24 @@ export default function AdminClient() {
       );
     }
 
-    if (loading || !data) {
+    if (loading) {
       return (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+      );
+    }
+
+    if (!data) {
+      return (
+        <div className="text-center p-12 bg-slate-900 rounded-xl border border-slate-800">
+          <p className="text-slate-400 mb-3">Admin records could not be loaded.</p>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition-colors"
+          >
+            Retry
+          </button>
         </div>
       );
     }
@@ -829,12 +843,23 @@ export default function AdminClient() {
       "updatedAt",
       "password",
       "passwordHash",
+      "productionLogs",
+      "shiftHandovers",
+      "assignments",
+      "attendanceLogs",
+      "fromShiftCounts",
+      "toShiftCounts",
+      "rosterEntries",
+      "logsheets",
+      "packagingScanLogs",
     ];
-    const cols = Object.keys(items[0]).filter((k) => !excludeCols.includes(k));
+    const cols = Object.keys(items[0] || {}).filter(
+      (k) => !excludeCols.includes(k) && !Array.isArray(items[0][k]),
+    );
 
     return (
       <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-w-full">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-800/50 text-slate-300 font-semibold border-b border-slate-800">
               <tr>
@@ -864,14 +889,16 @@ export default function AdminClient() {
                             <XCircle className="w-3.5 h-3.5" /> Inactive
                           </span>
                         )
+                      ) : Array.isArray(item[col]) ? (
+                        `${item[col].length} items`
                       ) : typeof item[col] === "object" &&
                         item[col] !== null ? (
                         item[col].name ||
                         item[col].code ||
                         item[col].sku ||
-                        "Object"
+                        "—"
                       ) : (
-                        String(item[col])
+                        String(item[col] ?? "—")
                       )}
                     </td>
                   ))}

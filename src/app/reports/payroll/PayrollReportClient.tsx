@@ -73,7 +73,7 @@ export default function PayrollReportClient({
   return (
     <PrintWrapper
       title="Monthly Payroll & Compensation Summary"
-      subtitle={`Period: ${formattedMonthName} â€” Statutory Overtime & Attendance Payroll Register`}
+      subtitle={`Period: ${formattedMonthName} — Statutory Overtime & Attendance Payroll Register`}
       controls={
         <div className="flex flex-wrap items-center gap-3">
           {/* Month Picker */}
@@ -129,10 +129,10 @@ export default function PayrollReportClient({
                 <span>Gross Payroll</span>
               </div>
               <div className="text-xl font-black font-mono text-white">
-                â‚¹{summary.totals.grossPay.toLocaleString("en-IN")}
+                ₹{summary.totals.grossPay.toLocaleString("en-IN")}
               </div>
               <div className="text-[10px] text-slate-500 mt-1">
-                Rate: â‚¹{summary.laborRate}/hr | OT Multiplier:{" "}
+                Rate: ₹{summary.laborRate}/hr | OT Multiplier:{" "}
                 {summary.multiplier}x
               </div>
             </div>
@@ -157,7 +157,7 @@ export default function PayrollReportClient({
                 <span>Total OT Pay</span>
               </div>
               <div className="text-xl font-black font-mono text-purple-400">
-                â‚¹{summary.totals.otPay.toLocaleString("en-IN")}
+                ₹{summary.totals.otPay.toLocaleString("en-IN")}
               </div>
               <div className="text-[10px] text-slate-500 mt-1">
                 Threshold: {summary.threshold}h / day
@@ -204,7 +204,7 @@ export default function PayrollReportClient({
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
             <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/60">
               <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-200">
-                Operator Payroll Ledger â€” {formattedMonthName}
+                Operator Payroll Ledger — {formattedMonthName}
               </h3>
               <span className="text-xs font-semibold text-slate-500">
                 {summary.rows.length} Operators Enrolled
@@ -220,9 +220,9 @@ export default function PayrollReportClient({
                     <th className="p-3 text-center">Late Days</th>
                     <th className="p-3 text-right">Worked Hours</th>
                     <th className="p-3 text-right">OT Hours</th>
-                    <th className="p-3 text-right">Regular Pay (â‚¹)</th>
-                    <th className="p-3 text-right">OT Pay (â‚¹)</th>
-                    <th className="p-3 text-right">Gross Pay (â‚¹)</th>
+                    <th className="p-3 text-right">Regular Pay (₹)</th>
+                    <th className="p-3 text-right">OT Pay (₹)</th>
+                    <th className="p-3 text-right">Gross Pay (₹)</th>
                     <th className="p-3 text-center">Statutory Status</th>
                   </tr>
                 </thead>
@@ -274,19 +274,19 @@ export default function PayrollReportClient({
                           </span>
                         </td>
                         <td className="p-3 text-right font-mono">
-                          â‚¹
+                          ₹
                           {row.regularPay.toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                           })}
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-purple-400">
-                          â‚¹
+                          ₹
                           {row.otPay.toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                           })}
                         </td>
                         <td className="p-3 text-right font-mono font-extrabold text-white">
-                          â‚¹
+                          ₹
                           {row.grossPay.toLocaleString("en-IN", {
                             minimumFractionDigits: 2,
                           })}
@@ -325,19 +325,19 @@ export default function PayrollReportClient({
                       {summary.totals.otHours} h
                     </td>
                     <td className="p-3 text-right font-mono text-white">
-                      â‚¹
+                      ₹
                       {summary.totals.regularPay.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
                     </td>
                     <td className="p-3 text-right font-mono text-purple-400">
-                      â‚¹
+                      ₹
                       {summary.totals.otPay.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
                     </td>
                     <td className="p-3 text-right font-mono text-lg text-emerald-400">
-                      â‚¹
+                      ₹
                       {summary.totals.grossPay.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}

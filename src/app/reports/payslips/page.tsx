@@ -54,7 +54,7 @@ export default async function PayslipsReport(props: {
               Monthly Salary Payslips
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              One payslip per employee for the selected month â€” earnings,
+              One payslip per employee for the selected month — earnings,
               deductions and net pay.
             </p>
           </div>
@@ -116,7 +116,7 @@ export default async function PayslipsReport(props: {
                       {branding.companyName || "Manufacturing Max"}
                     </div>
                     <div className="text-[11px] text-slate-400 print:text-gray-600">
-                      Salary Payslip Â· {p.month} Â· Generated{" "}
+                      Salary Payslip · {p.month} · Generated{" "}
                       {now.toLocaleDateString()}
                     </div>
                   </div>
@@ -128,7 +128,7 @@ export default async function PayslipsReport(props: {
                       </strong>
                     </div>
                     <div>
-                      Code: {s.employeeCode} Â· {s.designation || "â€”"}
+                      Code: {s.employeeCode} · {s.designation || "—"}
                     </div>
                   </div>
                 </div>
@@ -200,7 +200,7 @@ export default async function PayslipsReport(props: {
 
                 <div className="px-6 py-4 border-t border-slate-600 print:border-gray-300 flex items-center justify-between">
                   <div className="text-[11px] text-slate-400 print:text-gray-500">
-                    Amount payable: â‚¹ {fmt(p.netPay)} Â· This is a
+                    Amount payable: ₹ {fmt(p.netPay)} · This is a
                     system-generated payslip.
                   </div>
                   <div className="flex gap-10">
@@ -232,7 +232,7 @@ export default async function PayslipsReport(props: {
                 Gross Payroll
               </div>
               <div className="text-xl font-black text-white">
-                â‚¹ {fmt(totalGross)}
+                ₹ {fmt(totalGross)}
               </div>
             </div>
             <div>
@@ -240,7 +240,7 @@ export default async function PayslipsReport(props: {
                 PF Deductions
               </div>
               <div className="text-xl font-black text-white">
-                â‚¹ {fmt(totalPf)}
+                ₹ {fmt(totalPf)}
               </div>
             </div>
             <div>
@@ -248,14 +248,14 @@ export default async function PayslipsReport(props: {
                 Net Payroll
               </div>
               <div className="text-xl font-black text-emerald-400">
-                â‚¹ {fmt(totalNet)}
+                ₹ {fmt(totalNet)}
               </div>
             </div>
           </div>
 
           <p className="text-[10px] text-slate-400 print:text-gray-400">
-            Manufacturing MAX Â· Monthly Salary Payslips Â· {month} Â·{" "}
-            {branding.companyName} Â· Confidential
+            Manufacturing MAX · Monthly Salary Payslips · {month} ·{" "}
+            {branding.companyName} · Confidential
           </p>
         </div>
       )}

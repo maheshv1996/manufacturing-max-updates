@@ -4,6 +4,9 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { permissionForPath } from "@/lib/departments";
 import ScorecardsClient from "./ScorecardsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Customer Scorecards (our PPM/OTD)" };
 
 export default async function Page() {

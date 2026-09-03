@@ -259,7 +259,7 @@ export default function WorkOrderDispatchesCard({
                                   : "bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950 text-rose-300"
                             }`}
                           >
-                            {inv.status} (â‚¹
+                            {inv.status} (₹
                             {inv.totalValue?.toLocaleString("en-IN")})
                           </span>
                         </div>
@@ -297,7 +297,7 @@ export default function WorkOrderDispatchesCard({
         </table>
       </div>
 
-      {/* â”€â”€ CREATE DISPATCH MODAL â”€â”€ */}
+      {/* ── CREATE DISPATCH MODAL ── */}
       {showDispatchModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
@@ -409,7 +409,7 @@ export default function WorkOrderDispatchesCard({
         </div>
       )}
 
-      {/* â”€â”€ GENERATE INVOICE MODAL â”€â”€ */}
+      {/* ── GENERATE INVOICE MODAL ── */}
       {showInvoiceModal && selectedDispatch && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-6 my-8">
@@ -548,7 +548,7 @@ export default function WorkOrderDispatchesCard({
                       Taxable Value
                     </span>
                     <strong className="text-white font-bold">
-                      â‚¹{taxableValue.toLocaleString("en-IN")}
+                      ₹{taxableValue.toLocaleString("en-IN")}
                     </strong>
                   </div>
                   <div>
@@ -556,7 +556,7 @@ export default function WorkOrderDispatchesCard({
                       {taxType === "INTRA" ? "CGST (9%)" : "IGST (18%)"}
                     </span>
                     <strong className="text-emerald-400 font-bold">
-                      â‚¹
+                      ₹
                       {(taxType === "INTRA" ? cgst : igst).toLocaleString(
                         "en-IN",
                       )}
@@ -568,8 +568,8 @@ export default function WorkOrderDispatchesCard({
                     </span>
                     <strong className="text-emerald-400 font-bold">
                       {taxType === "INTRA"
-                        ? `â‚¹${sgst.toLocaleString("en-IN")}`
-                        : "â€”"}
+                        ? `₹${sgst.toLocaleString("en-IN")}`
+                        : "—"}
                     </strong>
                   </div>
                   <div>
@@ -577,7 +577,7 @@ export default function WorkOrderDispatchesCard({
                       Grand Total Value
                     </span>
                     <strong className="text-cyan-400 font-bold text-sm">
-                      â‚¹{totalValue.toLocaleString("en-IN")}
+                      ₹{totalValue.toLocaleString("en-IN")}
                     </strong>
                   </div>
                 </div>
@@ -597,7 +597,7 @@ export default function WorkOrderDispatchesCard({
                   className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl shadow-lg flex items-center gap-1.5"
                 >
                   {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Generate GST Tax Invoice ðŸ“„
+                  Generate GST Tax Invoice 📄
                 </button>
               </div>
             </form>

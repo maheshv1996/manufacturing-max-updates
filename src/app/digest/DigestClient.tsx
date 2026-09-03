@@ -42,23 +42,23 @@ export default function DigestClient({
   };
 
   const handleCopy = () => {
-    const oeeArrow = initialData.oeeDelta >= 0 ? "â–²" : "â–¼";
+    const oeeArrow = initialData.oeeDelta >= 0 ? "▲" : "▼";
     const best = initialData.bestMachine
-      ? `ðŸ¥‡ ${initialData.bestMachine.name} ${initialData.bestMachine.oee.toFixed(1)}%`
+      ? `🥇 ${initialData.bestMachine.name} ${initialData.bestMachine.oee.toFixed(1)}%`
       : "";
     const worst = initialData.worstMachine
-      ? ` | âš ï¸ ${initialData.worstMachine.name} ${initialData.worstMachine.oee.toFixed(1)}%`
+      ? ` | ⚠️ ${initialData.worstMachine.name} ${initialData.worstMachine.oee.toFixed(1)}%`
       : "";
     const topReason = initialData.topDowntimeReason
       ? ` - top: ${initialData.topDowntimeReason}`
       : "";
 
-    const text = `ðŸ­ ${initialData.plantName} - ${format(currentDate, "dd MMM")}
+    const text = `🏭 ${initialData.plantName} - ${format(currentDate, "dd MMM")}
 OEE ${initialData.oee.toFixed(1)}% (${oeeArrow}${Math.abs(initialData.oeeDelta).toFixed(1)})
-âœ… ${initialData.totalGood.toLocaleString()} good / ${initialData.totalScrap.toLocaleString()} scrap
-â¸ï¸ ${initialData.totalDowntimeMin} min downtime${topReason}
+✅ ${initialData.totalGood.toLocaleString()} good / ${initialData.totalScrap.toLocaleString()} scrap
+⏸️ ${initialData.totalDowntimeMin} min downtime${topReason}
 ${best}${worst}
-ðŸ“‹ ${initialData.openWorkOrders} work orders open`;
+📋 ${initialData.openWorkOrders} work orders open`;
 
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -142,7 +142,7 @@ ${best}${worst}
                 <span
                   className={`text-sm font-bold ${initialData.oeeDelta >= 0 ? "text-emerald-500" : "text-rose-500"}`}
                 >
-                  {initialData.oeeDelta >= 0 ? "â–²" : "â–¼"}
+                  {initialData.oeeDelta >= 0 ? "▲" : "▼"}
                   {Math.abs(initialData.oeeDelta).toFixed(1)}
                 </span>
               </div>
@@ -198,7 +198,7 @@ ${best}${worst}
                       Best
                     </p>
                     <p className="text-lg font-bold text-emerald-400">
-                      ðŸ¥‡{" "}
+                      🥇{" "}
                       {initialData.bestMachine
                         ? `${initialData.bestMachine.name} (${initialData.bestMachine.oee.toFixed(1)}%)`
                         : "N/A"}
@@ -209,7 +209,7 @@ ${best}${worst}
                       Worst
                     </p>
                     <p className="text-lg font-bold text-rose-400">
-                      âš ï¸{" "}
+                      ⚠️{" "}
                       {initialData.worstMachine
                         ? `${initialData.worstMachine.name} (${initialData.worstMachine.oee.toFixed(1)}%)`
                         : "N/A"}

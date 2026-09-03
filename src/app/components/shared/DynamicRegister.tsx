@@ -43,11 +43,11 @@ export interface RegisterConfig {
 
 function formatValue(col: RegisterColumn, row: any): string {
   const v = row[col.key];
-  if (v === null || v === undefined || v === "") return "â€”";
+  if (v === null || v === undefined || v === "") return "—";
   if (col.format === "date") return new Date(v).toLocaleDateString();
   if (col.format === "number") return Number(v).toLocaleString();
   if (col.format === "currency") {
-    return `${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} â‚¹`;
+    return `${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })} ₹`;
   }
   if (col.format === "boolean") return v ? "Yes" : "No";
   return String(v);

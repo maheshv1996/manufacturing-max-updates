@@ -97,7 +97,7 @@ export default async function ProcurementIntelligencePage() {
     {},
   );
 
-  // Same weighted formula as the scorecard API â€” recompute so stored snapshots
+  // Same weighted formula as the scorecard API — recompute so stored snapshots
   // (e.g. legacy rows with 0 scores) display the correct trend.
   const scoreOf = (d: any) => {
     const otd = Math.min(100, Math.max(0, Number(d.onTimeDelivery) || 0));
@@ -156,7 +156,7 @@ export default async function ProcurementIntelligencePage() {
             Procurement Intelligence
           </h1>
           <p className="text-sm text-slate-400">
-            Supplier scorecard trends, spend analysis and reorder visibility â€”
+            Supplier scorecard trends, spend analysis and reorder visibility —
             the SQA and buyer briefing.
           </p>
         </div>
@@ -225,7 +225,7 @@ export default async function ProcurementIntelligencePage() {
                               {r.overall.toFixed(1)}
                             </span>
                           ) : (
-                            <span className="text-slate-600">â€”</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
                       );
@@ -243,7 +243,7 @@ export default async function ProcurementIntelligencePage() {
                           {Math.abs(up).toFixed(1)}
                         </span>
                       ) : (
-                        <span className="text-slate-600">â€”</span>
+                        <span className="text-slate-600">—</span>
                       )}
                     </td>
                   </tr>
@@ -259,7 +259,7 @@ export default async function ProcurementIntelligencePage() {
         {sectionTitle(
           <IndianRupee className="w-6 h-6 text-emerald-400" />,
           "Supplier Spend Analysis",
-          `Total committed spend â‚¹ ${fmt(totalSpend)} across ${spendRows.length} suppliers`,
+          `Total committed spend ₹ ${fmt(totalSpend)} across ${spendRows.length} suppliers`,
           "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
         )}
         <div className="space-y-3">
@@ -273,7 +273,7 @@ export default async function ProcurementIntelligencePage() {
               <div className="flex justify-between text-sm mb-1">
                 <span className="font-semibold text-white">{r.name}</span>
                 <span className="font-mono text-slate-600 text-slate-300">
-                  â‚¹ {fmt(r.purchased)} Â· paid â‚¹ {fmt(r.paid)} Â·{" "}
+                  ₹ {fmt(r.purchased)} · paid ₹ {fmt(r.paid)} ·{" "}
                   {r.poCount} PO(s)
                 </span>
               </div>
@@ -320,7 +320,7 @@ export default async function ProcurementIntelligencePage() {
                         {s.name}
                       </div>
                       <div className="text-[11px] font-mono text-slate-400">
-                        {s.sku} Â· {s.machineCode || "â€”"} Â·{" "}
+                        {s.sku} · {s.machineCode || "—"} ·{" "}
                         {s.supplierName || "no supplier"}
                       </div>
                     </div>
@@ -354,16 +354,16 @@ export default async function ProcurementIntelligencePage() {
                 >
                   <div>
                     <div className="font-semibold text-white text-sm font-mono">
-                      {po.poNumber} Â·{" "}
+                      {po.poNumber} ·{" "}
                       {po.rawMaterial?.name || po.rawMaterial?.sku}
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      {po.supplier?.name} Â· {po.status}
+                      {po.supplier?.name} · {po.status}
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-sm text-slate-300">
-                      {po.qty} Ã— â‚¹{fmt(po.unitCost)}
+                      {po.qty} × ₹{fmt(po.unitCost)}
                     </div>
                     <div className="text-[10px] text-slate-400">
                       {po.expectedDate
@@ -379,7 +379,7 @@ export default async function ProcurementIntelligencePage() {
       </section>
 
       <p className="text-[10px] text-slate-400">
-        Generated {now.toLocaleString()} Â· Procurement Intelligence Â·
+        Generated {now.toLocaleString()} · Procurement Intelligence ·
         Manufacturing MAX
       </p>
     </div>

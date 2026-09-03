@@ -19,6 +19,7 @@ export default function InvoicePrintClient({
   const wo = invoice.workOrder;
   const prod = wo?.product;
   const dispatch = invoice.dispatchRecord;
+  const lines = invoice.lines?.length ? invoice.lines : null;
 
   const totalTax = invoice.cgstAmt + invoice.sgstAmt + invoice.igstAmt;
   const qty = dispatch ? dispatch.dispatchedQty : wo?.plannedQuantity || 1;
@@ -40,6 +41,11 @@ export default function InvoicePrintClient({
     if (count > 0) return taxable / count;
     return 100;
   }
+
+  const inr = (n: number) =>
+    (Number(n) || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+    });
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-900 p-4 sm:p-8">
@@ -178,6 +184,17 @@ export default function InvoicePrintClient({
               </div>
             )}
 
+            {invoice.salesOrder?.orderNumber && (
+              <div className="flex justify-between sm:justify-end gap-4">
+                <span className="text-slate-500 font-sans">
+                  Sales Order #:
+                </span>
+                <strong className="text-blue-700">
+                  {invoice.salesOrder.orderNumber}
+                </strong>
+              </div>
+            )}
+
             <div className="flex justify-between sm:justify-end gap-4 pt-1">
               <span className="text-slate-500 font-sans">Place of Supply:</span>
               <strong className="text-slate-900">
@@ -203,33 +220,66 @@ export default function InvoicePrintClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 font-mono">
-              <tr>
-                <td className="p-3.5 text-slate-500 font-sans">1</td>
-                <td className="p-3.5 font-sans">
-                  <strong className="text-slate-900 text-sm block font-bold">
-                    {prod?.name || "Precision Manufactured Assemblies"}
-                  </strong>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    SKU: {prod?.sku || "SKU-PRODUCT-001"}
-                  </span>
-                </td>
-                <td className="p-3.5 font-mono text-slate-600">8481.80</td>
-                <td className="p-3.5 text-right font-bold text-slate-900">
-                  {qty.toLocaleString("en-IN")} pcs
-                </td>
-                <td className="p-3.5 text-right text-slate-700">
-                  ₹
-                  {unitPrice.toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-                <td className="p-3.5 text-right font-bold text-slate-900 text-sm">
-                  ₹
-                  {invoice.taxableValue.toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
+              {lines
+                ? lines.map((l: any, i: number) => (
+                    <tr key={l.id}>
+                      <td className="p-3.5 text-slate-500 font-sans">
+                        {l.lineNo || i + 1}
+                      </td>
+                      <td className="p-3.5 font-sans">
+                        <strong className="text-slate-900 text-sm block font-bold">
+                          {l.productName || prod?.name || "Precision Manufactured Assemblies"}
+                        </strong>
+                        {l.productSku && (
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            SKU: {l.productSku}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-600">
+                        8481.80
+                      </td>
+                      <td className="p-3.5 text-right font-bold text-slate-900">
+                        {Number(l.qty || 0).toLocaleString("en-IN")} pcs
+                      </td>
+                      <td className="p-3.5 text-right text-slate-700">₹
+                        {inr(l.unitPrice)}
+                      </td>
+                      <td className="p-3.5 text-right font-bold text-slate-900 text-sm">
+                        ₹{inr(l.taxableValue)}
+                      </td>
+                    </tr>
+                  ))
+                : (() => {
+                    const name = prod?.name || "Precision Manufactured Assemblies";
+                    return (
+                      <tr>
+                        <td className="p-3.5 text-slate-500 font-sans">1</td>
+                        <td className="p-3.5 font-sans">
+                          <strong className="text-slate-900 text-sm block font-bold">
+                            {name}
+                          </strong>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            SKU: {prod?.sku || "SKU-PRODUCT-001"}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono text-slate-600">
+                          8481.80
+                        </td>
+                        <td className="p-3.5 text-right font-bold text-slate-900">
+                          {qty.toLocaleString("en-IN")} pcs
+                        </td>
+                        <td className="p-3.5 text-right text-slate-700">₹
+                          {unitPrice.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td className="p-3.5 text-right font-bold text-slate-900 text-sm">
+                          ₹{inr(invoice.taxableValue)}
+                        </td>
+                      </tr>
+                    );
+                  })()}
             </tbody>
           </table>
         </div>
@@ -250,6 +300,14 @@ export default function InvoicePrintClient({
             {invoice.notes && (
               <p className="text-xs text-slate-600 italic">
                 <strong>Notes:</strong> {invoice.notes}
+              </p>
+            )}
+
+            {invoice.glRef && (
+              <p className="text-[11px] text-slate-500 font-mono">
+                Posted to ledger:{' '}
+                <strong className="text-slate-700">{invoice.glRef}</strong>{" "}
+                (auto-generated)
               </p>
             )}
           </div>

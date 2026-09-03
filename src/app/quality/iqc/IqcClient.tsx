@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   Loader2,
   CheckCircle2,
@@ -8,6 +10,7 @@ import {
   ShieldAlert,
   ClipboardX,
   Info,
+  ShieldCheck
 } from "lucide-react";
 import { Button, Input } from "@/app/components/ui";
 
@@ -110,6 +113,13 @@ export default function IqcClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Iqc"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           ["pending", "Pending inspection", "text-amber-300"],

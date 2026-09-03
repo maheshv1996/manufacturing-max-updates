@@ -1,15 +1,19 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Upload, Unlink, Trash2, Landmark } from "lucide-react";
+import { Loader2, Upload, Unlink, Trash2, Landmark,
+  FileText
+} from "lucide-react";
 
 type Entry = any;
 type Tx = any;
 
 function parseAmount(s: string): number {
-  const cleaned = String(s || "").replace(/[â‚¹,\s]/g, "");
+  const cleaned = String(s || "").replace(/[₹,\s]/g, "");
   const n = parseFloat(cleaned);
   return isNaN(n) ? NaN : n;
 }
@@ -138,7 +142,7 @@ export default function BankReconcileClient() {
         await fetchData();
         if (action === "upload")
           setMsg(
-            `Imported ${d.record?.imported || 0} rows â€” ${d.record?.autoMatched || 0} auto-matched.`,
+            `Imported ${d.record?.imported || 0} rows — ${d.record?.autoMatched || 0} auto-matched.`,
           );
       }
     } catch (e) {
@@ -173,6 +177,13 @@ export default function BankReconcileClient() {
 
   return (
     <div className="space-y-5">
+      <PageHeader
+        title="Treasury"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -286,7 +297,7 @@ export default function BankReconcileClient() {
                     colSpan={6}
                     className="px-5 py-10 text-center text-slate-400 italic"
                   >
-                    No statement rows yet â€” upload a CSV to begin.
+                    No statement rows yet — upload a CSV to begin.
                   </td>
                 </tr>
               )}
@@ -304,7 +315,7 @@ export default function BankReconcileClient() {
                   <td
                     className={`px-5 py-3 font-mono font-bold ${e.amount >= 0 ? "text-emerald-400" : "text-rose-500"}`}
                   >
-                    {e.amount >= 0 ? "+" : "âˆ’"}
+                    {e.amount >= 0 ? "+" : "−"}
                     {fmt(Math.abs(e.amount))}
                   </td>
                   <td className="px-5 py-3">
@@ -318,11 +329,11 @@ export default function BankReconcileClient() {
                     {e.matchedTreasury ? (
                       <div className="text-xs">
                         <div className="font-bold text-white">
-                          {e.matchedTreasury.reference || "â€”"}
+                          {e.matchedTreasury.reference || "—"}
                         </div>
                         <div className="text-slate-400">
                           {e.matchedTreasury.category || e.matchedTreasury.type}{" "}
-                          Â· {fmt(Math.abs(e.matchedTreasury.amount))}
+                          · {fmt(Math.abs(e.matchedTreasury.amount))}
                         </div>
                       </div>
                     ) : (
@@ -337,11 +348,11 @@ export default function BankReconcileClient() {
                         }}
                         className="w-52 bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-white"
                       >
-                        <option value="">Select treasury txâ€¦</option>
+                        <option value="">Select treasury tx…</option>
                         {unmatchedTreasury.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {new Date(t.date).toLocaleDateString()} Â·{" "}
-                            {t.reference || t.category || t.type} Â·{" "}
+                            {new Date(t.date).toLocaleDateString()} ·{" "}
+                            {t.reference || t.category || t.type} ·{" "}
                             {fmt(Math.abs(t.amount))}
                           </option>
                         ))}

@@ -129,7 +129,7 @@ const REPORT_CARDS = [
     icon: BadgeIndianRupee,
     badge: "HR Statutory",
     badgeColor: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-    desc: "Monthly Provident Fund and ESI contribution register per employee with totals â€” the statutory compliance evidence file for PF/ESI inspections.",
+    desc: "Monthly Provident Fund and ESI contribution register per employee with totals — the statutory compliance evidence file for PF/ESI inspections.",
   },
   {
     id: "pf-esi-challan",
@@ -138,7 +138,7 @@ const REPORT_CARDS = [
     icon: BadgeIndianRupee,
     badge: "Payment Challan",
     badgeColor: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-    desc: "Monthly PF/ESI payment challan aggregating employee & employer shares per scheme, with amount-in-words and signature blocks â€” ready for bank submission.",
+    desc: "Monthly PF/ESI payment challan aggregating employee & employer shares per scheme, with amount-in-words and signature blocks — ready for bank submission.",
   },
   {
     id: "payslips",
@@ -147,7 +147,7 @@ const REPORT_CARDS = [
     icon: Wallet,
     badge: "Payroll & Salary",
     badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    desc: "Printable employee payslips per month â€” earnings breakup, PF & professional-tax deductions, net pay, and signature blocks.",
+    desc: "Printable employee payslips per month — earnings breakup, PF & professional-tax deductions, net pay, and signature blocks.",
   },
   {
     id: "compliance-digest",
@@ -156,7 +156,7 @@ const REPORT_CARDS = [
     icon: AlertTriangle,
     badge: "Management Briefing",
     badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-    desc: "One-page daily briefing of every critical and warning compliance flag â€” environment, backups, spares, contracts, calibration, vendors, NCRs and ECOs â€” with owner dispatch log.",
+    desc: "One-page daily briefing of every critical and warning compliance flag — environment, backups, spares, contracts, calibration, vendors, NCRs and ECOs — with owner dispatch log.",
   },
   {
     id: "supplier-scorecards",
@@ -165,7 +165,7 @@ const REPORT_CARDS = [
     icon: Star,
     badge: "Supplier SQA",
     badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-    desc: "Printable quarterly supplier KPI register â€” OTD, quality PPM, cost variance, responsiveness, weighted overall score and A-D grade.",
+    desc: "Printable quarterly supplier KPI register — OTD, quality PPM, cost variance, responsiveness, weighted overall score and A-D grade.",
   },
   {
     id: "audit-register",
@@ -174,7 +174,7 @@ const REPORT_CARDS = [
     icon: ClipboardCheck,
     badge: "QMS Evidence",
     badgeColor: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
-    desc: "Printable ISO 9001 / AS9100 audit schedule with findings, open and critical counts per audit â€” the register an auditor asks for.",
+    desc: "Printable ISO 9001 / AS9100 audit schedule with findings, open and critical counts per audit — the register an auditor asks for.",
   },
   {
     id: "quality-calendar",
@@ -183,7 +183,7 @@ const REPORT_CARDS = [
     icon: CalendarRange,
     badge: "QMS Planning",
     badgeColor: "bg-teal-500/20 text-teal-300 border-teal-500/30",
-    desc: "Year-at-a-glance plan of internal audits, calibration due dates, preventive maintenance and statutory renewals â€” the forward-looking register for AS9100 planning.",
+    desc: "Year-at-a-glance plan of internal audits, calibration due dates, preventive maintenance and statutory renewals — the forward-looking register for AS9100 planning.",
   },
   {
     id: "exim",
@@ -219,7 +219,7 @@ const REPORT_CARDS = [
     icon: ClipboardCheck,
     badge: "CAPA & 8D",
     badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    desc: "Printable 8-discipline problem-solving register with linked NCRs, root-cause summaries, CAPA action counts, and closure status â€” CAPA evidence for ISO 9001 / AS9100.",
+    desc: "Printable 8-discipline problem-solving register with linked NCRs, root-cause summaries, CAPA action counts, and closure status — CAPA evidence for ISO 9001 / AS9100.",
   },
   {
     id: "ppap-register",
@@ -228,7 +228,7 @@ const REPORT_CARDS = [
     icon: FileCheck2,
     badge: "PPAP / IATF",
     badgeColor: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
-    desc: "Printable Production Part Approval Process register â€” AIAG 18-element progress per part, submission level, customer, and approval disposition.",
+    desc: "Printable Production Part Approval Process register — AIAG 18-element progress per part, submission level, customer, and approval disposition.",
   },
   {
     id: "control-plan",
@@ -237,7 +237,7 @@ const REPORT_CARDS = [
     icon: ListChecks,
     badge: "IATF / AS9100",
     badgeColor: "bg-violet-500/20 text-violet-300 border-violet-500/30",
-    desc: "Printable Control Plan per product â€” characteristic, specification, measurement method, sample/frequency, control method, and reaction plan.",
+    desc: "Printable Control Plan per product — characteristic, specification, measurement method, sample/frequency, control method, and reaction plan.",
   },
   {
     id: "psw",
@@ -246,7 +246,7 @@ const REPORT_CARDS = [
     icon: FileSignature,
     badge: "AIAG PPAP Form",
     badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    desc: "Printable AIAG Part Submission Warrant per PPAP â€” part information, 18-element results, approval disposition, and supplier/customer sign-off blocks.",
+    desc: "Printable AIAG Part Submission Warrant per PPAP — part information, 18-element results, approval disposition, and supplier/customer sign-off blocks.",
   },
   {
     id: "grn-register",
@@ -255,7 +255,7 @@ const REPORT_CARDS = [
     icon: PackageCheck,
     badge: "AP Control",
     badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    desc: "Printable Goods Receipt Note and supplier invoice ledger with PO â‡„ GRN â‡„ Invoice three-way match status â€” the accounts payable control evidence file.",
+    desc: "Printable Goods Receipt Note and supplier invoice ledger with PO ⇄ GRN ⇄ Invoice three-way match status — the accounts payable control evidence file.",
   },
   {
     id: "eco-register",
@@ -282,7 +282,7 @@ const REPORT_CARDS = [
     icon: DollarSign,
     badge: "Asset Valuation",
     badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    desc: "On-hand raw material stock asset valuation (Current Stock Ã— Unit Cost), SKU asset distribution %, and reorder status chips.",
+    desc: "On-hand raw material stock asset valuation (Current Stock × Unit Cost), SKU asset distribution %, and reorder status chips.",
   },
   {
     id: "profitability",

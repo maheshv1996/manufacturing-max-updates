@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useState } from "react";
 import DynamicRegister from "@/app/components/shared/DynamicRegister";
 import BankReconcileClient from "./BankReconcileClient";
 import BudgetVarianceBanner from "./BudgetVarianceBanner";
-import { PiggyBank, Wallet, Landmark } from "lucide-react";
+import { PiggyBank, Wallet, Landmark,
+  FileText
+} from "lucide-react";
 
 export default function TreasuryPageClient() {
   const [tab, setTab] = useState<"treasury" | "budget" | "reconcile">(
@@ -13,6 +17,13 @@ export default function TreasuryPageClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Treasury"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setTab("treasury")}
@@ -66,7 +77,7 @@ export default function TreasuryPageClient() {
               { key: "account", label: "Account", placeholder: "e.g. Main" },
               {
                 key: "amount",
-                label: "Amount (â‚¹)",
+                label: "Amount (₹)",
                 type: "number",
                 required: true,
               },
@@ -122,8 +133,8 @@ export default function TreasuryPageClient() {
                   required: true,
                   placeholder: "e.g. Capex",
                 },
-                { key: "allocated", label: "Allocated (â‚¹)", type: "number" },
-                { key: "spent", label: "Spent (â‚¹)", type: "number" },
+                { key: "allocated", label: "Allocated (₹)", type: "number" },
+                { key: "spent", label: "Spent (₹)", type: "number" },
                 { key: "notes", label: "Notes", type: "textarea" },
               ],
               columns: [

@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {useCallback, useEffect, useState } from "react";
 import {
   BadgeIndianRupee,
   AlertTriangle,
@@ -9,6 +11,7 @@ import {
   Plus,
   X,
   TrendingUp,
+  FileText
 } from "lucide-react";
 import { Button, Input, Select } from "@/app/components/ui";
 
@@ -109,6 +112,13 @@ export default function PriceRevisionsClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Price Revisions"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       {msg && <p className="text-sm text-emerald-300 font-semibold">{msg}</p>}
 
       {/* KPI strip */}

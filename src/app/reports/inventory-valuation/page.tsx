@@ -57,7 +57,7 @@ export default async function InventoryValuationReportPage() {
                 Raw Material Inventory Valuation Report
               </h1>
               <p className="text-xs text-slate-400">
-                Asset valuation of on-hand raw material stock (Current Stock Ã—
+                Asset valuation of on-hand raw material stock (Current Stock ×
                 Unit Cost).
               </p>
             </div>
@@ -71,14 +71,14 @@ export default async function InventoryValuationReportPage() {
         {/* PRINT BRANDING HEADER */}
         <div className="hidden print:block border-b border-slate-300 pb-4 mb-6">
           <h1 className="text-2xl font-bold text-slate-900">
-            Manufacturing Max â€” Enterprise MES
+            Manufacturing Max — Enterprise MES
           </h1>
           <h2 className="text-lg font-bold text-slate-700">
             Raw Material Asset Valuation Report
           </h2>
           <p className="text-xs text-slate-500">
-            Generated on {new Date().toLocaleString()} â€¢ Total Inventory Asset
-            Value: â‚¹{totalValuation.toLocaleString()}
+            Generated on {new Date().toLocaleString()} • Total Inventory Asset
+            Value: ₹{totalValuation.toLocaleString()}
           </p>
         </div>
 
@@ -89,7 +89,7 @@ export default async function InventoryValuationReportPage() {
               Total Inventory Asset Value
             </span>
             <p className="text-3xl font-black text-emerald-400 font-mono">
-              â‚¹{totalValuation.toLocaleString()}
+              ₹{totalValuation.toLocaleString()}
             </p>
             <p className="text-[11px] text-slate-400 font-medium">
               On-hand raw material assets
@@ -141,8 +141,8 @@ export default async function InventoryValuationReportPage() {
                 <th className="p-4">Raw Material / SKU</th>
                 <th className="p-4 text-right">Current Stock</th>
                 <th className="p-4 text-right">Min Stock</th>
-                <th className="p-4 text-right">Unit Cost (â‚¹)</th>
-                <th className="p-4 text-right">Total Asset Valuation (â‚¹)</th>
+                <th className="p-4 text-right">Unit Cost (₹)</th>
+                <th className="p-4 text-right">Total Asset Valuation (₹)</th>
                 <th className="p-4 text-right">% Asset Share</th>
                 <th className="p-4 text-center">Stock Status</th>
               </tr>
@@ -166,7 +166,7 @@ export default async function InventoryValuationReportPage() {
                     <td className="p-4 font-sans">
                       <p className="font-bold text-white text-sm">{m.name}</p>
                       <p className="text-[11px] text-slate-400 font-mono">
-                        SKU: {m.sku} â€¢ Unit: {m.unit}
+                        SKU: {m.sku} • Unit: {m.unit}
                       </p>
                     </td>
                     <td className="p-4 text-right font-bold text-white text-sm">
@@ -176,10 +176,10 @@ export default async function InventoryValuationReportPage() {
                       {m.minStock.toLocaleString()} {m.unit}
                     </td>
                     <td className="p-4 text-right text-slate-300">
-                      â‚¹{m.unitCost.toLocaleString()}
+                      ₹{m.unitCost.toLocaleString()}
                     </td>
                     <td className="p-4 text-right font-black text-emerald-400 text-sm">
-                      â‚¹{itemValuation.toLocaleString()}
+                      ₹{itemValuation.toLocaleString()}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-300">
                       {assetShare}%
@@ -216,7 +216,7 @@ export default async function InventoryValuationReportPage() {
                 </td>
                 <td colSpan={3}></td>
                 <td className="p-4 text-right text-emerald-400 font-mono">
-                  â‚¹{totalValuation.toLocaleString()}
+                  ₹{totalValuation.toLocaleString()}
                 </td>
                 <td className="p-4 text-right font-mono">100.0%</td>
                 <td></td>

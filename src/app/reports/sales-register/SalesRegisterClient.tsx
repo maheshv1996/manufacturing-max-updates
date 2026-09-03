@@ -154,7 +154,7 @@ export default function SalesRegisterClient({
             Total Taxable Sales Value
           </span>
           <span className="text-xl font-black font-mono text-blue-400 mt-1 block">
-            â‚¹{totalTaxable.toLocaleString("en-IN")}
+            ₹{totalTaxable.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -163,7 +163,7 @@ export default function SalesRegisterClient({
             Total GST Collected
           </span>
           <span className="text-xl font-black font-mono text-emerald-400 mt-1 block">
-            â‚¹{totalTax.toLocaleString("en-IN")}
+            ₹{totalTax.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -172,7 +172,7 @@ export default function SalesRegisterClient({
             Grand Invoice Total
           </span>
           <span className="text-xl font-black font-mono text-purple-400 mt-1 block">
-            â‚¹{grandTotal.toLocaleString("en-IN")}
+            ₹{grandTotal.toLocaleString("en-IN")}
           </span>
         </div>
       </div>
@@ -202,11 +202,11 @@ export default function SalesRegisterClient({
                 <th className="py-3 px-4">Invoice #</th>
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Customer Name &amp; GSTIN</th>
-                <th className="py-3 px-4 text-right">Taxable Value (â‚¹)</th>
-                <th className="py-3 px-4 text-right">CGST (â‚¹)</th>
-                <th className="py-3 px-4 text-right">SGST (â‚¹)</th>
-                <th className="py-3 px-4 text-right">IGST (â‚¹)</th>
-                <th className="py-3 px-4 text-right">Grand Total (â‚¹)</th>
+                <th className="py-3 px-4 text-right">Taxable Value (₹)</th>
+                <th className="py-3 px-4 text-right">CGST (₹)</th>
+                <th className="py-3 px-4 text-right">SGST (₹)</th>
+                <th className="py-3 px-4 text-right">IGST (₹)</th>
+                <th className="py-3 px-4 text-right">Grand Total (₹)</th>
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>
@@ -247,28 +247,28 @@ export default function SalesRegisterClient({
                       )}
                     </td>
                     <td className="py-3 px-4 text-right font-bold text-white">
-                      â‚¹
+                      ₹
                       {inv.taxableValue.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
                     </td>
                     <td className="py-3 px-4 text-right text-emerald-600">
                       {inv.cgstAmt > 0
-                        ? `â‚¹${inv.cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
-                        : "â€”"}
+                        ? `₹${inv.cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                        : "—"}
                     </td>
                     <td className="py-3 px-4 text-right text-emerald-600">
                       {inv.sgstAmt > 0
-                        ? `â‚¹${inv.sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
-                        : "â€”"}
+                        ? `₹${inv.sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                        : "—"}
                     </td>
                     <td className="py-3 px-4 text-right text-emerald-600">
                       {inv.igstAmt > 0
-                        ? `â‚¹${inv.igstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
-                        : "â€”"}
+                        ? `₹${inv.igstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                        : "—"}
                     </td>
                     <td className="py-3 px-4 text-right font-black text-white text-sm">
-                      â‚¹
+                      ₹
                       {inv.totalValue.toLocaleString("en-IN", {
                         minimumFractionDigits: 2,
                       })}
@@ -298,37 +298,37 @@ export default function SalesRegisterClient({
                   TOTAL REGISTER SUMMARY ({filtered.length} INVOICES)
                 </td>
                 <td className="py-3.5 px-4 text-right text-blue-600 font-extrabold text-sm">
-                  â‚¹
+                  ₹
                   {totalTaxable.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </td>
                 <td className="py-3.5 px-4 text-right text-emerald-600">
-                  â‚¹
+                  ₹
                   {totalCGST.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </td>
                 <td className="py-3.5 px-4 text-right text-emerald-600">
-                  â‚¹
+                  ₹
                   {totalSGST.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </td>
                 <td className="py-3.5 px-4 text-right text-emerald-600">
-                  â‚¹
+                  ₹
                   {totalIGST.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </td>
                 <td className="py-3.5 px-4 text-right font-black text-purple-600 text-base">
-                  â‚¹
+                  ₹
                   {grandTotal.toLocaleString("en-IN", {
                     minimumFractionDigits: 2,
                   })}
                 </td>
                 <td className="py-3.5 px-4 text-center font-sans text-slate-400">
-                  â€”
+                  —
                 </td>
               </tr>
             </tfoot>

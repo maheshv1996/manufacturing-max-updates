@@ -151,13 +151,13 @@ export default function ReceivablesClient({
                 Total Outstanding
               </p>
               <p className="text-2xl font-black text-blue-600 font-mono mt-1">
-                â‚¹{grandTotals.due.toLocaleString("en-IN")}
+                ₹{grandTotals.due.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="text-right">
               <p className="text-xs font-bold text-slate-500 uppercase">0-30</p>
               <p className="font-mono font-bold mt-1">
-                â‚¹{grandTotals.b0_30.toLocaleString("en-IN")}
+                ₹{grandTotals.b0_30.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="text-right">
@@ -165,7 +165,7 @@ export default function ReceivablesClient({
                 31-60
               </p>
               <p className="font-mono font-bold mt-1">
-                â‚¹{grandTotals.b31_60.toLocaleString("en-IN")}
+                ₹{grandTotals.b31_60.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="text-right">
@@ -173,7 +173,7 @@ export default function ReceivablesClient({
                 61-90
               </p>
               <p className="font-mono font-bold text-amber-600 mt-1">
-                â‚¹{grandTotals.b61_90.toLocaleString("en-IN")}
+                ₹{grandTotals.b61_90.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="text-right">
@@ -181,7 +181,7 @@ export default function ReceivablesClient({
                 &gt;90
               </p>
               <p className="font-mono font-bold text-rose-600 mt-1">
-                â‚¹{grandTotals.b90Plus.toLocaleString("en-IN")}
+                ₹{grandTotals.b90Plus.toLocaleString("en-IN")}
               </p>
             </div>
           </div>
@@ -198,7 +198,7 @@ export default function ReceivablesClient({
                         Total Due
                       </span>
                       <span className="font-mono font-bold text-blue-600">
-                        â‚¹{c.totalDue.toLocaleString("en-IN")}
+                        ₹{c.totalDue.toLocaleString("en-IN")}
                       </span>
                     </div>
                     {c.bucket90Plus > 0 && (
@@ -207,7 +207,7 @@ export default function ReceivablesClient({
                           &gt;90 Days
                         </span>
                         <span className="font-mono font-bold text-rose-600">
-                          â‚¹{c.bucket90Plus.toLocaleString("en-IN")}
+                          ₹{c.bucket90Plus.toLocaleString("en-IN")}
                         </span>
                       </div>
                     )}
@@ -240,18 +240,18 @@ export default function ReceivablesClient({
                             {new Date(inv.invoiceDate).toLocaleDateString()}
                           </td>
                           <td className="py-2 text-right">
-                            â‚¹{inv.totalValue.toLocaleString("en-IN")}
+                            ₹{inv.totalValue.toLocaleString("en-IN")}
                           </td>
                           <td className="py-2 text-right text-emerald-600">
-                            â‚¹{(inv.paidAmount || 0).toLocaleString("en-IN")}
+                            ₹{(inv.paidAmount || 0).toLocaleString("en-IN")}
                           </td>
                           <td className="py-2 text-right font-bold">
-                            â‚¹{due.toLocaleString("en-IN")}
+                            ₹{due.toLocaleString("en-IN")}
                           </td>
                           <td
                             className={`py-2 text-right ${due > 0 ? (age > 90 ? "text-rose-600 font-bold" : age > 60 ? "text-amber-600" : "") : "text-slate-400"}`}
                           >
-                            {due > 0 ? age : "â€”"}
+                            {due > 0 ? age : "—"}
                           </td>
                         </tr>
                       );

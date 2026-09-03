@@ -1,7 +1,9 @@
 "use client";
 
+import PageHeader from "@/app/components/shared/PageHeader";
 
-import { logClientError } from "@/lib/clientLogger";
+
+import {logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
@@ -13,6 +15,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   MinusCircle,
+  ShieldCheck
 } from "lucide-react";
 
 const KPI_META: Record<
@@ -281,6 +284,13 @@ export default function ObjectivesClient() {
                     {isManager && (
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
+      <PageHeader
+        title="Objectives"
+        description="Inspections, NCRs, audits and compliance control."
+        icon={<ShieldCheck className="w-6 h-6" />}
+        iconTone="emerald"
+      />
+
                           <button
                             onClick={() => {
                               setForm({ ...o });

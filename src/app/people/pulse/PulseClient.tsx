@@ -1,12 +1,14 @@
 "use client";
 
-import {
-  Clock,
+import PageHeader from "@/app/components/shared/PageHeader";
+
+import {Clock,
   CalendarX,
   UserCheck,
   AlertOctagon,
   GraduationCap,
   FileCheck,
+  Users
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -18,6 +20,13 @@ export default function PulseClient({
 }: any) {
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Pulse"
+        description="Roster, attendance, leave and workforce operations."
+        icon={<Users className="w-6 h-6" />}
+        iconTone="violet"
+      />
+
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-surface-1 rounded-card border border-border p-4 flex flex-col justify-between">

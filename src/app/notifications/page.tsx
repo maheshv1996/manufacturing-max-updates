@@ -5,6 +5,9 @@ import { permissionForPath } from "@/lib/departments";
 import NotificationsClient from "./NotificationsClient";
 import { Bell } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = { title: "Notifications Center" };
 
 export default async function NotificationsPage() {

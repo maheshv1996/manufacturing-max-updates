@@ -2,8 +2,12 @@ export const maxDuration = 60;
 import { prisma } from "@/lib/prisma";
 import ReceivablesClient from "./ReceivablesClient";
 import { verifySessionToken } from "@/lib/auth";
+import { getSettings } from "@/lib/settings";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ReceivablesReportPage() {
   const cookieStore = await cookies();
@@ -25,14 +29,9 @@ export default async function ReceivablesReportPage() {
     },
   });
 
-  const branding = await (prisma as any).appSettings.findUnique({
-    where: { id: "default" },
-    select: {
-      companyName: true,
-      companyAddress: true,
-      companyGstin: true,
-    },
-  });
+  const settings = await getSettings();
 
-  return <ReceivablesClient invoices={invoices} branding={branding} />;
+  return (
+    <ReceivablesClient invoices={invoices} branding={settings.branding} />
+  );
 }

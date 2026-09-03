@@ -64,10 +64,10 @@ export default function WorkOrderTablesWithEdits({
                       {new Date(log.startTime).toLocaleString()}
                     </td>
                     <td className="py-2.5 px-3 font-medium">
-                      {log.machine?.name || "â€”"}
+                      {log.machine?.name || "—"}
                     </td>
                     <td className="py-2.5 px-3 text-slate-600 text-slate-300">
-                      {log.operator?.name || "â€”"}
+                      {log.operator?.name || "—"}
                     </td>
                     <td className="py-2.5 px-3 font-bold text-emerald-400">
                       {log.goodQuantity}
@@ -172,7 +172,7 @@ export default function WorkOrderTablesWithEdits({
                         : "Ongoing"}
                     </td>
                     <td className="py-2.5 px-3 font-bold text-amber-400">
-                      {log.durationMinutes?.toFixed(1) || "â€”"} mins
+                      {log.durationMinutes?.toFixed(1) || "—"} mins
                     </td>
                     <td className="py-2.5 px-3 font-medium">
                       {log.reason
@@ -180,7 +180,7 @@ export default function WorkOrderTablesWithEdits({
                         : "Unspecified"}
                     </td>
                     <td className="py-2.5 px-3 text-slate-500 text-xs">
-                      {log.notes || "â€”"}
+                      {log.notes || "—"}
                     </td>
                     <td className="py-2.5 px-3">
                       <SourceRecordEditModal
@@ -281,7 +281,7 @@ export default function WorkOrderTablesWithEdits({
                       {q.failed}
                     </td>
                     <td className="py-2.5 px-3 text-xs text-slate-500">
-                      {q.notes || "â€”"}
+                      {q.notes || "—"}
                     </td>
                     <td className="py-2.5 px-3">
                       <SourceRecordEditModal
@@ -425,7 +425,7 @@ export default function WorkOrderTablesWithEdits({
                   <th className="py-2.5 px-3">Heat No</th>
                   <th className="py-2.5 px-3">Cert</th>
                   <th className="py-2.5 px-3">Quantity Issued</th>
-                  <th className="py-2.5 px-3">Unit Cost (â‚¹)</th>
+                  <th className="py-2.5 px-3">Unit Cost (₹)</th>
                   <th className="py-2.5 px-3">Actions</th>
                 </tr>
               </thead>
@@ -439,7 +439,7 @@ export default function WorkOrderTablesWithEdits({
                       {new Date(tx.at).toLocaleString()}
                     </td>
                     <td className="py-2.5 px-3 font-bold">
-                      {tx.rawMaterial?.sku || "â€”"}
+                      {tx.rawMaterial?.sku || "—"}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-xs bg-slate-800/60 px-2 py-0.5 rounded">
                       {tx.batchNo || "BATCH-DEFAULT"}
@@ -450,7 +450,7 @@ export default function WorkOrderTablesWithEdits({
                           {tx.materialCert.heatNumber}
                         </span>
                       ) : (
-                        <span className="text-slate-400">â€”</span>
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="py-2.5 px-3">
@@ -462,11 +462,11 @@ export default function WorkOrderTablesWithEdits({
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-300 text-[10px] font-bold hover:bg-emerald-200 transition-colors"
                           >
-                            âœ“ CERT
+                            ✓ CERT
                           </a>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-300 text-[10px] font-bold">
-                            âœ“ CERT
+                            ✓ CERT
                           </span>
                         )
                       ) : (
@@ -479,7 +479,7 @@ export default function WorkOrderTablesWithEdits({
                       {tx.qty}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-xs">
-                      â‚¹{tx.unitCost || tx.rawMaterial?.unitCost || 0}
+                      ₹{tx.unitCost || tx.rawMaterial?.unitCost || 0}
                     </td>
                     <td className="py-2.5 px-3">
                       <SourceRecordEditModal
@@ -494,7 +494,7 @@ export default function WorkOrderTablesWithEdits({
                           },
                           {
                             key: "unitCost",
-                            label: "Unit Cost (â‚¹)",
+                            label: "Unit Cost (₹)",
                             type: "number",
                           },
                           {
