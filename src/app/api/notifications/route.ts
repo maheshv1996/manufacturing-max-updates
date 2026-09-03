@@ -138,6 +138,49 @@ export async function GET(req: NextRequest) {
           return null;
         },
       },
+      // Risk register — HIGH/CRITICAL open risks are a danger bell, overdue
+      // quarterly reviews warn. Both link to the register page.
+      {
+        check: () =>
+          hasPerm("system.view") || hasPerm("system.edit") || hasPerm("exec.view"),
+        query: async () => {
+          const risks = await prisma.riskRegister.findMany({
+            where: { status: { not: "CLOSED" } },
+            select: {
+              id: true,
+              riskCode: true,
+              title: true,
+              riskLevel: true,
+              reviewDueAt: true,
+            },
+          });
+          const critical = risks.filter(
+            (r) => r.riskLevel === "CRITICAL" || r.riskLevel === "HIGH",
+          );
+          const overdue = risks.filter(
+            (r) => r.reviewDueAt && new Date(r.reviewDueAt).getTime() < Date.now(),
+          );
+          if (critical.length > 0 || overdue.length > 0) {
+            const danger = critical.filter((r) => r.riskLevel === "CRITICAL").length;
+            return {
+              id: "risk-register",
+              title:
+                critical.length > 0
+                  ? `Risk register — ${critical.length} HIGH/CRITICAL open risk${critical.length === 1 ? "" : "s"}`
+                  : `Risk register — ${overdue.length} review${overdue.length === 1 ? "" : "s"} overdue`,
+              description: `${danger > 0 ? `${danger} critical · ` : ""}${critical
+                .slice(0, 3)
+                .map((r) => `${r.riskCode} ${r.riskLevel}`)
+                .join(", ")}${overdue.length > 0 ? ` · ${overdue.length} review overdue` : ""} — review in the register.`,
+              type: (critical.length > 0 ? "danger" : "warning") as
+                | "danger"
+                | "warning",
+              link: "/system/risk-register",
+            };
+          }
+          return null;
+        },
+      },
       // M31 — IT tickets: any ticket past its SLA due is a danger bell, open
       // tickets with SLA approaching warn the IT team.
       {

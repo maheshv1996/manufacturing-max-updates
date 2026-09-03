@@ -2440,6 +2440,69 @@ async function main() {
     });
   }
 
+  // Risk register — demo risks (one with an overdue review so the digest,
+  // the bell and the MRM agenda surface it on first run).
+  if ((await prisma.riskRegister.count()) === 0) {
+    const now = new Date();
+    const d = (days: number) => {
+      const x = new Date(now);
+      x.setDate(x.getDate() + days);
+      return x;
+    };
+    await prisma.riskRegister.createMany({
+      data: [
+        {
+          riskCode: "RK-2026-001",
+          title: "Key statutory consent renewal slippage (SPCB / CLRA)",
+          category: "COMPLIANCE",
+          description: "Consent and licence renewals depend on one coordinator; a slip blocks dispatch.",
+          likelihood: 4,
+          impact: 5,
+          riskScore: 20,
+          riskLevel: "CRITICAL",
+          owner: "EHS Head",
+          mitigation: "Renewal calendar in the compliance digest; 90-day alerting; second approver.",
+          contingency: "Fast-track liaison with board office; interim permission letter.",
+          status: "OPEN",
+          reviewDueAt: d(-5), // overdue — flags digest + bell
+          createdBy: "System Admin",
+        },
+        {
+          riskCode: "RK-2026-002",
+          title: "Single-source supplier concentration (critical raw material)",
+          category: "SUPPLY",
+          description: "Two critical forgings bought from one vendor with no qualified alternate.",
+          likelihood: 4,
+          impact: 3,
+          riskScore: 12,
+          riskLevel: "HIGH",
+          owner: "SCM Head",
+          mitigation: "Vendor qualification programme for a second source; 8-week buffer stock.",
+          contingency: "Spot purchase at premium via rate contract; expedited freight.",
+          status: "OPEN",
+          reviewDueAt: d(40),
+          createdBy: "System Admin",
+        },
+        {
+          riskCode: "RK-2026-003",
+          title: "Single-point backup failure on embedded database",
+          category: "IT",
+          description: "Backup chain depends on one nightly job; restore drills are quarterly.",
+          likelihood: 3,
+          impact: 2,
+          riskScore: 6,
+          riskLevel: "MEDIUM",
+          owner: "IT Admin",
+          mitigation: "Keep-30 rotation + physical fallback + scheduled restore drills.",
+          contingency: "Quarantine + physical restore path proven in drill.",
+          status: "OPEN",
+          reviewDueAt: d(75),
+          createdBy: "System Admin",
+        },
+      ],
+    });
+  }
+
   if ((await prisma.treasuryTransaction.count()) === 0) {
     await prisma.treasuryTransaction.createMany({
       data: [

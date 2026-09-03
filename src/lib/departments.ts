@@ -176,6 +176,12 @@ export const DEPARTMENTS: Department[] = [
         icon: Siren,
       },
       {
+        name: "Risk Register",
+        desc: "L×I matrix · owners · quarterly reviews",
+        href: "/system/risk-register",
+        icon: ShieldAlert,
+      },
+      {
         name: "Notifications & Alerts",
         desc: "Alert centre",
         href: "/notifications",

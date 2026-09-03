@@ -4723,6 +4723,31 @@ model GlIntegrityRun {
   @@index([kind])
 }
 
+model RiskRegister {
+  id              String    @id @default(cuid())
+  riskCode        String    @unique // RK-YYYY-NNN
+  title           String
+  category        String // SAFETY | QUALITY | SUPPLY | FINANCIAL | COMPLIANCE | OPERATIONAL | MARKET | IT | HR | ENVIRONMENT | STRATEGIC
+  description     String?
+  likelihood      Int       @default(1) // 1-5
+  impact          Int       @default(1) // 1-5
+  riskScore       Int       @default(1) // likelihood * impact — computed at write
+  riskLevel       String    @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
+  owner           String? // accountable owner (name / role)
+  mitigation      String?
+  contingency     String?
+  status          String    @default("OPEN") // OPEN | MITIGATED | CLOSED
+  reviewDueAt     DateTime? // next quarterly review — overdue flags the digest + bell
+  lastReviewedAt  DateTime?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([riskLevel])
+  @@index([status])
+  @@index([reviewDueAt])
+}
+
 enum FiscalPeriodStatus {
   OPEN
   CLOSED

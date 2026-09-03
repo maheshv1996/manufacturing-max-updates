@@ -339,6 +339,40 @@ export async function getComplianceFlags(
     // Consent check must never throw
   }
 
+  // 13b. Enterprise Risk Register — HIGH/CRITICAL open risks + overdue reviews
+  try {
+    const risks =
+      (await (prisma as any).riskRegister?.findMany().catch(() => [])) ?? [];
+    risks.forEach((r: any) => {
+      if (!r || r?.status === "CLOSED") return;
+      if (r?.riskLevel === "HIGH" || r?.riskLevel === "CRITICAL") {
+        flags.push({
+          id: `risk-${r.id}`,
+          category: "Risk Register",
+          label: `${r.riskCode} · ${r.title || "Untitled risk"} — ${r.riskLevel} (${r.riskScore})`,
+          detail: `Owner: ${r.owner || "unassigned"} · ${r.category || ""} · Likelihood ${r.likelihood} × Impact ${r.impact}`,
+          severity: r.riskLevel === "CRITICAL" ? "critical" : "warning",
+          href: "/system/risk-register",
+        });
+      }
+      if (r?.reviewDueAt) {
+        const dueIn = safeDaysUntil(r.reviewDueAt, safeNow);
+        if (dueIn !== null && dueIn < 0 && r?.status !== "CLOSED") {
+          flags.push({
+            id: `risk-review-${r.id}`,
+            category: "Risk Register",
+            label: `${r.riskCode} · review OVERDUE`,
+            detail: `${r.title || "Untitled risk"} — quarterly review was due ${safeFormatDate(r.reviewDueAt)}.`,
+            severity: "warning",
+            href: "/system/risk-register",
+          });
+        }
+      }
+    });
+  } catch {
+    // Risk check must never throw
+  }
+
   // 14. Customer Quality Scorecards (PPM & OTD)
   try {
     const scorecards = await (prisma as any).customerScorecard?.findMany({
