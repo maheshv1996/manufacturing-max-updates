@@ -48,6 +48,19 @@ That one drill covers both `logical pg_dump -Fc` and `physical pgdata-*` paths (
 
 If all 6 match, the `offlineSync.ts:290` queue + `IdempotencyKey` + `SequenceCounter` + `plantScope` are live.
 
+## 4. Ledger & Governance Walk — finance close, integrity sweep, risks (10 min at the office PC)
+
+**Kit:** 1 office PC, finance + system logins.
+
+**Script:**
+1. `/finance/gl-backfill` → `Run integrity check` → expect "Books check out — N entries balance" (the daily 02:30 desktop sweep writes the same scan to `GlIntegrityRun`).
+2. `/finance/hub` → the integrity banner should be absent; `Receivables`/`Bank Balance` figures match treasury (+/₹) and are paise-exact (₹1,234.56 style, never rounded off).
+3. `/system/risk-register` → the 3 seeded risks show CRITICAL/HIGH/MEDIUM with owners; RK-2026-001 shows `REVIEW OVERDUE` → hit `Review` → overdue clears, next review +90d.
+4. Register a real risk (e.g. "Single-person dependency for NC programming", L3×I2): sliders show `MEDIUM (6)` live → `Register` → it lands at the top of the list.
+5. `/reports/compliance-digest` → `Risk Register` category lists the HIGH/CRITICAL risks and overdue reviews — the same flags auto-populate the MRM agenda (`/quality/mrm`).
+
+If all 5 work, the fixed-point ledger, GL backfill/integrity provenance, and risk-based thinking (ISO 9001 6.1) are live end-to-end.
+
 ---
 
-**After these 3, tick `HANDOVER.md` and ship.** No code left — next is just watching `MfgMaxData/logs/postgres.log` and `backup` count during the first real shift.
+**After these 4, tick `HANDOVER.md` and ship.** No code left — next is just watching `MfgMaxData/logs/postgres.log` and `backup` count during the first real shift.

@@ -10,10 +10,15 @@ npx prisma db seed
 npm run dev          # http://localhost:3000
 npm run dist         # → dist/ManufacturingMax-Setup-1.0.0.exe (verify-build + harden-desktop + bytenode)
 ```
-Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SESSION_SECRET` (`MfgMaxData/secrets.json`), `embeddedDb` init, `migrate deploy`, `seedIfEmpty`, `watchdog` (server+db), `scheduleDailyBackup 20:00`, `scheduleIdempotencyPrune 02:15` (`desktop/lib/pruneIdempotency.js` via `pg`/`node:sqlite`, 7-day TTL).
+Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SESSION_SECRET` (`MfgMaxData/secrets.json`), `embeddedDb` init, `migrate deploy`, `seedIfEmpty`, `watchdog` (server+db), `scheduleDailyBackup 20:00`, `scheduleIdempotencyPrune 02:15` (`desktop/lib/pruneIdempotency.js` via `pg`/`node:sqlite`, 7-day TTL), `scheduleLedgerIntegrity 02:30` (`desktop/lib/ledgerIntegrity.js` POSTs `/api/finance/gl-integrity` with the control-token Bearer; the proxy admits that one endpoint via `MFGMAX_CONTROL_TOKEN` mirroring the kiosk gate — every other `/api/*` still needs a session).
 
 ## Auth / Proxy
 `src/proxy.ts:15` public: `/terminal`, `/track`, `/api/auth/*`, `/api/health`, `/api/setup`, `/landing`, `/showroom`, `/ops/andon`. Kiosk APIs (`/api/operator`, `/api/terminal`, `/api/attendance/clock`, `/api/ipcc`, `/api/hold-points`) public but `MFGMAX_KIOSK_TOKEN` gate if set (`x-kiosk-token`). Others require `app_session` JWT (`jose`) + `sessionEpoch` re-check + `permissionForPath` → `can()` (`src/lib/permissions.ts:99` phantom manager heuristic removed — must list `ops.view` etc explicitly). `plantScope.ts:6` now fail-closed (`throw` if no `app_session`).
+
+## Data Integrity (PR1-4 + ledger)
+- Money is **integer paise** end-to-end (`src/lib/money.ts` row-mappers): GL (`JournalEntry/JournalLine` debit+credit paise, `totalDebit/totalCredit`), and documents (Invoice, Payment, SupplierInvoice, ExpenseClaim, TreasuryTransaction, BankStatementEntry, Customer.creditLimit, BudgetLine). Rupee contract at every API edge; `Float` columns hold exact integers by convention.
+- Ledger provenance: `GlIntegrityRun` records every backfill execution and integrity scan. `src/lib/glBackfill.ts` replays missing docs (invoices/payments/expense/payroll) idempotently; `src/lib/glIntegrity.ts` scans for posted-but-unbalanced entries + unposted docs; `/finance/gl-backfill` workbench + finance-hub banner surface both; the 02:30 desktop sweep keeps the record fresh daily.
+- `src/app/api/register/[entity]` maps money models (`MONEY_MODEL_BY_ENTITY`) both ways, GET and POST.
 
 ## Data Integrity (PR1-4)
 - `src/lib/sequence.ts` `nextSequenceTx` via `SequenceCounter` (no `count()+1` race) used in `purchasing:117`, `grn:203`, `invoices`, `quotations`, `vouchers`, `ncr`.
