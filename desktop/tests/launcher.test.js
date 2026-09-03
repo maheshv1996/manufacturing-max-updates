@@ -10,7 +10,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { DesktopApp, argValue } = require("../launcher");
+const { DesktopApp, argValue, licenseStartError } = require("../launcher");
 const embeddedDb = require("../lib/embeddedDb");
 
 function tmpdir() {
@@ -101,6 +101,18 @@ test("CLI arg parsing never mistakes the action word for a flag value", () => {
   assert.strictEqual(argValue(["backup", "--data-dir", "/tmp/d1"], "--data-dir"), "/tmp/d1");
   assert.strictEqual(argValue(["--data-dir", "/tmp/d1", "start"], "--data-dir"), "/tmp/d1");
   assert.strictEqual(argValue(["export", "--to", "/pendrive"], "--to"), "/pendrive");
+});
+
+test("license gate: ACTIVE and GRACE boot, EXPIRED and INVALID block", () => {
+  // The start gate must never block ACTIVE keys or the GRACE window
+  // (offline-first evaluation), and must block EXPIRED (valid key, date
+  // passed — previously booted forever) and INVALID (grace over).
+  assert.strictEqual(licenseStartError({ status: "ACTIVE", reason: "OK" }), null);
+  assert.strictEqual(licenseStartError({ status: "GRACE", reason: "MISSING" }), null);
+  assert.strictEqual(licenseStartError({ status: "GRACE", reason: "MACHINE_CHANGED" }), null);
+  assert.match(licenseStartError({ status: "EXPIRED", reason: "DATE_PASSED", expiresAt: "2026-01-01T00:00:00Z" }), /expired/i);
+  assert.match(licenseStartError({ status: "INVALID", reason: "MISSING" }), /grace/i);
+  assert.match(licenseStartError(null), /unknown/i);
 });
 
 test("physicalRestore validates the PG_VERSION marker before touching the live cluster", () => {

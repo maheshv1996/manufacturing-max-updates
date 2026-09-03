@@ -818,8 +818,9 @@ async function main(argv) {
   // start
   app.ensureDirs();
   const lic = app.evaluateLicense();
-  if (lic.status === "INVALID") {
-    console.error("LICENSE_INVALID: no valid license and grace expired. Provide MFGMAX_LICENSE.");
+  const licErr = licenseStartError(lic);
+  if (licErr) {
+    console.error("LICENSE_BLOCKED: " + licErr);
     process.exit(2);
   }
   app.ensureEmbeddedDb();
@@ -869,4 +870,25 @@ function argValue(args, flag) {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-module.exports = { DesktopApp, argValue, resolveDataDir, resolveAppRoot, resolveResourcesDir };
+/**
+ * Decide whether boot may continue under the current activation state.
+ * GRACE (no key yet within the first-run window, or a machine change within
+ * its window) is deliberately non-blocking — offline-first plants keep
+ * running while a key is arranged. EXPIRED (valid key, date passed) and
+ * INVALID (no valid key and grace over) block startup.
+ * @param {{status?: string, reason?: string, expiresAt?: string}} activation
+ * @returns {string | null} blocking message, or null when boot may proceed
+ */
+function licenseStartError(activation) {
+  if (!activation || typeof activation.status !== "string") {
+    return "License state unknown — cannot start.";
+  }
+  if (activation.status === "ACTIVE" || activation.status === "GRACE") return null;
+  if (activation.status === "EXPIRED") {
+    const d = activation.expiresAt ? new Date(activation.expiresAt).toISOString() : "";
+    return "This license expired" + (d ? " on " + d : "") + ". Contact your vendor to renew (MFGMAX_LICENSE).";
+  }
+  return "No valid license and the evaluation (grace) period has ended. Activate with a license key (MFGMAX_LICENSE).";
+}
+
+module.exports = { DesktopApp, argValue, resolveDataDir, resolveAppRoot, resolveResourcesDir, licenseStartError };

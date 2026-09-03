@@ -13,7 +13,7 @@
 const { app, BrowserWindow, Tray, Menu, dialog, shell, ipcMain, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { DesktopApp, resolveResourcesDir } = require("../launcher");
+const { DesktopApp, resolveResourcesDir, licenseStartError } = require("../launcher");
 
 let tray = null;
 let mainWindow = null;
@@ -221,6 +221,20 @@ app.whenReady().then(async () => {
   appInstance = new DesktopApp({ dataDir: process.env.MFGMAX_DATA_DIR, log: (m) => console.log("[launcher]", m) });
   appInstance.ensureDirs();
   appInstance.evaluateLicense();
+  // License gate: GRACE keeps running (offline-first evaluation window), but an
+  // EXPIRED key or an INVALID state (grace over, no key) blocks the boot BEFORE
+  // the database or server start — the machine cannot run unlicensed.
+  const licErr = licenseStartError(appInstance.state.license);
+  if (licErr) {
+    await dialog.showMessageBox({
+      type: "error",
+      title: "License Required",
+      message: "Manufacturing Max cannot start",
+      detail: licErr + "\n\nInstall a license key and restart the application.",
+    });
+    app.quit();
+    return;
+  }
   appInstance.ensureEmbeddedDb();
   appInstance.startDb();
   if (!(await appInstance.waitForDbReady())) dialog.showErrorBox("Database", "Database did not become ready.");
