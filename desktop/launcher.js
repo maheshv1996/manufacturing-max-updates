@@ -782,8 +782,11 @@ class DesktopApp {
 // ---------------------------------------------------------------------------
 async function main(argv) {
   const args = argv.slice(2);
-  const dataDir = args[args.indexOf("--data-dir") + 1];
-  const port = Number(args[args.indexOf("--port") + 1] || 3000);
+  // Only treat the token AFTER a flag as its value — without this, running a
+  // bare action like `node launcher.js license` resolved the data dir to the
+  // literal word "license" and created <cwd>/license/… (real pollution bug).
+  const dataDir = argValue(args, "--data-dir");
+  const port = Number(argValue(args, "--port") || 3000);
   const action = args.find((a) => ["start", "backup", "export", "license", "health"].includes(a)) || "start";
 
   const app = new DesktopApp({ dataDir, port, log: (m) => console.log(m) });
@@ -802,7 +805,7 @@ async function main(argv) {
   }
   if (action === "export") {
     app.ensureDirs();
-    const target = args[args.indexOf("--to") + 1];
+    const target = argValue(args, "--to");
     if (!target) throw new Error("--to <dir> required");
     console.log(JSON.stringify(app.exportToDrive(target)));
     return;
@@ -861,4 +864,9 @@ if (require.main === module) {
   });
 }
 
-module.exports = { DesktopApp, resolveDataDir, resolveAppRoot, resolveResourcesDir };
+function argValue(args, flag) {
+  const i = args.indexOf(flag);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
+module.exports = { DesktopApp, argValue, resolveDataDir, resolveAppRoot, resolveResourcesDir };

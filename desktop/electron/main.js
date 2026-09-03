@@ -141,7 +141,7 @@ function buildTrayMenu() {
         if (ok.response !== 0) return;
         try {
           await appInstance.restoreFrom(picked.filePaths[0]);
-          appInstance.restartServer?.();
+          // restoreFrom() restarts the server itself (stop -> swap -> start).
           dialog.showMessageBox({ type: "info", message: "Restore complete. Server restarted." });
         } catch (e) {
           dialog.showErrorBox("Restore failed", e.message);
@@ -263,9 +263,10 @@ app.whenReady().then(async () => {
   mainWindow.webContents.on("did-finish-load", () => armStaleGuard(appInstance.port));
 });
 
-app.on("window-all-closed", (e) => {
-  // Keep running in tray.
-  e.preventDefault();
+app.on("window-all-closed", () => {
+  // Keep running in tray. Note: Electron emits this event with NO arguments,
+  // so any `event` parameter is undefined — never call preventDefault() here.
+  // Simply subscribing is what stops the default quit on Windows/Linux.
 });
 
 if (gotLock) {

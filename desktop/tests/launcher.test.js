@@ -10,7 +10,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { DesktopApp } = require("../launcher");
+const { DesktopApp, argValue } = require("../launcher");
 const embeddedDb = require("../lib/embeddedDb");
 
 function tmpdir() {
@@ -89,6 +89,18 @@ test("physicalRestore rejects a folder that is not a pgdata backup", () => {
     () => embeddedDb.physicalRestore({ dataDir: dir, binDir, backupsDir, backupName: "pgdata-notreally", log: () => {} }),
     /no embedded cluster/
   );
+});
+
+test("CLI arg parsing never mistakes the action word for a flag value", () => {
+  // Regression: `node launcher.js license` (no --data-dir) used to resolve the
+  // data dir to the literal word "license" and created <cwd>/license/… — a
+  // real project-root pollution bug on bare-action invocations.
+  assert.strictEqual(argValue(["license"], "--data-dir"), undefined);
+  assert.strictEqual(argValue(["start"], "--port"), undefined);
+  assert.strictEqual(argValue(["export"], "--to"), undefined);
+  assert.strictEqual(argValue(["backup", "--data-dir", "/tmp/d1"], "--data-dir"), "/tmp/d1");
+  assert.strictEqual(argValue(["--data-dir", "/tmp/d1", "start"], "--data-dir"), "/tmp/d1");
+  assert.strictEqual(argValue(["export", "--to", "/pendrive"], "--to"), "/pendrive");
 });
 
 test("physicalRestore validates the PG_VERSION marker before touching the live cluster", () => {
