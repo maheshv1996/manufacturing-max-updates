@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { getComplianceFlags } from "@/lib/complianceDigest";
+import { fromPaise } from "@/lib/money";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -74,12 +75,15 @@ export async function GET(req: Request) {
 
     const sum = (rs: any[], f: string) =>
       rs.reduce((s, r) => s + Number(r[f] || 0), 0);
-    const invoiced = sum(invoices, "totalValue");
-    const collected = sum(invoices, "paidAmount");
-    const outstanding = allInvoices
-      .filter((i) => i.status !== "PAID")
-      .reduce((s, i) => s + (Number(i.totalValue) - Number(i.paidAmount)), 0);
-    const prevInvoiced = sum(prevInvoices, "totalValue");
+    // Ledger-style fixed point: invoice rows store paise — expose rupees.
+    const invoiced = fromPaise(sum(invoices, "totalValue"));
+    const collected = fromPaise(sum(invoices, "paidAmount"));
+    const outstanding = fromPaise(
+      allInvoices
+        .filter((i) => i.status !== "PAID")
+        .reduce((s, i) => s + (Number(i.totalValue) - Number(i.paidAmount)), 0),
+    );
+    const prevInvoiced = fromPaise(sum(prevInvoices, "totalValue"));
     const wonValue = sum(wonQuotes, "quotedPrice");
     const prevWonValue = sum(prevWonQuotes, "quotedPrice");
     const sentPipeline = sum(sentQuotes, "quotedPrice");

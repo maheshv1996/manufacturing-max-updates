@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       // Create payment record
       const paymentRecord = await prisma.paymentRecord.create({
         data: {
-          amount: paymentLink.amount / 100, // convert paise to INR
+          amount: paymentLink.amount, // gateway amount is ALREADY integer paise
           method: "RAZORPAY",
           reference: paymentLink.reference_id,
           extendsUntil: newDueDate,

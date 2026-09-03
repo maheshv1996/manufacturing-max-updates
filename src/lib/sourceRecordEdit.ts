@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { toPaise } from "./money";
 
 export interface EditRecordPayload {
   entityType:
@@ -1052,7 +1053,8 @@ export async function editSourceRecord(payload: EditRecordPayload) {
       ];
 
       const dataToUpdate: any = { adjustmentHistory: newHistory };
-      if (updates.paidAmount !== undefined) dataToUpdate.paidAmount = Number(updates.paidAmount);
+      // Admin edits arrive in rupees; rows store integer paise.
+      if (updates.paidAmount !== undefined) dataToUpdate.paidAmount = toPaise(Number(updates.paidAmount));
       if (updates.status) dataToUpdate.status = updates.status;
 
       updatedRecord = await prisma.invoice.update({

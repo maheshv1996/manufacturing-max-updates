@@ -2,6 +2,7 @@ import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { numberToIndianWords } from "@/lib/invoicingEngine";
+import { fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +37,16 @@ export async function GET(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    const totalWords = numberToIndianWords(invoice.totalValue);
+    // Ledger-style fixed point: row stores paise — expose the rupee contract.
+    const invoiceRupees = {
+      ...fromPaiseRow("Invoice", invoice),
+      lines: Array.isArray(invoice.lines)
+        ? fromPaiseRows("InvoiceLine", invoice.lines)
+        : invoice.lines,
+    };
+    const totalWords = numberToIndianWords(invoiceRupees.totalValue);
 
-    return NextResponse.json({ invoice, totalWords });
+    return NextResponse.json({ invoice: invoiceRupees, totalWords });
   } catch (error: any) {
     console.error("GET /api/invoices/[id] error:", error);
     return NextResponse.json(

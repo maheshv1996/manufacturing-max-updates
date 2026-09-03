@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { fromPaise } from "./money";
 import { getSettings } from "./settings";
 import {
   startOfDay,
@@ -224,7 +225,8 @@ export async function analyzeQuery(
     const rows: (string | number)[][] = [];
 
     invoices.forEach((inv) => {
-      const owed = (inv.totalValue || 0) - (inv.paidAmount || 0);
+      // Ledger-style fixed point: invoice rows store paise — expose rupees.
+      const owed = fromPaise(Number(inv.totalValue || 0)) - fromPaise(Number(inv.paidAmount || 0));
       totalOwed += owed;
       const daysOverdue = inv.dueDate
         ? Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / (1000 * 3600 * 24))

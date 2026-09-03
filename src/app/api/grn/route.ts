@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 import { poOrderedValue, poFullyReceived } from "@/lib/poLines";
 import { autoPostToGL } from "@/lib/glPosting";
+import { toPaise, toPaiseRow, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 const MATCH_TOLERANCE_PCT = 0.5; // 0.5% value tolerance
 
@@ -190,16 +191,24 @@ export async function GET() {
       : [];
     const glByInvId = new Map(glVouchers.map((g) => [g.sourceId, g.entryNumber]));
 
+    // Supplier invoices store paise; matching compares against PO rupee rates
+    // and the UI expects rupees — convert each row (and its lines) up front.
+    const invoiceToRupees = (inv: any) => ({
+      ...fromPaiseRow("SupplierInvoice", inv),
+      lines: Array.isArray(inv.lines) ? fromPaiseRows("SupplierInvoiceLine", inv.lines) : inv.lines,
+    });
     const enriched = grns.map((g) => ({
       ...g,
-      matchStatus: computeMatch(g, g.po, g.supplierInvoice || null),
+      supplierInvoice: g.supplierInvoice ? invoiceToRupees(g.supplierInvoice) : g.supplierInvoice,
+      matchStatus: computeMatch(g, g.po, g.supplierInvoice ? invoiceToRupees(g.supplierInvoice) : null),
     }));
 
     // Live invoice status vs match
     const now = Date.now();
     const enrichedInvoices = invoices.map((inv) => {
+      const invRupees = invoiceToRupees(inv);
       const matchStatus = inv.grn
-        ? computeMatch(inv.grn, inv.po || { qty: 0, unitCost: 0 }, inv)
+        ? computeMatch(inv.grn, inv.po || { qty: 0, unitCost: 0 }, invRupees)
         : "UNMATCHED";
       // Aging: days since invoice date (for unpaid/mismatched) and days overdue (past dueDate)
       const daysSinceInvoice = Math.max(
@@ -219,7 +228,7 @@ export async function GET() {
       else if (daysSinceInvoice > 30) bucket = "30to60";
       else if (daysSinceInvoice > 0) bucket = "1to30";
       return {
-        ...inv,
+        ...invRupees,
         matchStatus,
         glRef: glByInvId.get(inv.id) || null,
         aging: { daysSinceInvoice, daysOverdue, bucket },
@@ -539,7 +548,7 @@ export async function POST(request: Request) {
 
       const created = await prisma.$transaction(async (tx) => {
         const inv = await (tx as any).supplierInvoice.create({
-          data: {
+          data: toPaiseRow("SupplierInvoice", {
             invoiceNumber,
             supplierId,
             poId: poId || null,
@@ -549,19 +558,21 @@ export async function POST(request: Request) {
             invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
             dueDate: dueDate ? new Date(dueDate) : null,
             notes: notes || null,
-          },
+          }),
         });
         if (poRows.length > 0) {
           await (tx as any).supplierInvoiceLine.createMany({
-            data: poRows.map((r: any) => ({
-              invoiceId: inv.id,
-              poLineId: r.poLineId || null,
-              rawMaterialId: r.rawMaterialId,
-              lineNo: r.lineNo,
-              qty: r.qty,
-              unitCost: r.unitCost,
-              amount: r.amount,
-            })),
+            data: poRows.map((r: any) =>
+              toPaiseRow("SupplierInvoiceLine", {
+                invoiceId: inv.id,
+                poLineId: r.poLineId || null,
+                rawMaterialId: r.rawMaterialId,
+                lineNo: r.lineNo,
+                qty: r.qty,
+                unitCost: r.unitCost,
+                amount: r.amount,
+              }),
+            ),
           });
         }
         return inv;
@@ -830,7 +841,9 @@ export async function POST(request: Request) {
         ? await prisma.purchaseOrder.findUnique({ where: { id: inv.poId }, include: { lines: true } })
         : null;
       const grnInv = inv.grnId ? await prisma.goodsReceiptNote.findUnique({ where: { id: inv.grnId } }) : null;
-      const match = computeMatch(grnInv || { receivedQty: 0 }, po || { qty: 0, unitCost: 0 }, inv);
+      // Rows store paise; matching compares against PO rupee rates → rupee view.
+      const invR = fromPaiseRow("SupplierInvoice", inv);
+      const match = computeMatch(grnInv || { receivedQty: 0 }, po || { qty: 0, unitCost: 0 }, invR);
       if (match !== "MATCHED") {
         return NextResponse.json(
           {
@@ -841,7 +854,7 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      const payAmount = amount ? Number(amount) : inv.totalAmount;
+      const payAmount = amount ? Number(amount) : Number(invR.totalAmount);
       let treasuryId: string | null = null;
       const updated = await prisma.$transaction(async (tx) => {
         if (clientId) {
@@ -862,7 +875,7 @@ export async function POST(request: Request) {
           data: {
             type: "OUTFLOW",
             account: "Main",
-            amount: payAmount,
+            amount: toPaise(Number(payAmount)),
             reference: freshInv.invoiceNumber,
             category: "Supplier Payment",
             notes: `Paid ${freshInv.invoiceNumber} (3-way matched) via ${method || "Bank"}`,

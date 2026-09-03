@@ -6,41 +6,22 @@ import { requireManagerLevel } from "@/lib/managerGate";
 import { logAudit } from "@/lib/audit";
 import { nextSequence } from "@/lib/sequence";
 import { autoPostToGL } from "@/lib/glPosting";
+import { toPaise, fromPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
+import { CATEGORY_ACCOUNT } from "@/lib/expenseCategories";
 
 export const dynamic = "force-dynamic";
 
-// Category → GL expense account. Fallback = 5140 Administrative Expenses.
-const CATEGORY_ACCOUNT: Record<string, string> = {
-  TRAVEL: "5120",
-  FUEL: "5120",
-  FOOD: "5140",
-  STATIONERY: "5140",
-  MARKETING: "5130",
-  REPAIR: "5100",
-  UTILITY: "5090",
-  QUALITY: "5060",
-  TOOLING: "5040",
-  SUBCONTRACT: "5030",
-  TRAINING: "5140",
-  OTHER: "5140",
-};
-
-export const CATEGORY_META: Record<string, { label: string; cls: string }> = {
-  TRAVEL: { label: "Travel", cls: "bg-sky-500/10 text-sky-400" },
-  FUEL: { label: "Fuel", cls: "bg-amber-500/10 text-amber-400" },
-  FOOD: { label: "Food & Dining", cls: "bg-orange-500/10 text-orange-400" },
-  STATIONERY: { label: "Stationery", cls: "bg-slate-500/10 text-slate-300" },
-  MARKETING: { label: "Marketing", cls: "bg-purple-500/10 text-purple-400" },
-  REPAIR: { label: "Repairs", cls: "bg-rose-500/10 text-rose-400" },
-  UTILITY: { label: "Utilities", cls: "bg-teal-500/10 text-teal-400" },
-  QUALITY: { label: "Quality", cls: "bg-emerald-500/10 text-emerald-400" },
-  TOOLING: { label: "Tooling", cls: "bg-indigo-500/10 text-indigo-400" },
-  SUBCONTRACT: { label: "Subcontract", cls: "bg-cyan-500/10 text-cyan-400" },
-  TRAINING: { label: "Training", cls: "bg-lime-500/10 text-lime-400" },
-  OTHER: { label: "Other", cls: "bg-slate-500/10 text-slate-400" },
-};
-
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
+/** Claim row + items → rupee API contract (rows store paise). */
+function claimToRupees(claim: any): any {
+  return {
+    ...fromPaiseRow("ExpenseClaim", claim),
+    items: Array.isArray(claim?.items)
+      ? fromPaiseRows("ExpenseClaimItem", claim.items)
+      : claim?.items,
+  };
+}
 
 export async function GET() {
   try {
@@ -61,18 +42,25 @@ export async function GET() {
     })) as Array<{ status: string; _sum: { totalAmount: number | null }; _count: { _all: number } }>;
     const statusOf = (s: string) => byStatus.find((b) => b.status === s);
     const now = new Date();
+    // Ledger-style fixed point: rows store paise — expose the rupee contract.
+    const claimsRupees = claims.map((c: any) => ({
+      ...fromPaiseRow("ExpenseClaim", c),
+      items: Array.isArray(c.items) ? fromPaiseRows("ExpenseClaimItem", c.items) : c.items,
+    }));
     return NextResponse.json({
-      claims,
+      claims: claimsRupees,
       stats: {
         openApprovals: (statusOf("SUBMITTED")?._count._all || 0) + (statusOf("APPROVED")?._count._all || 0),
-        paidTotal: statusOf("PAID")?._sum.totalAmount || 0,
-        approvedOutstanding: statusOf("APPROVED")?._sum.totalAmount || 0,
-        monthTotal: claims
-          .filter((c: any) => {
-            const d = c.expenseDate ? new Date(c.expenseDate) : null;
-            return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-          })
-          .reduce((s: number, c: any) => s + Number(c.totalAmount || 0), 0),
+        paidTotal: fromPaise(statusOf("PAID")?._sum.totalAmount || 0),
+        approvedOutstanding: fromPaise(statusOf("APPROVED")?._sum.totalAmount || 0),
+        monthTotal: fromPaise(
+          claims
+            .filter((c: any) => {
+              const d = c.expenseDate ? new Date(c.expenseDate) : null;
+              return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            })
+            .reduce((s: number, c: any) => s + Number(c.totalAmount || 0), 0),
+        ),
       },
     });
   } catch (error: any) {
@@ -150,7 +138,7 @@ export async function POST(req: Request) {
           claimantName: displayName,
           claimantCode: displayCode || null,
           claimantUserId,
-          totalAmount: total,
+          totalAmount: toPaise(total),
           category: primary,
           expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
           submittedBy: user.name || user.id,
@@ -159,7 +147,7 @@ export async function POST(req: Request) {
             create: rows.map((r) => ({
               category: r.category,
               description: r.description,
-              amount: r.amount,
+              amount: toPaise(r.amount),
               expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
             })),
           },
@@ -173,7 +161,18 @@ export async function POST(req: Request) {
         entityId: claim.id,
         details: `Claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
       });
-      return NextResponse.json({ success: true, claim }, { status: 201 });
+      return NextResponse.json(
+        {
+          success: true,
+          claim: {
+            ...fromPaiseRow("ExpenseClaim", claim),
+            items: Array.isArray((claim as any).items)
+              ? fromPaiseRows("ExpenseClaimItem", (claim as any).items)
+              : (claim as any).items,
+          },
+        },
+        { status: 201 },
+      );
     }
 
     const mgr = await requireManagerLevel(user);
@@ -199,7 +198,7 @@ export async function POST(req: Request) {
         entityId: claim.id,
         details: `${claim.claimNumber} (${claim.claimantName}) ${claim.totalAmount} approved — ${(reason || "").slice(0, 80)}`,
       });
-      return NextResponse.json({ claim: updated });
+      return NextResponse.json({ claim: claimToRupees(updated) });
     }
 
     if (action === "reject") {
@@ -229,7 +228,7 @@ export async function POST(req: Request) {
         entityId: claim.id,
         details: `${claim.claimNumber} rejected — ${String(reason).slice(0, 80)}`,
       });
-      return NextResponse.json({ claim: updated });
+      return NextResponse.json({ claim: claimToRupees(updated) });
     }
 
     if (action === "pay") {
@@ -239,14 +238,15 @@ export async function POST(req: Request) {
       if (claim.status !== "APPROVED") {
         return NextResponse.json({ error: `Claim is ${claim.status} — only APPROVED claims can be paid` }, { status: 400 });
       }
-      const total = round2(Number(claim.totalAmount));
-      if (total <= 0) return NextResponse.json({ error: "Nothing to pay" }, { status: 400 });
+      const totalPaise = round2(Number(claim.totalAmount)); // stored paise
+      if (totalPaise <= 0) return NextResponse.json({ error: "Nothing to pay" }, { status: 400 });
+      const total = fromPaise(totalPaise); // rupee view for GL/audit
       const payMethod = method ? String(method).slice(0, 50) : "Bank";
       const treasury = await prisma.treasuryTransaction.create({
         data: {
           type: "OUTFLOW",
           account: "Main",
-          amount: total,
+          amount: totalPaise,
           reference: claim.claimNumber,
           category: "Expense Reimbursement",
           notes: `${claim.claimantName} — ${(reason || "").slice(0, 160)}`,
@@ -271,7 +271,8 @@ export async function POST(req: Request) {
         details: `${claim.claimNumber} reimbursed ${total} via ${payMethod}${(reason ? " — " + String(reason).slice(0, 80) : "")}`,
       });
 
-      // GL auto-post: Dr expense account(s) by item category, Cr Bank
+      // GL auto-post: Dr expense account(s) by item category, Cr Bank — item
+      // amounts are stored paise; the engine contract is rupees.
       const byAccount = new Map<string, number>();
       for (const it of claim.items) {
         const acc = CATEGORY_ACCOUNT[it.category] || "5140";
@@ -279,8 +280,9 @@ export async function POST(req: Request) {
       }
       const glLines: any[] = [];
       for (const [acc, amt] of byAccount) {
-        if (amt > 0.01)
-          glLines.push({ accountCode: acc, debit: round2(amt), reference: claim.claimNumber, narration: `Expense ${claim.claimNumber} — ${claim.claimantName}` });
+        const amtRupees = fromPaise(amt);
+        if (amtRupees > 0.01)
+          glLines.push({ accountCode: acc, debit: round2(amtRupees), reference: claim.claimNumber, narration: `Expense ${claim.claimNumber} — ${claim.claimantName}` });
       }
       glLines.push({ accountCode: "1020", credit: total, reference: claim.claimNumber, narration: `Reimbursement ${claim.claimNumber} via ${payMethod}` });
       await autoPostToGL({
@@ -291,7 +293,7 @@ export async function POST(req: Request) {
         lines: glLines,
       });
 
-      return NextResponse.json({ claim: paid });
+      return NextResponse.json({ claim: claimToRupees(paid) });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

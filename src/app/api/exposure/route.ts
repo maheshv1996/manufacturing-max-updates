@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { termsDays } from "@/lib/winLoss";
+import { fromPaiseRow } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,9 @@ export async function GET() {
     for (const inv of invoices) {
       const name = (inv.customerName || "").trim();
       if (!name || inv.status === "PAID") continue;
-      const outstanding = inv.totalValue - inv.paidAmount;
+      // Ledger-style fixed point: rows store paise — compute in rupees.
+      const invR = fromPaiseRow("Invoice", inv);
+      const outstanding = Number(invR.totalValue) - Number(invR.paidAmount || 0);
       if (outstanding <= 0) continue;
       const row = exposureByCustomer.get(name) || {
         receivables: 0,

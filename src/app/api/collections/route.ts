@@ -5,6 +5,7 @@ import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
 import { logAudit } from "@/lib/audit";
 import { differenceInCalendarDays } from "date-fns";
+import { fromPaiseRow } from "@/lib/money";
 
 export const maxDuration = 60;
 
@@ -49,7 +50,9 @@ export async function GET(req: Request) {
 
     const now = new Date();
     const aged = invoices.map((inv) => {
-      const outstanding = Number(inv.totalValue) - Number(inv.paidAmount || 0);
+      // Ledger-style fixed point: rows store paise — expose the rupee contract.
+      const invR = fromPaiseRow("Invoice", inv);
+      const outstanding = Number(invR.totalValue) - Number(invR.paidAmount || 0);
       const base = inv.dueDate
         ? new Date(inv.dueDate)
         : new Date(inv.invoiceDate);
@@ -60,8 +63,8 @@ export async function GET(req: Request) {
         customerName: inv.customerName,
         invoiceDate: inv.invoiceDate.toISOString(),
         dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
-        totalValue: inv.totalValue,
-        paidAmount: inv.paidAmount || 0,
+        totalValue: invR.totalValue,
+        paidAmount: invR.paidAmount || 0,
         outstanding,
         days,
         bucket: bucketFor(days),

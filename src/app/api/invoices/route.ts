@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { autoPostToGL } from "@/lib/glPosting";
 import { computeSalesOrderFulfilment } from "@/lib/salesOrders";
+import { toPaiseRow, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,12 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ invoices });
+    // Ledger-style fixed point: rows store paise — expose the rupee contract.
+    const invoicesRupees = invoices.map((inv: any) => ({
+      ...fromPaiseRow("Invoice", inv),
+      lines: Array.isArray(inv.lines) ? fromPaiseRows("InvoiceLine", inv.lines) : inv.lines,
+    }));
+    return NextResponse.json({ invoices: invoicesRupees });
   } catch (error: any) {
     console.error("GET /api/invoices error:", error);
     return NextResponse.json(
@@ -309,7 +315,7 @@ export async function POST(req: Request) {
 
           invoiceNumber = await nextSequenceTx(tx as any, "INV", 3);
           created = await (tx as any).invoice.create({
-            data: {
+            data: toPaiseRow("Invoice", {
               invoiceNumber,
               dispatchRecordId: dispatchRecordId || null,
               workOrderId: workOrderTx.id,
@@ -333,8 +339,8 @@ export async function POST(req: Request) {
                 : new Date(Date.now() + 30 * 86400000),
               status: "UNPAID",
               notes: notes || null,
-              lines: { create: lines },
-            },
+              lines: { create: lines.map((l: any) => toPaiseRow("InvoiceLine", l)) },
+            }),
             include: {
               dispatchRecord: true,
               workOrder: { include: { product: true } },
@@ -452,7 +458,7 @@ export async function POST(req: Request) {
 
           invoiceNumber = await nextSequenceTx(tx as any, "INV", 3);
           created = await (tx as any).invoice.create({
-            data: {
+            data: toPaiseRow("Invoice", {
               invoiceNumber,
               dispatchRecordId: null,
               workOrderId: null,
@@ -474,8 +480,8 @@ export async function POST(req: Request) {
                 : new Date(Date.now() + 30 * 86400000),
               status: "UNPAID",
               notes: notes || null,
-              lines: { create: lines },
-            },
+              lines: { create: lines.map((l: any) => toPaiseRow("InvoiceLine", l)) },
+            }),
             include: {
               dispatchRecord: true,
               workOrder: { include: { product: true } },
@@ -521,11 +527,21 @@ export async function POST(req: Request) {
           },
         });
 
-        return { invoice: created, taxCalc: null, lineItems: lines.length };
+        return {
+          invoice: {
+            ...fromPaiseRow("Invoice", created),
+            lines: Array.isArray(created.lines)
+              ? fromPaiseRows("InvoiceLine", created.lines)
+              : created.lines,
+          },
+          taxCalc: null,
+          lineItems: lines.length,
+        };
       });
 
       // GL auto-post: Dr Accounts Receivable, Cr Sales, Cr GST Output
-      const createdInv = result.invoice;
+      // (GL lines are built from the RUpee view of the stored paise row.)
+      const createdInv = fromPaiseRow("Invoice", result.invoice);
       if (createdInv && Number(createdInv.totalValue) > 0.01) {
         const outTax =
           Number(createdInv.cgstAmt || 0) +

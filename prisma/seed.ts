@@ -2,6 +2,7 @@ import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { scryptSync, randomBytes } from "crypto";
 import { DEFAULT_COA } from "../src/lib/glEngine";
+import { toPaiseRow, toPaise } from "../src/lib/money";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -2036,7 +2037,7 @@ async function main() {
     // Seed Invoices (UNPAID INTRA, PAID INTER, PARTIAL INTRA)
   // Invoice 1: INTRA, UNPAID (No payments)
   await (prisma as any).invoice.create({
-    data: {
+    data: toPaiseRow("Invoice", {
       invoiceNumber: "INV-2026-001",
       dispatchRecordId: disp1.id,
       workOrderId: wo1.id,
@@ -2054,12 +2055,12 @@ async function main() {
       dueDate: new Date(Date.now() + 30 * 86400000), // Net 30
       status: "UNPAID",
       notes: "First batch delivery",
-    },
+    }),
   });
 
   // Invoice 2: INTER, PAID (Fully paid)
   const invoice2 = await (prisma as any).invoice.create({
-    data: {
+    data: toPaiseRow("Invoice", {
       invoiceNumber: "INV-2026-002",
       dispatchRecordId: disp2.id,
       workOrderId: wo1.id,
@@ -2076,13 +2077,13 @@ async function main() {
       paidAmount: 177000,
       dueDate: new Date(Date.now() - 5 * 86400000), // Overdue by 5 days
       status: "PAID",
-    },
+    }),
   });
 
   await (prisma as any).payment.create({
     data: {
       invoiceId: invoice2.id,
-      amount: 177000,
+      amount: toPaise(177000),
       method: "BANK_TRANSFER",
       reference: "UTR-HDFC-991823",
       receivedBy: "Admin",
@@ -2102,7 +2103,7 @@ async function main() {
   });
 
   const invoice3 = await (prisma as any).invoice.create({
-    data: {
+    data: toPaiseRow("Invoice", {
       invoiceNumber: "INV-2026-003",
       dispatchRecordId: dispatch3.id,
       workOrderId: wo2.id,
@@ -2119,13 +2120,13 @@ async function main() {
       paidAmount: 20000,
       dueDate: new Date(Date.now() - 65 * 86400000), // Overdue by 65 days
       status: "PARTIAL",
-    },
+    }),
   });
 
   await (prisma as any).payment.create({
     data: {
       invoiceId: invoice3.id,
-      amount: 20000,
+      amount: toPaise(20000),
       method: "UPI",
       reference: "UPI-TID-12345",
       receivedBy: "Admin",
@@ -2446,7 +2447,7 @@ async function main() {
         { date: new Date(corpNow.getTime() - 2 * 86400000), type: "OUTFLOW", account: "Main", amount: 2150000, reference: "PYMT-2026-118", category: "Supplier Payment", notes: "AeroHeat Treat Ltd." },
         { date: new Date(corpNow.getTime() - 4 * 86400000), type: "OUTFLOW", account: "Payroll", amount: 6800000, reference: "PAY-2026-07", category: "Payroll", notes: "July salary disbursal." },
         { date: new Date(corpNow.getTime() - 6 * 86400000), type: "INFLOW", account: "Main", amount: 4120000, reference: "REC-2026-327", category: "Customer Receipt", notes: "Aerospace Systems GmbH - Milestone 2." },
-      ],
+      ].map((r: any) => toPaiseRow("TreasuryTransaction", r)),
     });
   }
 
@@ -2859,7 +2860,7 @@ async function main() {
       });
       // Invoice-1: correct value 300 × 380 = 114,000 + 18% GST → MATCHED
       const inv1 = await prisma.supplierInvoice.create({
-        data: {
+        data: toPaiseRow("SupplierInvoice", {
           invoiceNumber: "INV-2026-8831",
           supplierId: s3.id,
           poId: po3.id,
@@ -2870,12 +2871,12 @@ async function main() {
           invoiceDate: new Date(corpNow.getTime() - 2 * 86400000),
           dueDate: new Date(corpNow.getTime() + 28 * 86400000),
           status: "MATCHED",
-        },
+        }),
       });
       await prisma.goodsReceiptNote.update({ where: { id: grn2.id }, data: { matchStatus: "MATCHED" } });
       // Invoice-2: WRONG value (billed 150,000 instead of 45,000 for PO-002) → MISMATCHED
       const inv2 = await prisma.supplierInvoice.create({
-        data: {
+        data: toPaiseRow("SupplierInvoice", {
           invoiceNumber: "INV-2026-7788",
           supplierId: s2.id,
           poId: po2.id,
@@ -2886,7 +2887,7 @@ async function main() {
           invoiceDate: new Date(corpNow.getTime() - 1 * 86400000),
           dueDate: new Date(corpNow.getTime() + 30 * 86400000),
           status: "MISMATCHED",
-        },
+        }),
       });
       await prisma.goodsReceiptNote.update({ where: { id: grn1.id }, data: { matchStatus: "MISMATCHED" } });
       // Bring the two POs to full RECEIVED (match the seeded 400 + 600 receipt history)

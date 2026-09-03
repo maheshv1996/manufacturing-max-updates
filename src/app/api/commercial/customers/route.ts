@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
+import { fromPaise } from "@/lib/money";
 import { parseOr400 } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,8 @@ export async function GET() {
     const openBy: Record<string, number> = {};
     for (const i of invoices) {
       if (i.status === "PAID") continue;
-      const open = (i.totalValue || 0) - (i.paidAmount || 0);
+      // Ledger-style fixed point: rows store paise — expose the rupee contract.
+      const open = fromPaise(Number(i.totalValue || 0)) - fromPaise(Number(i.paidAmount || 0));
       if (open > 0) openBy[i.customerName] = (openBy[i.customerName] || 0) + open;
     }
 

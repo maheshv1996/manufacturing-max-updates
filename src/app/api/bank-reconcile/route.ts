@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export async function GET() {
   const headersList = await headers();
@@ -37,9 +38,17 @@ export async function GET() {
     const total = entries.length;
     const matched = entries.filter((e) => e.matchStatus !== "UNMATCHED").length;
 
+    // Ledger-style fixed point: rows store paise — expose the rupee contract.
+    const entriesRupees = entries.map((e: any) => ({
+      ...fromPaiseRow("BankStatementEntry", e),
+      matchedTreasury: e.matchedTreasury
+        ? fromPaiseRow("TreasuryTransaction", e.matchedTreasury)
+        : e.matchedTreasury,
+    }));
+    const treasuryRupees = fromPaiseRows("TreasuryTransaction", treasury);
     return NextResponse.json({
-      entries,
-      treasury,
+      entries: entriesRupees,
+      treasury: treasuryRupees,
       summary: {
         total,
         matched,
@@ -101,12 +110,12 @@ export async function POST(req: Request) {
       let autoMatched = 0;
       for (const row of rows) {
         const date = new Date(row.date);
-        const amount = Number(row.amount) || 0;
-        if (isNaN(date.getTime()) || amount === 0) continue;
+        const amountPaise = toPaise(Number(row.amount) || 0); // CSV is rupees → paise
+        if (isNaN(date.getTime()) || amountPaise === 0) continue;
 
         const match = unmatchedTreasury.find(
           (t) =>
-            Math.abs(Math.abs(t.amount) - Math.abs(amount)) < 0.01 &&
+            Math.abs(Math.abs(t.amount) - Math.abs(amountPaise)) <= 1 && // both paise
             new Date(t.date).toDateString() === date.toDateString(),
         );
 
@@ -115,9 +124,9 @@ export async function POST(req: Request) {
             data: {
               date,
               description: String(row.description || ""),
-              amount,
+              amount: amountPaise,
               balanceAfter:
-                row.balanceAfter != null ? Number(row.balanceAfter) : null,
+                row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
               matchedTreasuryId: match.id,
               matchStatus: "MATCHED",
               uploadBatch: batch,
@@ -129,9 +138,9 @@ export async function POST(req: Request) {
             data: {
               date,
               description: String(row.description || ""),
-              amount,
+              amount: amountPaise,
               balanceAfter:
-                row.balanceAfter != null ? Number(row.balanceAfter) : null,
+                row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
               matchStatus: "UNMATCHED",
               uploadBatch: batch,
             },
@@ -171,7 +180,12 @@ export async function POST(req: Request) {
       details: `${user.name || "Admin"} ${action} on bank reconciliation`,
     });
 
-    return NextResponse.json({ success: true, record: result });
+    // match/unmatch/delete return a ledger row — expose the rupee contract.
+    const recordRupees =
+      result && typeof result === "object" && !Array.isArray(result) && "amount" in result
+        ? fromPaiseRow("BankStatementEntry", result)
+        : result;
+    return NextResponse.json({ success: true, record: recordRupees });
   } catch (error) {
     console.error("POST /api/bank-reconcile error:", error);
     return NextResponse.json(

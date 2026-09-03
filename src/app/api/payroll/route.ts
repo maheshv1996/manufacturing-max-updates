@@ -5,6 +5,7 @@ import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
 import { logAudit } from "@/lib/audit";
 import { autoPostToGL } from "@/lib/glPosting";
+import { toPaise } from "@/lib/money";
 
 const STRUCTURE_FIELDS = [
   "employeeName",
@@ -279,7 +280,7 @@ export async function POST(req: Request) {
         data: {
           type: "OUTFLOW",
           account: "Main",
-          amount: total,
+          amount: toPaise(total),
           reference: `Payroll-${month}`,
           category: "Payroll Settlement",
           notes: `${(data.reason || "").slice(0, 200)} — net ${Math.round(netSum)} + statutory ${Math.round(statu)}`,

@@ -1,25 +1,31 @@
 /**
  * GL backfill — bring pre-auto-post documents into the ledger.
  * ---------------------------------------------------------------------------
- * autoPostToGL only covers documents created after it shipped; older sales
- * invoices and supplier invoices never entered the books. This enumerates
- * those documents (by mirroring each flow's exact line recipe from the stored
- * row — sales invoice, customer payment, supplier invoice) and posts the
- * missing journal entries idempotently through the same autoPostToGL path.
+ * autoPostToGL only covers documents created after it shipped; older documents
+ * never entered the books. This enumerates those documents (by mirroring each
+ * flow's exact line recipe from the stored rows) and posts the missing journal
+ * entries idempotently through the same autoPostToGL path.
  *
- * Document classes deliberately NOT covered here, because their splits are
- * runtime computations not fully reconstructable from a single stored row:
- * supplier/expense/payroll payments (treasury OUTFLOW rows — category-specific
- * line building), payroll accruals. The GL repair queue covers post-shipment
- * failures for those flows going forward.
+ * Covered classes: sales invoice, customer payment, supplier invoice, and —
+ * reconstructable from stored rows — supplier payments, expense
+ * reimbursements, payroll settlements (treasury OUTFLOW rows + the document
+ * they reference) and payroll accruals (payslip aggregates for the run month).
+ * Treasury rows whose reference does not resolve to a document (e.g. legacy
+ * cashbook entries) are skipped and reported, never guessed at.
  */
 import { prisma } from "./prisma";
 import { autoPostToGL, type AutoPostInput } from "./glPosting";
+import { fromPaise, fromPaiseRow } from "./money";
+import { CATEGORY_ACCOUNT } from "./expenseCategories";
 
 export type BackfillKind =
   | "sales_invoice"
   | "customer_payment"
-  | "supplier_invoice";
+  | "supplier_invoice"
+  | "supplier_payment"
+  | "expense_payment"
+  | "payroll_payment"
+  | "payroll_accrual";
 
 export interface BackfillCandidate {
   kind: BackfillKind;
@@ -61,7 +67,8 @@ async function salesInvoiceCandidates(keys: Set<string>): Promise<BackfillCandid
     },
   });
   const out: BackfillCandidate[] = [];
-  for (const inv of invoices) {
+  for (const invRaw of invoices) {
+    const inv = fromPaiseRow("Invoice", invRaw); // stored paise → rupee lines
     if (Number(inv.totalValue) <= 0.01) continue;
     if (keys.has(`INVOICE:${inv.id}`)) continue;
     const outTax =
@@ -114,7 +121,8 @@ async function customerPaymentCandidates(keys: Set<string>): Promise<BackfillCan
     },
   });
   const out: BackfillCandidate[] = [];
-  for (const p of payments) {
+  for (const pRaw of payments) {
+    const p = fromPaiseRow("Payment", pRaw); // stored paise → rupee lines
     if (Number(p.amount) <= 0.01) continue;
     if (keys.has(`PAYMENT:${p.id}`)) continue;
     out.push({
@@ -156,7 +164,8 @@ async function supplierInvoiceCandidates(keys: Set<string>): Promise<BackfillCan
     },
   });
   const out: BackfillCandidate[] = [];
-  for (const inv of invoices) {
+  for (const invRaw of invoices) {
+    const inv = fromPaiseRow("SupplierInvoice", invRaw); // stored paise → rupee lines
     if (Number(inv.totalAmount) <= 0.01) continue;
     if (keys.has(`VOUCHER:${inv.id}`)) continue;
     const net = Number(inv.amount || 0);
@@ -197,16 +206,202 @@ async function supplierInvoiceCandidates(keys: Set<string>): Promise<BackfillCan
   return out;
 }
 
+/** Supplier payments — treasury OUTFLOW rows (mirrors the GRN pay block). */
+async function supplierPaymentCandidates(keys: Set<string>): Promise<BackfillCandidate[]> {
+  const txs = await prisma.treasuryTransaction.findMany({
+    where: { type: "OUTFLOW", category: "Supplier Payment" },
+    orderBy: { date: "asc" },
+  });
+  // Resolve each row's reference to its supplier invoice (invoiceNumber).
+  const numbers = txs.map((t) => t.reference || "").filter(Boolean);
+  const invoices = numbers.length
+    ? await prisma.supplierInvoice.findMany({
+        where: { invoiceNumber: { in: numbers } },
+        select: { id: true, invoiceNumber: true, totalAmount: true },
+      })
+    : [];
+  const byNumber = new Map(invoices.map((i) => [i.invoiceNumber, i]));
+  const out: BackfillCandidate[] = [];
+  for (const tRaw of txs) {
+    if (keys.has(`PAYMENT:${tRaw.id}`)) continue;
+    const inv = tRaw.reference ? byNumber.get(tRaw.reference) : undefined;
+    if (!inv) continue; // legacy cashbook rows (no resolvable document) — never guessed
+    const amount = fromPaise(Number(tRaw.amount));
+    if (amount <= 0.01) continue;
+    out.push({
+      kind: "supplier_payment",
+      source: "PAYMENT",
+      sourceId: tRaw.id,
+      docNumber: inv.invoiceNumber,
+      memo: `Supplier payment ${inv.invoiceNumber} — settles payable (backfill)`,
+      date: tRaw.date ? new Date(tRaw.date) : undefined,
+      lines: [
+        {
+          accountCode: "2010",
+          debit: amount,
+          reference: inv.invoiceNumber,
+          narration: `Settled ${inv.invoiceNumber}`,
+        },
+        {
+          accountCode: "1020",
+          credit: amount,
+          reference: inv.invoiceNumber,
+          narration: "Bank — Main",
+        },
+      ],
+    });
+  }
+  return out;
+}
+
+/** Expense reimbursements — treasury OUTFLOW rows (mirrors the expenses pay block). */
+async function expensePaymentCandidates(keys: Set<string>): Promise<BackfillCandidate[]> {
+  const txs = await prisma.treasuryTransaction.findMany({
+    where: { type: "OUTFLOW", category: "Expense Reimbursement" },
+    orderBy: { date: "asc" },
+  });
+  const numbers = txs.map((t) => t.reference || "").filter(Boolean);
+  const claims = numbers.length
+    ? await prisma.expenseClaim.findMany({
+        where: { claimNumber: { in: numbers } },
+        include: { items: true },
+      })
+    : [];
+  const byNumber = new Map(claims.map((c) => [c.claimNumber, c]));
+  const out: BackfillCandidate[] = [];
+  for (const tRaw of txs) {
+    if (keys.has(`PAYMENT:${tRaw.id}`)) continue;
+    const claim = tRaw.reference ? byNumber.get(tRaw.reference) : undefined;
+    if (!claim || !Array.isArray(claim.items)) continue;
+    const total = fromPaise(Number(claim.totalAmount || 0));
+    if (total <= 0.01) continue;
+    const byAccount = new Map<string, number>();
+    for (const it of claim.items) {
+      const acc = CATEGORY_ACCOUNT[String(it.category).toUpperCase()] || "5140";
+      byAccount.set(acc, (byAccount.get(acc) || 0) + fromPaise(Number(it.amount || 0)));
+    }
+    const lines: AutoPostInput["lines"] = [];
+    for (const [acc, amt] of byAccount) {
+      if (amt > 0.01)
+        lines.push({ accountCode: acc, debit: amt, reference: claim.claimNumber, narration: `Expense ${claim.claimNumber} — ${claim.claimantName || "employee"}` });
+    }
+    lines.push({ accountCode: "1020", credit: total, reference: claim.claimNumber, narration: `Reimbursement ${claim.claimNumber} via Bank` });
+    out.push({
+      kind: "expense_payment",
+      source: "PAYMENT",
+      sourceId: tRaw.id,
+      docNumber: claim.claimNumber,
+      memo: `Expense reimbursement ${claim.claimNumber} — ${claim.claimantName || "employee"} (backfill)`,
+      date: tRaw.date ? new Date(tRaw.date) : undefined,
+      lines,
+    });
+  }
+  return out;
+}
+
+/** Payslip sums for a month, in rupee terms (payslip amounts stay rupee floats). */
+async function payrollSums(month: string) {
+  const sums = await prisma.payslip.aggregate({
+    where: { month },
+    _sum: {
+      grossPay: true,
+      pfDeduction: true,
+      ptDeduction: true,
+      esiDeduction: true,
+      netPay: true,
+      bonus: true,
+      arrears: true,
+      lopDeduction: true,
+    },
+  });
+  const s: any = sums._sum || {};
+  const statu =
+    Math.round(((s.pfDeduction || 0) + (s.esiDeduction || 0) + (s.ptDeduction || 0)) * 100) / 100;
+  const netSum = Math.round((s.netPay || 0) * 100) / 100;
+  const expense =
+    Math.round(
+      ((s.grossPay || 0) + (s.bonus || 0) + (s.arrears || 0) - (s.lopDeduction || 0)) * 100,
+    ) / 100;
+  return { statu, netSum, expense };
+}
+
+/** Payroll settlements — treasury OUTFLOW rows (mirrors the settle-run block). */
+async function payrollPaymentCandidates(keys: Set<string>): Promise<BackfillCandidate[]> {
+  const txs = await prisma.treasuryTransaction.findMany({
+    where: { type: "OUTFLOW", category: "Payroll Settlement" },
+    orderBy: { date: "asc" },
+  });
+  const out: BackfillCandidate[] = [];
+  for (const tRaw of txs) {
+    if (keys.has(`PAYMENT:${tRaw.id}`)) continue;
+    const m = /^Payroll-(\d{4}-\d{2})$/.exec(tRaw.reference || "");
+    if (!m) continue;
+    const { statu, netSum } = await payrollSums(m[1]);
+    if (netSum <= 0.01) continue;
+    const total = Math.round((netSum + statu) * 100) / 100;
+    out.push({
+      kind: "payroll_payment",
+      source: "PAYMENT",
+      sourceId: tRaw.id,
+      docNumber: `Payroll-${m[1]}`,
+      memo: `Payroll settlement ${m[1]} — net ${netSum} + statutory ${statu} (backfill)`,
+      date: tRaw.date ? new Date(tRaw.date) : undefined,
+      lines: [
+        { accountCode: "2050", debit: netSum, narration: "Net wages paid" },
+        ...(statu > 0.01
+          ? [{ accountCode: "2030", debit: statu, narration: "PF / ESI / PT remitted" }]
+          : []),
+        { accountCode: "1020", credit: total, narration: "Bank — payroll" },
+      ],
+    });
+  }
+  return out;
+}
+
+/** Payroll accruals — approved runs with payslips, no accrual voucher (mirrors approve-run). */
+async function payrollAccrualCandidates(keys: Set<string>): Promise<BackfillCandidate[]> {
+  const runs = await prisma.payrollRun.findMany({
+    where: { approvedAt: { not: null } },
+    orderBy: { month: "asc" },
+  });
+  const out: BackfillCandidate[] = [];
+  for (const run of runs) {
+    if (keys.has(`VOUCHER:${run.id}`)) continue;
+    const { statu, netSum, expense } = await payrollSums(run.month);
+    if (netSum <= 0.01) continue;
+    const lines: AutoPostInput["lines"] = [
+      { accountCode: "5080", debit: expense, narration: `Payroll ${run.month} — net ${netSum} + statutory ${statu}` },
+    ];
+    if (statu > 0.01)
+      lines.push({ accountCode: "2030", credit: statu, narration: "PF / ESI / PT statutory dues" });
+    lines.push({ accountCode: "2050", credit: netSum, narration: "Net wages payable (bank transfer)" });
+    out.push({
+      kind: "payroll_accrual",
+      source: "VOUCHER",
+      sourceId: run.id,
+      docNumber: `Payroll-${run.month}`,
+      memo: `Payroll run ${run.month} approved — salaries & wages accrual (backfill)`,
+      date: run.approvedAt || undefined,
+      lines,
+    });
+  }
+  return out;
+}
+
 /** Enumerate every document the ledger is missing (preview + execute share this). */
 export async function listGlBackfillCandidates(): Promise<BackfillCandidate[]> {
   const keys = await existingLedgerKeys();
-  const [a, b, c] = await Promise.all([
+  const [a, b, c, d, e, f, g] = await Promise.all([
     salesInvoiceCandidates(keys),
     customerPaymentCandidates(keys),
     supplierInvoiceCandidates(keys),
+    supplierPaymentCandidates(keys),
+    expensePaymentCandidates(keys),
+    payrollPaymentCandidates(keys),
+    payrollAccrualCandidates(keys),
   ]);
   // Deterministic order: kind, then doc number.
-  return [...a, ...b, ...c].sort((x, y) =>
+  return [...a, ...b, ...c, ...d, ...e, ...f, ...g].sort((x, y) =>
     `${x.kind}:${x.docNumber}`.localeCompare(`${y.kind}:${y.docNumber}`),
   );
 }

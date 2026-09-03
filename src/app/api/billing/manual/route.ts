@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getDerivedLicenseStatus, updateLicense } from "@/lib/licenseEngine";
 import { addDays } from "date-fns";
+import { toPaise } from "@/lib/money";
 
 export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "MANUAL_INVOICE_GENERATED", entityType: "BillingInvoice", details: "Manual billing invoice created" });
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     // Create payment record
     await prisma.paymentRecord.create({
       data: {
-        amount,
+        amount: toPaise(Number(amount)), // stored integer paise
         method: "OTHER", // Manual payment
         reference: reference || "Manual record",
         extendsUntil: newDueDate,

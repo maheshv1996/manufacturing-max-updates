@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
+import { fromPaise } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,8 @@ export async function GET() {
     prisma.user.count({ where: { isActive: true, role: { isNot: null } } }),
   ]);
 
-  const monthSpend = monthSpendRows.reduce(
-    (s: number, t: any) => s + (t.amount || 0),
-    0,
+  const monthSpend = fromPaise(
+    monthSpendRows.reduce((s: number, t: any) => s + (t.amount || 0), 0),
   );
 
   return NextResponse.json({

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { logAudit } from "@/lib/audit";
 import { autoPostToGL } from "@/lib/glPosting";
+import { toPaise, fromPaiseRow } from "@/lib/money";
 
 export async function POST(
   request: Request,
@@ -46,10 +47,12 @@ export async function POST(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    const newPaidAmount = invoice.paidAmount + amount;
+    // Invoice money is stored as integer paise; the request amount is rupees.
+    const amountPaise = toPaise(Number(amount));
+    const newPaidAmount = Number(invoice.paidAmount) + amountPaise;
 
     let newStatus = invoice.status;
-    if (newPaidAmount >= invoice.totalValue) {
+    if (newPaidAmount >= Number(invoice.totalValue)) {
       newStatus = "PAID";
     } else if (newPaidAmount > 0) {
       newStatus = "PARTIAL";
@@ -59,7 +62,7 @@ export async function POST(
       const payment = await tx.payment.create({
         data: {
           invoiceId: id,
-          amount,
+          amount: amountPaise,
           method,
           paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
           reference,
@@ -116,7 +119,12 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ success: true, result });
+    // Expose the rupee contract: payment + updated invoice amounts.
+    const resultRupees = {
+      payment: fromPaiseRow("Payment", result.payment),
+      updatedInvoice: fromPaiseRow("Invoice", result.updatedInvoice),
+    };
+    return NextResponse.json({ success: true, result: resultRupees });
   } catch (error: any) {
     console.error("Error recording payment:", error);
     return NextResponse.json(

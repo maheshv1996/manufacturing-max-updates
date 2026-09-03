@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { poReceivedValue } from "@/lib/poLines";
+import { fromPaise, fromPaiseRow } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -60,18 +61,21 @@ async function invoicesCsv() {
     "Total",
     "Status",
   ];
-  const rows = invoices.map((inv: any) => [
-    fmtDate(inv.invoiceDate),
-    inv.invoiceNumber,
-    inv.customerName,
-    inv.customerGstin || "",
-    inv.taxableValue,
-    inv.cgstAmt || 0,
-    inv.sgstAmt || 0,
-    inv.igstAmt || 0,
-    inv.totalValue,
-    inv.status,
-  ]);
+  const rows = invoices.map((inv: any) => {
+    const invR = fromPaiseRow("Invoice", inv); // stored paise → rupee contract
+    return [
+      fmtDate(invR.invoiceDate),
+      invR.invoiceNumber,
+      invR.customerName,
+      invR.customerGstin || "",
+      invR.taxableValue,
+      invR.cgstAmt || 0,
+      invR.sgstAmt || 0,
+      invR.igstAmt || 0,
+      invR.totalValue,
+      invR.status,
+    ];
+  });
   return { header, rows };
 }
 
@@ -96,7 +100,7 @@ async function paymentsCsv() {
       t.account,
       t.type === "INFLOW" ? "Receipt" : "Payment",
       t.reference || "",
-      t.amount,
+      fromPaise(Number(t.amount)),
     ]);
   }
   for (const p of supplierPayments) {
@@ -115,7 +119,7 @@ async function paymentsCsv() {
         inv.customerName,
         "Receipt",
         p.reference || p.method || "",
-        p.amount,
+        fromPaise(Number(p.amount)),
       ]);
     }
   }

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { fromPaise } from "./money";
 import { getMissedObjectives } from "./qualityObjectives";
 
 export type ComplianceFlag = {
@@ -242,7 +243,7 @@ export async function getComplianceFlags(
         id: `inv-${i.id}`,
         category: "AP 3-Way Match",
         label: `Invoice mismatch · ${i.invoiceNumber || "Invoice"}`,
-        detail: `PO ⇄ GRN ⇄ Invoice price/qty variance (₹${(Number(i.totalAmount) || 0).toLocaleString("en-IN")})`,
+        detail: `PO ⇄ GRN ⇄ Invoice price/qty variance (₹${fromPaise(Number(i.totalAmount) || 0).toLocaleString("en-IN")})`,
         severity: "critical",
         href: "/supply/grn",
       });

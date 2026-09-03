@@ -3,8 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { toPaiseRow, fromPaiseRows } from "@/lib/money";
 
 // Map URL entity keys to the actual Prisma model names (plural route key -> camelCase model).
+// Entities whose rows store fixed-point paise → rupee contract at the API edge.
+const MONEY_MODEL_BY_ENTITY: Record<string, string> = {
+  treasuryTransactions: "TreasuryTransaction",
+};
+
 const ENTITY_MODELS: Record<string, string> = {
   statutoryContributions: "statutoryContribution",
   healthChecks: "healthCheckRecord",
@@ -299,7 +305,11 @@ export async function GET(
       orderBy: { createdAt: "desc" },
       take: 500,
     });
-    return NextResponse.json({ rows });
+    // Entities storing fixed-point paise expose the rupee contract.
+    const moneyModel = MONEY_MODEL_BY_ENTITY[entity];
+    return NextResponse.json({
+      rows: moneyModel ? fromPaiseRows(moneyModel, rows) : rows,
+    });
   } catch (error) {
     console.error(`GET /api/register/${entity} error:`, error);
     return NextResponse.json(
@@ -344,9 +354,12 @@ export async function POST(
     }
 
     let result: any;
+    const moneyModel = MONEY_MODEL_BY_ENTITY[entity];
+    const toStorage = (d: any) =>
+      moneyModel ? toPaiseRow(moneyModel, coerce(ENTITY_FIELDS[entity], d)) : coerce(ENTITY_FIELDS[entity], d);
     if (action === "create") {
       result = await (prisma as any)[model].create({
-        data: coerce(ENTITY_FIELDS[entity], data),
+        data: toStorage(data),
       });
     } else if (action === "update") {
       if (!data.id) {
@@ -354,7 +367,7 @@ export async function POST(
       }
       result = await (prisma as any)[model].update({
         where: { id: data.id },
-        data: coerce(ENTITY_FIELDS[entity], data),
+        data: toStorage(data),
       });
     } else if (action === "delete") {
       if (!data.id) {

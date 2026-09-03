@@ -48,3 +48,51 @@ export function formatRupees(paise: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+// ---------------------------------------------------------------------------
+// DOCUMENT ROW MAPPERS — operational document money is stored as integer
+// paise, exactly like the ledger. Each model's money-bearing keys are listed
+// here; routes convert with toPaiseRow() before prisma writes and
+// fromPaiseRow() before returning rows to the rupee API contract.
+// Fields NOT listed are rates / quantities / percents and stay as-is.
+// ---------------------------------------------------------------------------
+export const MONEY_KEYS: Record<string, readonly string[]> = {
+  Invoice: ["taxableValue", "cgstAmt", "sgstAmt", "igstAmt", "totalValue", "paidAmount"],
+  InvoiceLine: ["taxableValue", "cgstAmt", "sgstAmt", "igstAmt", "totalValue"],
+  Payment: ["amount"],
+  PaymentRecord: ["amount"],
+  SupplierInvoice: ["amount", "taxAmount", "totalAmount"],
+  SupplierInvoiceLine: ["amount"],
+  ExpenseClaim: ["totalAmount"],
+  ExpenseClaimItem: ["amount"],
+  TreasuryTransaction: ["amount"],
+  BankStatementEntry: ["amount", "balanceAfter"],
+  GoodsReceiptNoteLine: ["amount"],
+};
+
+/** Map one row's money keys rupees→paise (for prisma writes). Keys absent → untouched. */
+export function toPaiseRow<T extends Record<string, unknown>>(model: string, row: T): T {
+  const keys = MONEY_KEYS[model];
+  if (!keys) return row;
+  const out: Record<string, unknown> = { ...row };
+  for (const k of keys) {
+    if (out[k] !== undefined && out[k] !== null) out[k] = toPaise(Number(out[k]));
+  }
+  return out as T;
+}
+
+/** Map one row's money keys paise→rupees (for API responses). */
+export function fromPaiseRow<T extends Record<string, unknown>>(model: string, row: T): T {
+  const keys = MONEY_KEYS[model];
+  if (!keys) return row;
+  const out: Record<string, unknown> = { ...row };
+  for (const k of keys) {
+    if (out[k] !== undefined && out[k] !== null) out[k] = fromPaise(Number(out[k]));
+  }
+  return out as T;
+}
+
+/** Map a list of rows with fromPaiseRow. */
+export function fromPaiseRows<T extends Record<string, unknown>>(model: string, rows: T[]): T[] {
+  return rows.map((r) => fromPaiseRow(model, r));
+}

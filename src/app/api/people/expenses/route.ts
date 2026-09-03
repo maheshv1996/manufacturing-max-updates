@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { nextSequence } from "@/lib/sequence";
+import { toPaise, fromPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,18 @@ export async function GET() {
       _count: { _all: true },
     });
     const statusOf = (s: string) => byStatus.find((b: any) => b.status === s);
+    // Ledger-style fixed point: rows store paise — expose the rupee contract.
+    const claimsRupees = claims.map((c: any) => ({
+      ...fromPaiseRow("ExpenseClaim", c),
+      items: Array.isArray(c.items) ? fromPaiseRows("ExpenseClaimItem", c.items) : c.items,
+    }));
     return NextResponse.json({
-      claims,
+      claims: claimsRupees,
       stats: {
         submitted: statusOf("SUBMITTED")?._count._all || 0,
         approved: statusOf("APPROVED")?._count._all || 0,
-        paidTotal: statusOf("PAID")?._sum.totalAmount || 0,
-        outstanding: (statusOf("APPROVED")?._sum.totalAmount || 0) + (statusOf("SUBMITTED")?._sum.totalAmount || 0),
+        paidTotal: fromPaise(statusOf("PAID")?._sum.totalAmount || 0),
+        outstanding: fromPaise((statusOf("APPROVED")?._sum.totalAmount || 0) + (statusOf("SUBMITTED")?._sum.totalAmount || 0)),
       },
     });
   } catch (error: any) {
@@ -92,7 +98,7 @@ export async function POST(req: Request) {
         claimantName,
         claimantCode: claimantCode || null,
         claimantUserId: user.id,
-        totalAmount: total,
+        totalAmount: toPaise(total),
         category: rows[0].category,
         expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
         submittedBy: user.name || user.id,
@@ -101,7 +107,7 @@ export async function POST(req: Request) {
           create: rows.map((r) => ({
             category: r.category,
             description: r.description,
-            amount: r.amount,
+            amount: toPaise(r.amount),
             expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
           })),
         },
@@ -115,7 +121,18 @@ export async function POST(req: Request) {
       entityId: claim.id,
       details: `Self-service claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
     });
-    return NextResponse.json({ success: true, claim }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        claim: {
+          ...fromPaiseRow("ExpenseClaim", claim),
+          items: Array.isArray((claim as any).items)
+            ? fromPaiseRows("ExpenseClaimItem", (claim as any).items)
+            : (claim as any).items,
+        },
+      },
+      { status: 201 },
+    );
   } catch (error: any) {
     console.error("POST /api/people/expenses error:", error);
     return NextResponse.json({ error: "Failed to submit claim" }, { status: 500 });

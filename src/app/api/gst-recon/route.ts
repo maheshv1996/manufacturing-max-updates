@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { fromPaiseRow } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -110,7 +111,9 @@ export async function POST(req: Request) {
         };
       }
       const key = `${gstin}|${invoiceNumber}`;
-      const reg = registerByKey.get(key);
+      const regRaw = registerByKey.get(key);
+      // Ledger-style fixed point: supplier invoice rows store paise.
+      const reg = regRaw ? fromPaiseRow("SupplierInvoice", regRaw) : undefined;
       if (!reg) {
         return {
           idx,
