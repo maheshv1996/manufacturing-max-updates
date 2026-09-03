@@ -50,5 +50,11 @@ Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SE
      recovery -> access revocation -> exit interview).
   3. Supplier audits (cadence + findings + CAPA linkage) and CSAT / VOC.
   4. TDS compliance tracker; MOC beyond ECO; policy acknowledgements;
-     anonymous whistleblower channel; visitor/gate inbound logs;
-     contract expiry alerts into the digest.
+     anonymous whistleblower channel; contract expiry alerts into the
+     digest. (Visitor logs, PPE issues and fleet already exist.)
+  5. Tier-3 (grep-verified absent, see `docs/ORG_GAP_ANALYSIS.md`):
+     credit/debit notes + returns, CSR (customer-specific requirements)
+     matrix, skill/competency matrix + SOP sign-off, gratuity provisioning,
+     employee loans & advances, petty cash, e-invoice IRN + GSTR-1/3B
+     exports, board resolutions + related-party registers, password policy
+     enforcement, cheque register, insurance claims, sales quota/commission.

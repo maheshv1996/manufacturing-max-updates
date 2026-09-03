@@ -157,3 +157,39 @@ is the rest of "a complete real-world organisation": the highest-value next
 builds are (1) org chart + RACI with seeded functional role bundles,
 (2) exit/offboarding management, (3) supplier audits. Each plugs into the
 existing digest/bell/MRM machinery the same way risk management did.
+
+## Tier-3 - verified against the schema (grep-confirmed absent, 2026-09-04)
+
+Candidates that looked missing but ALREADY EXIST: PPE issue register
+(`PpeIssue`, PPE-YYYY-NNN), inbound visitor log (`VisitorLog` - badge, host,
+check-in/out), fleet register (`Vehicle` - RC/insurance/fitness/permit
+expiries). Everything below returned 0 model matches in schema.prisma:
+
+1. **Credit / debit notes + sales & purchase returns** - the returns process
+   is a real finance-commercial flow (returns -> stock IN/OUT -> GST
+   adjustment -> customer/supplier balance) and nothing models it.
+2. **CSR matrix (customer-specific requirements)** - aerospace/defence
+   reality (AS9100 cl.4.3.2): per-customer requirements mapped to process
+   evidence, contract flow-down sign-off.
+3. **Skill / competency matrix + SOP acknowledgements** - training
+   effectiveness tracks programs; a matrix of required vs achieved
+   competency per role (with expiry, e.g. welder recert) and machine-side
+   SOP sign-off on the terminal is a real audit ask.
+4. **Gratuity provisioning** - PF/ESI/PT exist in payslips; the Gratuity
+   Act liability (provision + balance-sheet accrual) is unmodeled.
+5. **Employee loans & advances** - salary advances / vehicle loans with
+   recovery schedules against payslips.
+6. **Petty cash register** - small-cash transactions between treasury
+   entries, with replenishment.
+7. **GST e-invoice (IRN) + GSTR-1/3B returns** - 2B reconciliation exists;
+   IRN generation and return-filing exports do not.
+8. **Board resolutions + related-party transaction registers** - Companies
+   Act statutory registers, linked to the board pack.
+9. **Password policy enforcement** - login hardening exists; expiry /
+   complexity / history policy is not enforced.
+10. **Cheque / payment-instrument register** - instrument issue, stop,
+    clearance tracking alongside bank reconciliation.
+11. **Insurance claims lifecycle** - insurance register exists; claims
+    (intimation -> surveyor -> settlement) do not.
+12. **Sales quota & commission** - enquiry funnel tracks pipeline; per-sales-
+    person targets and commission accrual are unmodeled.
