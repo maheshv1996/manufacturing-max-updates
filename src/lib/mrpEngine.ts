@@ -104,18 +104,27 @@ export function calculateShiftCapacityMinutes(
   return Math.round(days * machineCount * dailyEffectiveMinutes);
 }
 
+const MAX_BOM_DEPTH = 20;
+
 /**
  * Explode Multi-Level BOM and compute Gross Requirements recursively with scrap yield factors.
+ * PR3: Added cycle guard (visited set) and max depth to prevent infinite recursion on circular BOMs.
  */
 export function explodeBom(
   node: BomNode,
   parentRequiredQty: number,
   depth: number = 0,
-  resultMap: Map<
-    string,
-    { gross: number; scrap: number; node: BomNode }
-  > = new Map(),
+  resultMap: Map<string, { gross: number; scrap: number; node: BomNode }> = new Map(),
+  visited: Set<string> = new Set(),
 ): Map<string, { gross: number; scrap: number; node: BomNode }> {
+  if (depth > MAX_BOM_DEPTH) {
+    throw new Error(`BOM depth exceeds ${MAX_BOM_DEPTH} — likely circular or excessively deep structure at ${node.itemCode}`);
+  }
+  if (visited.has(node.itemCode)) {
+    const path = Array.from(visited).join(" → ") + ` → ${node.itemCode}`;
+    throw new Error(`Circular BOM detected: ${path}`);
+  }
+
   const scrapFactor = 1 + Math.max(0, node.scrapPercentage || 0) / 100;
   const neededQty = parentRequiredQty * node.qtyPerParent * scrapFactor;
 
@@ -132,9 +141,11 @@ export function explodeBom(
   }
 
   if (node.children && node.children.length > 0) {
+    visited.add(node.itemCode);
     for (const child of node.children) {
-      explodeBom(child, neededQty, depth + 1, resultMap);
+      explodeBom(child, neededQty, depth + 1, resultMap, visited);
     }
+    visited.delete(node.itemCode);
   }
 
   return resultMap;
@@ -236,6 +247,7 @@ export function calculateMrp(
     if (netRequirement > 0) {
       // Lot sizing calculation
       const orderQty = calculateLotSize(netRequirement, node);
+      const wasTruncated = !!(node.maxOrderQty && node.maxOrderQty > 0 && netRequirement > node.maxOrderQty);
 
       // Lead time with optional safety variability buffer
       const effectiveLeadTime = Math.max(
@@ -264,7 +276,7 @@ export function calculateMrp(
         requiredDate: minDate,
         leadTimeDaysUsed: effectiveLeadTime,
         estimatedCost,
-        reason: `Net requirement of ${Math.round(netRequirement)} for demands: ${demandRefs.join(", ")}`,
+        reason: `Net requirement of ${Math.round(netRequirement)} for demands: ${demandRefs.join(", ")}${wasTruncated ? ` — truncated to max lot ${node.maxOrderQty} (shortfall ${Math.round(netRequirement - orderQty)})` : ""}`,
         parentDemandRef: demandRefs[0] || "MRP-AUTO",
       });
 

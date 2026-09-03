@@ -97,15 +97,10 @@ export function can(user: any, key: PermissionKey): boolean {
     return true;
   }
 
-  // 5. Role level inheritance: MANAGER gets view/edit on their assigned role/department
-  if (user.level === "MANAGER") {
-    if (key.endsWith(".view") || key.endsWith(".edit")) {
-      const userDept = (user.roleName || "").toLowerCase();
-      if (userDept && key.startsWith(userDept)) {
-        return true;
-      }
-    }
-  }
+  // NOTE: Legacy MANAGER heuristic (roleName prefix grants view/edit) removed in PR2 for security.
+  // Previously a Role named "ops" implicitly granted "ops.view/edit" without explicit assignment.
+  // Now permissions must be explicitly listed in Role.permissions — see ALL_PERMISSIONS.
+  // This closes phantom escalation where renaming a role broadened access silently.
 
   return false;
 }

@@ -6,17 +6,18 @@ import { UserPreferences } from "./userPrefs";
 export async function getPlantScope(): Promise<string> {
   const cookieStore = await cookies();
   const tokenStr = cookieStore.get("app_session")?.value;
-  if (!tokenStr) return "ALL";
-
+  // Fail-closed: unauthenticated callers must not get silent "ALL" (cross-plant leak). Callers on protected pages
+  // have already passed proxy auth; public pages should not call getPlantScope.
+  if (!tokenStr) throw new Error("Plant scope requires authentication");
   const token = await verifySessionToken(tokenStr);
-  if (!token) return "ALL";
+  if (!token) throw new Error("Plant scope requires authentication");
 
   const user = await prisma.user.findUnique({
     where: { id: token.id },
     select: { role: true, homePlantId: true, prefs: true },
   });
 
-  if (!user) return "ALL";
+  if (!user) throw new Error("Plant scope requires authentication");
 
   if (user.role?.name === "Operator") {
     return user.homePlantId || "ALL";
@@ -43,7 +44,13 @@ export async function resolvePlantId(
   explicitPlantId?: string | null,
 ): Promise<string | null> {
   if (explicitPlantId) return explicitPlantId;
-  const scope = await getPlantScope();
+  let scope: string;
+  try {
+    scope = await getPlantScope();
+  } catch {
+    // Unauthenticated caller with no explicit plant — fail-closed (no silent defaultPlantId leak)
+    throw new Error("Plant scope requires authentication");
+  }
   if (scope && scope !== "ALL") return scope;
   try {
     const setting = await prisma.setting.findFirst({

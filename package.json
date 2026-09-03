@@ -37,7 +37,9 @@
         "from": ".next/standalone",
         "to": "standalone",
         "filter": [
-          "**/*"
+          "**/*",
+          "!dist",
+          "!dist/**/*"
         ]
       },
       {
@@ -94,7 +96,8 @@
     "recharts": "^3.10.1",
     "three": "^0.185.1",
     "tsx": "^4.23.10",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

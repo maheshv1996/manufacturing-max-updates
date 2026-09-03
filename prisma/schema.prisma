@@ -328,6 +328,7 @@ model Product {
   controlPlans           ControlPlan[]
   fixtures               Fixture[]
   priceRevisions         PriceRevision[] // P19 — price revision register
+  salesOrderLines        SalesOrderLine[]
 }
 
 model Shift {
@@ -502,6 +503,7 @@ model User {
   itTicketsAssigned    ItTicket[] @relation("TicketAssignedTo") // M31
   logsheets            Logsheet[] // P3 — shopfloor logsheet verification
   packagingScanLogs     PackagingScanLog[]
+  employee             Employee?
 }
 
 // P22 — Collections: aging buckets, collector assignment, weekly follow-ups, dunning L1/L2/L3
@@ -533,6 +535,9 @@ model PayrollRun {
   lockedBy        String?
   lockedAt        DateTime?
   corrections     Json? // [{ at, by, note, detail }]
+  settledAt       DateTime?
+  settledBy       String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -1304,6 +1309,17 @@ model Customer {
   city          String?
   state         String?
   gstin         String?
+  type            CustomerType   @default(DOMESTIC)
+  pan             String?
+  currency        String         @default("INR")
+  creditLimit     Float          @default(0) // 0 = no explicit limit
+  creditDays      Int            @default(30)
+  billingAddress  String?
+  shippingAddress String?
+  notes           String?
+  createdBy       String?
+  contacts        CustomerContact[]
+  salesOrders     SalesOrder[]
   paymentTerms  String   @default("NET30") // M16 — terms-vs-exposure baseline (NET15/30/45/60/ADVANCE/CUSTOM)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -1338,6 +1354,9 @@ model RawMaterial {
   writeOffRequests  WriteOffRequest[]
   comparativeStatements ComparativeStatement[]
   rateContracts     RateContract[]
+
+  poLines           PurchaseOrderLine[]
+  supplierInvoiceLines SupplierInvoiceLine[]
 
   @@index([sku])
   @@index([isActive])
@@ -1407,13 +1426,35 @@ model PurchaseOrder {
   grns              GoodsReceiptNote[]
   supplierInvoices  SupplierInvoice[]
 
+  lines             PurchaseOrderLine[]
+
   @@index([supplierId])
   @@index([rawMaterialId])
   @@index([status])
   @@index([approvalStatus])
   @@index([createdAt])
   @@index([status, createdAt])
+}
+
+model PurchaseOrderLine {
+  id            String            @id @default(cuid())
+  poId          String
+  po            PurchaseOrder     @relation(fields: [poId], references: [id], onDelete: Cascade)
+  rawMaterialId String
+  rawMaterial   RawMaterial       @relation(fields: [rawMaterialId], references: [id])
+  lineNo        Int               @default(1)
+  qty           Float
+  unitCost      Float
+  receivedQty   Float             @default(0)
+  createdAt     DateTime          @default(now())
+
+  grns          GoodsReceiptNote[]
+  supplierInvoiceLines SupplierInvoiceLine[]
+
+  @@index([poId])
+  @@index([rawMaterialId])
 }
+
 
 model BinLocation {
   id            String       @id @default(cuid())
@@ -1873,6 +1914,9 @@ model Invoice {
   adjustmentHistory Json?
   payments          Payment[]
   collectionAccount CollectionAccount? // P22 — collections workflow
+  salesOrderId      String?
+  salesOrder        SalesOrder?       @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  lines             InvoiceLine[]
 
   @@index([status])
   @@index([customerName])
@@ -2957,6 +3001,12 @@ model Payslip {
   otPay             Float           @default(0)
   generatedAt       DateTime        @default(now())
 
+  esiDeduction      Float           @default(0) // 0.75% of gross when gross <= 21000
+  lopDays           Float           @default(0)
+  lopDeduction      Float           @default(0) // (gross / 30) × lopDays
+  bonus             Float           @default(0)
+  arrears           Float           @default(0)
+
   @@unique([salaryStructureId, month])
   @@index([month])
 }
@@ -3577,6 +3627,92 @@ enum ThreeWayMatchStatus {
   MISMATCHED
 }
 
+model SupplierInvoiceLine {
+  id            String             @id @default(cuid())
+  invoiceId     String
+  invoice       SupplierInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  poLineId      String?
+  poLine        PurchaseOrderLine? @relation(fields: [poLineId], references: [id], onDelete: SetNull)
+  rawMaterialId String
+  rawMaterial   RawMaterial        @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+  lineNo        Int                @default(1)
+  qty           Float
+  unitCost      Float
+  amount        Float              @default(0)
+  createdAt     DateTime           @default(now())
+
+  @@index([invoiceId])
+  @@index([poLineId])
+}
+
+model InvoiceLine {
+  id               String   @id @default(cuid())
+  invoiceId        String
+  invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  salesOrderLineId String? // trace to SalesOrderLine when billing an SO (scalar link)
+  productId        String? // product snapshot reference (scalar link)
+  productName      String
+  productSku       String?
+  lineNo           Int      @default(1)
+  qty              Float
+  unitPrice        Float
+  taxableValue     Float    @default(0)
+  taxRatePct       Float    @default(0)
+  cgstAmt          Float    @default(0)
+  sgstAmt          Float    @default(0)
+  igstAmt          Float    @default(0)
+  totalValue       Float    @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([salesOrderLineId])
+}
+
+model ExpenseClaim {
+  id              String            @id @default(cuid())
+  claimNumber     String            @unique // EXP-YYYY-NNNN
+  claimantName    String
+  claimantCode    String?
+  claimantUserId  String?
+  totalAmount     Float             @default(0)
+  status          String            @default("SUBMITTED") // SUBMITTED | APPROVED | REJECTED | PAID
+  category        String            @default("OTHER") // primary category of the first item
+  expenseDate     DateTime          @default(now())
+  submittedBy     String?
+  submittedAt     DateTime          @default(now())
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  paidBy          String?
+  paidAt          DateTime?
+  paymentMethod   String?
+  treasuryRef     String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  items           ExpenseClaimItem[]
+
+  @@index([status])
+  @@index([claimantName])
+  @@index([claimantUserId])
+  @@index([claimNumber])
+}
+
+model ExpenseClaimItem {
+  id          String       @id @default(cuid())
+  claimId     String
+  claim       ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  category    String // TRAVEL | FOOD | FUEL | STATIONERY | MARKETING | REPAIR | UTILITY | QUALITY | TOOLING | SUBCONTRACT | TRAINING | OTHER
+  description String
+  amount      Float
+  expenseDate DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+
+  @@index([claimId])
+}
+
 enum SupplierInvoiceStatus {
   UNPAID
   MATCHED
@@ -3593,6 +3729,8 @@ model GoodsReceiptNote {
   supplier         Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   rawMaterialId    String
   rawMaterial      RawMaterial         @relation(fields: [rawMaterialId], references: [id], onDelete: Cascade)
+  poLineId         String?
+  poLine           PurchaseOrderLine? @relation(fields: [poLineId], references: [id], onDelete: SetNull)
   receivedQty      Float
   receivedAt       DateTime            @default(now())
   receivedBy       String              @default("Storekeeper")
@@ -3668,6 +3806,7 @@ model SupplierInvoice {
   po            PurchaseOrder?      @relation(fields: [poId], references: [id], onDelete: SetNull)
   grnId         String?             @unique
   grn           GoodsReceiptNote?   @relation(fields: [grnId], references: [id], onDelete: SetNull)
+  lines         SupplierInvoiceLine[]
   amount        Float               @default(0) // net goods value
   taxAmount     Float               @default(0)
   totalAmount   Float               @default(0)
@@ -4385,4 +4524,435 @@ model PackagingScanLog {
 
   @@index([workOrderId, timestamp])
   @@index([timestamp])
+}
+
+// ===== PR1 — atomicity & idempotency infrastructure =====
+
+model SequenceCounter {
+  id        String   @id // e.g. PO-2026, GRN-2026, NCR-SUP-2026
+  nextVal   Int      @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  clientId  String   @unique
+  endpoint  String?
+  createdAt DateTime @default(now())
+  response  Json?
+
+  @@index([createdAt])
+}
+
+// ===== Infinite — custom entities / fields / values =====
+// Generic low-code layer: any plant can invent `Titanium Blisk Cell` with N fields
+// and a Flow `if wear>90% → NCR + webhook` without a deploy. Values are JSON-typed
+// and validated via zod generated from CustomField at runtime.
+
+model CustomEntity {
+  id          String       @id @default(cuid())
+  slug        String       @unique // e.g. titanium_blisk_cell (derived from title)
+  title       String
+  description String?
+  icon        String?      // lucide icon name, e.g. Layers
+  colorTone   String?      // amber|emerald|violet|blue|cyan
+  isActive    Boolean      @default(true)
+  createdBy   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  fields      CustomField[]
+  records     CustomRecord[]
+
+  @@index([isActive])
+}
+
+model CustomField {
+  id           String       @id @default(cuid())
+  entityId     String
+  entity       CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  key          String       // e.g. blisk_serial, coating_microns (slug)
+  label        String
+  fieldType    String       // text|number|date|select|boolean
+  required     Boolean      @default(false)
+  options      Json?        // for select: ["PVD","CVD"]
+  placeholder  String?
+  defaultValue Json?
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+
+  @@unique([entityId, key])
+  @@index([entityId])
+}
+
+// ---------------------------------------------------------------------------
+// GL / Double-Entry Accounting Core (finance accounting)
+// ---------------------------------------------------------------------------
+enum GlAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum GlNormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum GlAccountGroup {
+  // Assets
+  CURRENT_ASSET
+  FIXED_ASSET
+  INTANGIBLE_ASSET
+  // Liabilities
+  CURRENT_LIABILITY
+  LONG_TERM_LIABILITY
+  // Equity
+  CAPITAL
+  RESERVES
+  RETAINED_EARNINGS
+  // Revenue
+  SALES_REVENUE
+  OTHER_REVENUE
+  // Expenses
+  DIRECT_EXPENSE
+  OPERATING_EXPENSE
+  FINANCE_EXPENSE
+  TAX_EXPENSE
+}
+
+model GlAccount {
+  id            String          @id @default(cuid())
+  code          String          @unique // e.g. 1010 — chart-of-accounts code
+  name          String
+  type          GlAccountType
+  group         GlAccountGroup?
+  normalBalance GlNormalBalance @default(DEBIT)
+  description   String?
+  isActive      Boolean         @default(true)
+  isSystem      Boolean         @default(false) // seeded defaults — never hard-deleted
+  createdBy     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  journalLines  JournalLine[]
+
+  @@index([type])
+  @@index([group])
+  @@index([isActive])
+}
+
+enum JournalEntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum JournalSource {
+  MANUAL
+  VOUCHER
+  INVOICE
+  PAYMENT
+  DEPRECIATION
+  SYSTEM
+}
+
+model JournalEntry {
+  id           String             @id @default(cuid())
+  entryNumber  String             @unique // JE-YYYY-NNNN via SequenceCounter
+  date         DateTime
+  period       String?            // "YYYY-MM" — fiscal month the entry posts into
+  memo         String
+  status       JournalEntryStatus @default(DRAFT)
+  source       JournalSource      @default(MANUAL)
+  sourceId     String?            // originating doc (voucher / invoice id) when applicable
+  totalDebit   Float              @default(0)
+  totalCredit  Float              @default(0)
+  createdBy    String
+  postedBy     String?
+  postedAt     DateTime?
+  reversedById String?            @unique // points at the reversal entry, if this entry was reversed
+  reversal     JournalEntry?      @relation("Reversal", fields: [reversedById], references: [id], onDelete: SetNull)
+  reversals    JournalEntry[]     @relation("Reversal")
+  reversalOfId String?            // set on the reversal entry, pointing at the original
+  reversalOf   JournalEntry?      @relation("ReversalOf", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversalsOf  JournalEntry[]     @relation("ReversalOf")
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  lines        JournalLine[]
+
+  @@index([date])
+  @@index([period])
+  @@index([status])
+  @@index([source])
+  @@index([createdAt])
+}
+
+model JournalLine {
+  id        String      @id @default(cuid())
+  entryId   String
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   GlAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit     Float       @default(0)
+  credit    Float       @default(0)
+  reference String?     // source doc number (invoice / voucher / PO)
+  narration String?
+  createdAt DateTime    @default(now())
+
+  @@index([accountId])
+  @@index([entryId])
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model FiscalPeriod {
+  id        String             @id @default(cuid())
+  code      String             @unique // e.g. "2026-04" or "FY2026-27"
+  label     String?
+  startDate DateTime
+  endDate   DateTime
+  status    FiscalPeriodStatus @default(OPEN)
+  closedBy  String?
+  closedAt  DateTime?
+  createdAt DateTime           @default(now())
+
+  @@index([status])
+  @@index([startDate])
+}
+
+// ---------------------------------------------------------------------------
+// HR Master — Employee (PAN/UAN/DOJ/bank etc.) + richer payslip fields
+// ---------------------------------------------------------------------------
+enum EmployeeStatus {
+  ACTIVE
+  ON_HOLD
+  EXITED
+}
+
+model Employee {
+  id                String         @id @default(cuid())
+  employeeNumber    String         @unique // join key: User.employeeNumber / SalaryStructure.employeeCode
+  name              String
+  userId            String?        @unique
+  user              User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  designation       String?
+  department        String?
+  doj               DateTime?
+  dob               DateTime?
+  gender            String?
+  phone             String?
+  email             String?
+  panNumber         String?
+  aadhaarNumber     String?
+  pfUan             String?
+  esiNumber         String?
+  bankName          String?
+  bankAccountNumber String?
+  bankIfsc          String?
+  address           String?
+  bloodGroup        String?
+  emergencyContact  String?
+  status            EmployeeStatus @default(ACTIVE)
+  exitDate          DateTime?
+  exitReason        String?
+  createdBy         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([status])
+  @@index([department])
+  @@index([designation])
+  @@index([doj])
+}
+
+// ---------------------------------------------------------------------------
+// CRM / Sales — Customer master + SalesOrders with line items
+// ---------------------------------------------------------------------------
+enum CustomerType {
+  DOMESTIC
+  EXPORT
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  role       String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  IN_PRODUCTION
+  PARTIALLY_DISPATCHED
+  DISPATCHED
+  INVOICED
+  CANCELLED
+}
+
+model SalesOrder {
+  id                String            @id @default(cuid())
+  orderNumber       String            @unique // SO-YYYY-NNNN via SequenceCounter
+  customerId        String
+  customer          Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerName      String            // denormalized snapshot
+  orderDate         DateTime          @default(now())
+  expectedDelivery  DateTime?
+  poReference       String?           // customer purchase order ref
+  paymentTerms      String?
+  currency          String            @default("INR")
+  status            SalesOrderStatus  @default(DRAFT)
+  sourceQuotationId String?           // plain ref — created from a quotation
+  totalValue        Float             @default(0) // Σ line amounts (before tax)
+  totalDiscount     Float             @default(0)
+  totalTax          Float             @default(0)
+  grandTotal        Float             @default(0) // value − discount + tax
+  notes             String?
+  createdBy         String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  lines             SalesOrderLine[]
+  invoices          Invoice[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+model SalesOrderLine {
+  id            String      @id @default(cuid())
+  salesOrderId  String
+  salesOrder    SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productCode   String?     // snapshot for legacy/free-form lines
+  productName   String
+  quantity      Float
+  unitPrice     Float
+  discountPct   Float       @default(0)
+  taxPct        Float       @default(0) // GST line rate
+  amount        Float       @default(0) // qty × unitPrice
+  discountAmt   Float       @default(0)
+  taxAmt        Float       @default(0)
+  total         Float       @default(0) // amount − discount + tax
+  scheduledDate DateTime?
+  dispatchedQty Float       @default(0)
+  invoicedQty   Float       @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@index([salesOrderId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Org-wide services — Announcements, Visitor log, Vehicle register, Insurance
+// ---------------------------------------------------------------------------
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  body      String
+  category  String    @default("GENERAL") // GENERAL | HR | SAFETY | QUALITY | MAINTENANCE | EVENT | EMERGENCY
+  priority  String    @default("NORMAL")  // NORMAL | IMPORTANT | URGENT
+  pinned    Boolean   @default(false)
+  active    Boolean   @default(true)
+  author    String?
+  publishAt DateTime  @default(now())
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([active])
+  @@index([category])
+  @@index([publishAt])
+}
+
+model VisitorLog {
+  id            String    @id @default(cuid())
+  visitorName   String
+  company       String?
+  phone         String?
+  purpose       String?
+  hostName      String?
+  vehicleNumber String?
+  idProofType   String?
+  idProofNumber String?
+  badgeNumber   String?
+  checkInAt     DateTime  @default(now())
+  checkOutAt    DateTime?
+  status        String    @default("IN_SITE") // EXPECTED | IN_SITE | CHECKED_OUT
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([checkInAt])
+}
+
+model Vehicle {
+  id                  String   @id @default(cuid())
+  registrationNumber  String   @unique
+  make                String?
+  model               String?
+  type                String   @default("FOUR_WHEELER") // TWO_WHEELER | CAR | VAN | TRUCK | BUS | FORKLIFT | OTHER
+  year                Int?
+  fuelType            String?
+  capacity            String?
+  assignedDriver      String?
+  rcExpiryDate        DateTime?
+  insuranceExpiryDate DateTime?
+  fitnessExpiryDate   DateTime?
+  permitExpiryDate    DateTime?
+  status              String   @default("ACTIVE") // ACTIVE | IN_SERVICE | OUT_OF_SERVICE | SOLD
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([status])
+}
+
+model InsurancePolicy {
+  id               String   @id @default(cuid())
+  policyNumber     String
+  insurer          String?
+  policyType       String   @default("OTHER") // ASSET | VEHICLE | FIRE | LIABILITY | GROUP_HEALTH | GROUP_LIFE | KEYMAN | MARINE | OTHER
+  coveredAsset     String?  // vehicle reg / asset tag / employee group
+  sumInsured       Float    @default(0)
+  premium          Float    @default(0)
+  premiumFrequency String   @default("YEARLY") // MONTHLY | QUARTERLY | HALF_YEARLY | YEARLY | ONE_TIME
+  startDate        DateTime?
+  endDate          DateTime?
+  renewalDate      DateTime?
+  status           String   @default("ACTIVE") // ACTIVE | EXPIRING | EXPIRED | CANCELLED
+  notes            String?
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status])
+  @@index([renewalDate])
+}
+
+model CustomRecord {
+  id        String       @id @default(cuid())
+  entityId  String
+  entity    CustomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  values    Json         // { blisk_serial: "BLK-001", coating_microns: 12.5 }
+  createdBy String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([entityId])
+  @@index([createdAt])
 }

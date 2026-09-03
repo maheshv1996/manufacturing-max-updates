@@ -9,6 +9,21 @@ export async function register() {
     const { startBuildMonitor } = await import("@/lib/buildMonitor");
     startBuildMonitor();
 
+    // Offline desktop: daily IdempotencyKey prune (7-day TTL) — keeps embedded DB bounded.
+    // Launcher also schedules the same prune, but the server is the source of truth when it is up.
+    if (process.env.DESKTOP_MODE === "true") {
+      const { pruneIdempotencyKeys } = await import("@/lib/idempotency");
+      const schedulePrune = () => {
+        const now = new Date();
+        if (now.getHours() === 2 && now.getMinutes() === 15) {
+          pruneIdempotencyKeys(7).catch(() => {});
+        }
+      };
+      setInterval(schedulePrune, 60_000).unref?.();
+      // Opportunistic prune on boot (best-effort, ignore if table not yet migrated)
+      pruneIdempotencyKeys(7).catch(() => {});
+    }
+
     // Sentry & APM Observability Sampling Initialization
     const sentryDsn = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN;
     if (sentryDsn) {

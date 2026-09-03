@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { scryptSync, randomBytes } from "crypto";
+import { DEFAULT_COA } from "../src/lib/glEngine";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -3085,7 +3086,55 @@ async function main() {
     create: { key: "companyCurrency", value: "INR" },
   });
 
-  console.log("Enterprise MES database seed complete!");
+  console.log("Seeding Chart of Accounts...");
+  const coaCount = await prisma.glAccount.count();
+  if (coaCount === 0) {
+    await prisma.glAccount.createMany({
+      data: DEFAULT_COA.map((a) => ({ ...a, isSystem: true, createdBy: "seed" })),
+    });
+    console.log(`Seeded ${DEFAULT_COA.length} GL accounts.`);
+  } else {
+    console.log(`Chart of accounts already present (${coaCount} accounts) — skipping.`);
+  }
+
+  async function alignDocumentCounters() {
+  // Seeded documents predate the SequenceCounter module: fresh databases would
+  // collide (P2002) on the first new PO/GRN/INV/SO/JE. Walk each document table,
+  // find the highest YYYY-NNNN suffix, and point the counter past it.
+  const year = new Date().getFullYear();
+  const maps: Record<string, { model: string; field: string }> = {
+    PO: { model: "purchaseOrder", field: "poNumber" },
+    GRN: { model: "goodsReceiptNote", field: "grnNumber" },
+    INV: { model: "invoice", field: "invoiceNumber" },
+    SO: { model: "salesOrder", field: "orderNumber" },
+    JE: { model: "journalEntry", field: "entryNumber" },
+  };
+  console.log("Aligning document sequence counters...");
+  for (const [prefix, { model, field }] of Object.entries(maps)) {
+    const rows = await (prisma as any)[model].findMany({
+      where: { [field]: { startsWith: `${prefix}-${year}-` } },
+      select: { [field]: true },
+    });
+    const nums = rows
+      .map((r: any) => parseInt(String(r[field]).split("-").pop() || "0", 10))
+      .filter((n: number) => Number.isFinite(n));
+    if (nums.length === 0) continue;
+    const maxSeq = Math.max(...nums);
+    const counterId = `${prefix}-${year}`;
+    const counter = await prisma.sequenceCounter.findUnique({ where: { id: counterId } });
+    if (!counter) {
+      await prisma.sequenceCounter.create({ data: { id: counterId, nextVal: maxSeq + 1 } });
+      console.log(`  ${counterId} counter created → ${maxSeq + 1}`);
+    } else if ((counter as any).nextVal <= maxSeq) {
+      await prisma.sequenceCounter.update({ where: { id: counterId }, data: { nextVal: maxSeq + 1 } });
+      console.log(`  ${counterId} → ${maxSeq + 1} (was ${(counter as any).nextVal})`);
+    }
+  }
+}
+
+await alignDocumentCounters();
+
+console.log("Enterprise MES database seed complete!");
 }
 
 main()

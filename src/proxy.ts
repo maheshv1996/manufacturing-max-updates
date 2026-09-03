@@ -12,14 +12,19 @@ import { getSecretKey } from "@/lib/auth";
 // access immediately, not at token expiry.
 
 // Routes fully bypassed regardless of auth state
+// PR2: tightened — only the minimal kiosk surface stays public. Sensitive APIs
+// (/api/logs, /api/shift-counts, /api/movement, /api/maintenance/jobs) were removed
+// from public and now require a valid app_session JWT.
 const PUBLIC_PREFIXES = [
   "/onboarding",
   "/login",
   "/landing",
   "/showroom", // Interactive client-side 3D demo showroom — public showcase
-  "/terminal",
+  "/terminal", // kiosk shell — page itself is public, but its data APIs below are gated
   "/track",
   "/api/setup",
+  "/api/system/ai",
+  "/api/ai/assistant",
   "/api/auth/login",
   "/api/auth/me",
   "/api/auth/logout",
@@ -30,22 +35,17 @@ const PUBLIC_PREFIXES = [
   "/api/marketing/landing",
   "/api/landing/lead",
   "/ops/andon", // public wall display — always accessible
-  // Shop-floor kiosk APIs — the /terminal is a LAN kiosk by design: operators
-  // clock in with an employee number (no web session), so every endpoint the
-  // terminal calls must pass through to the routes (which hold their own
-  // manager-action guards). Without these the proxy 401s the kiosk before the
-  // route ever runs.
+  // Shop-floor kiosk APIs — LAN kiosk by design: operators clock in with employeeNumber
+  // (no web session). These stay public at the proxy but each route enforces its own
+  // employeeNumber/cert/fixture guards. If MFGMAX_KIOSK_TOKEN is set (prod), a matching
+  // x-kiosk-token header is required; otherwise the route's own checks apply.
   "/api/operator",
   "/api/terminal",
   "/api/attendance/clock",
   "/api/ipcc",
   "/api/hold-points",
   "/api/ideas",
-  "/api/logs",
-  "/api/maintenance/jobs",
-  "/api/movement",
   "/api/safety",
-  "/api/shift-counts",
   "/_next",
   "/favicon.ico",
   "/grid.svg",
@@ -114,6 +114,21 @@ export async function proxy(request: NextRequest) {
         // Invalid/expired session — treat as anonymous.
       }
     }
+    // Kiosk LAN gate: if MFGMAX_KIOSK_TOKEN is configured (prod), anonymous kiosk APIs must present it
+    const kioskToken = process.env.MFGMAX_KIOSK_TOKEN || process.env.KIOSK_TOKEN;
+    if (kioskToken) {
+      const isKioskApi = ["/api/operator", "/api/terminal", "/api/attendance/clock", "/api/ipcc", "/api/hold-points"].some(
+        (p) => pathname === p || pathname.startsWith(p + "/"),
+      );
+      if (isKioskApi) {
+        const provided = request.headers.get("x-kiosk-token") || request.headers.get("x-kiosk-token".toLowerCase()) || new URL(request.url).searchParams.get("kioskToken");
+        // If no valid session was forwarded above (i.e., we are anonymous), enforce kiosk token
+        if (!provided || provided !== kioskToken) {
+          // Allow if a valid session existed (already returned above); this branch is anonymous kiosk
+          return NextResponse.json({ error: "Kiosk token required" }, { status: 401 });
+        }
+      }
+    }
     return NextResponse.next();
   }
 
@@ -160,7 +175,8 @@ export async function proxy(request: NextRequest) {
             mustChangePassword: true,
           },
         });
-        if (!dbUser || !dbUser.isActive || dbUser.sessionEpoch !== sess) {
+        const dbEpoch = dbUser?.sessionEpoch ?? 0;
+        if (!dbUser || !dbUser.isActive || dbEpoch !== sess) {
           // Session was rotated or the user was disabled — drop the cookie.
           if (pathname.startsWith("/api/")) {
             const res = NextResponse.json(

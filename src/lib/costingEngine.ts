@@ -191,16 +191,11 @@ export async function calculateWorkOrderCost(
     reworkQuantity = safeNonNegative(agg._sum.reworkQuantity);
   }
 
-  // Determine effective quantity for completed vs in-progress work orders
+  // PR3: Don't fabricate quantity for in-progress WOs. Revenue/cost must reflect actual production logs.
+  // COMPLETED with missing logs (manual close / import) falls back to plannedQuantity; otherwise actual goodQuantity (even if 0).
   let effectiveGoodQty = goodQuantity;
-  if (effectiveGoodQty === 0) {
-    if (wo.status === "COMPLETED") {
-      effectiveGoodQty = plannedQuantity;
-    } else {
-      // Progress estimation based on completed sequence proportion (min 1 unit)
-      const estimatedProgressRatio = Math.min(1, Math.max(0.25, (wo.currentSeq || 1) / 4.0));
-      effectiveGoodQty = Math.max(1, Math.round(plannedQuantity * estimatedProgressRatio));
-    }
+  if (effectiveGoodQty === 0 && wo.status === "COMPLETED") {
+    effectiveGoodQty = plannedQuantity;
   }
 
   // 4. Material Cost Calculation
