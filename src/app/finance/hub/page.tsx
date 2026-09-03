@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import PageHeader from "@/app/components/shared/PageHeader";
 import HubClient from "@/app/components/shared/HubClient";
 import { prisma } from "@/lib/prisma";
+import { fromPaiseRows } from "@/lib/money";
 import {
   Calculator,
   DollarSign,
@@ -57,17 +58,23 @@ export default async function FinanceHub() {
         `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
       ),
     ]);
-  const receivables = invoices.filter((i) => i.status !== "PAID");
+  // Ledger-style fixed point: invoice / supplier-invoice / treasury rows store
+  // paise — map to the rupee contract before any KPI, feed or section display.
+  const invoicesR = fromPaiseRows("Invoice", invoices);
+  const supplierInvoicesR = fromPaiseRows("SupplierInvoice", supplierInvoices);
+  const treasuryR = fromPaiseRows("TreasuryTransaction", treasury);
+
+  const receivables = invoicesR.filter((i) => i.status !== "PAID");
   const receivablesTotal = receivables.reduce(
     (s, i) => s + (i.totalValue - i.paidAmount),
     0,
   );
-  const payables = supplierInvoices.filter((i) => i.status === "UNPAID");
+  const payables = supplierInvoicesR.filter((i) => i.status === "UNPAID");
   const payablesTotal = payables.reduce((s, i) => s + i.totalAmount, 0);
-  const mismatched = supplierInvoices.filter(
+  const mismatched = supplierInvoicesR.filter(
     (i) => i.grn?.matchStatus === "MISMATCHED",
   );
-  const bankBalance = treasury.reduce(
+  const bankBalance = treasuryR.reduce(
     (s, t) => s + (t.type === "INFLOW" ? t.amount : -t.amount),
     0,
   );
@@ -77,7 +84,7 @@ export default async function FinanceHub() {
   const budgetUsed = budgetLines.reduce((s, b) => s + (b.spent || 0), 0);
 
   const feed = [
-    ...treasury.slice(0, 5).map((t: any) => ({
+    ...treasuryR.slice(0, 5).map((t: any) => ({
       time: format(new Date(t.date), "MMM d"),
       title:
         (t.type === "INFLOW" ? "Inflow" : "Outflow") +
@@ -87,7 +94,7 @@ export default async function FinanceHub() {
       tone: (t.type === "INFLOW" ? "ok" : "warn") as any,
       href: "/commercial/treasury",
     })),
-    ...supplierInvoices.slice(0, 4).map((i: any) => ({
+    ...supplierInvoicesR.slice(0, 4).map((i: any) => ({
       time: format(new Date(i.invoiceDate), "MMM d"),
       title: i.invoiceNumber + " · ₹" + i.totalAmount.toLocaleString("en-IN"),
       detail:
@@ -231,12 +238,12 @@ export default async function FinanceHub() {
             open: true,
             body: (
               <div className="space-y-2">
-                {supplierInvoices.length === 0 ? (
+                {supplierInvoicesR.length === 0 ? (
                   <p className="text-sm text-text-3">
                     No supplier invoices yet.
                   </p>
                 ) : (
-                  supplierInvoices.slice(0, 7).map((i: any) => (
+                  supplierInvoicesR.slice(0, 7).map((i: any) => (
                     <a
                       key={i.id}
                       href="/supply/grn"

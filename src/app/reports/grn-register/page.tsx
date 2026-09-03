@@ -2,6 +2,7 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { fromPaiseRows } from "@/lib/money";
 import PrintButton from "@/app/components/print/PrintButton";
 import { PackageCheck } from "lucide-react";
 
@@ -42,7 +43,10 @@ export default async function GrnRegisterPage() {
     }),
   ]);
 
-  const matched = invoices.filter((i) => i.status === "MATCHED").length;
+  // Supplier invoice rows store paise — map to rupees for the printed register.
+  const invoicesRupees = fromPaiseRows("SupplierInvoice", invoices);
+
+  const matched = invoicesRupees.filter((i) => i.status === "MATCHED").length;
   const mismatched = invoices.filter((i) => i.status === "MISMATCHED").length;
 
   return (
@@ -150,7 +154,7 @@ export default async function GrnRegisterPage() {
                 </td>
               </tr>
             )}
-            {invoices.map((inv) => (
+            {invoicesRupees.map((inv) => (
               <tr key={inv.id} className="align-top">
                 <td className="p-3 font-mono font-bold">{inv.invoiceNumber}</td>
                 <td className="p-3">{inv.supplier?.name}</td>
