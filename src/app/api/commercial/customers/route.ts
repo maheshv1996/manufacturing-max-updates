@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
-import { fromPaise } from "@/lib/money";
+import { fromPaise, toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 import { parseOr400 } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,9 @@ export async function GET() {
       if (open > 0) openBy[i.customerName] = (openBy[i.customerName] || 0) + open;
     }
 
-    const rows = customers.map((c) => ({
+    // Customer rows store creditLimit in integer paise — map to the rupee contract.
+    const customersR = fromPaiseRows("Customer", customers);
+    const rows = customersR.map((c: any) => ({
       ...c,
       openReceivable: Math.round(openBy[c.name] || 0),
       orderCount: 0,
@@ -174,7 +176,7 @@ export async function POST(req: Request) {
         gstin: d.gstin || null,
         pan: d.pan || null,
         paymentTerms: d.paymentTerms || "NET30",
-        creditLimit: d.creditLimit || 0,
+        creditLimit: toPaise(d.creditLimit || 0),
         creditDays: d.creditDays ?? 30,
         currency: d.currency || "INR",
         notes: d.notes || null,
@@ -201,7 +203,7 @@ export async function POST(req: Request) {
       details: `Created customer ${customer.code} ${customer.name} (${customer.type})`,
     });
 
-    return NextResponse.json({ success: true, customer });
+    return NextResponse.json({ success: true, customer: fromPaiseRow("Customer", customer) });
   } catch (error) {
     console.error("POST /api/commercial/customers error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

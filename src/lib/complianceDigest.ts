@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { fromPaise } from "./money";
+import { fromPaise, fromPaiseRows } from "./money";
 import { getMissedObjectives } from "./qualityObjectives";
 
 export type ComplianceFlag = {
@@ -151,7 +151,9 @@ export async function getComplianceFlags(
   });
 
   // 5. Departmental Treasury & Budget Overruns
-  budgetLines.forEach((b: any) => {
+  // Budget rows store integer paise — map to the rupee contract for the flag copy.
+  const budgetLinesR = fromPaiseRows("BudgetLine", budgetLines);
+  budgetLinesR.forEach((b: any) => {
     if (!b) return;
     const allocated = Number(b.allocated) || 0;
     const spent = Number(b.spent) || 0;

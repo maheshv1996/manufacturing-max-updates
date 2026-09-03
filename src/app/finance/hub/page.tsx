@@ -63,6 +63,7 @@ export default async function FinanceHub() {
   const invoicesR = fromPaiseRows("Invoice", invoices);
   const supplierInvoicesR = fromPaiseRows("SupplierInvoice", supplierInvoices);
   const treasuryR = fromPaiseRows("TreasuryTransaction", treasury);
+  const budgetLinesR = fromPaiseRows("BudgetLine", budgetLines);
 
   const receivables = invoicesR.filter((i) => i.status !== "PAID");
   const receivablesTotal = receivables.reduce(
@@ -81,7 +82,7 @@ export default async function FinanceHub() {
   const monthPayroll = payslips
     .filter((p) => p.month === thisMonth)
     .reduce((s, p) => s + (p.netPay || 0), 0);
-  const budgetUsed = budgetLines.reduce((s, b) => s + (b.spent || 0), 0);
+  const budgetUsed = budgetLinesR.reduce((s, b) => s + (b.spent || 0), 0);
 
   const feed = [
     ...treasuryR.slice(0, 5).map((t: any) => ({

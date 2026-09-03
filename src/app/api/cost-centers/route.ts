@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { matchDepartmentKey } from "@/lib/departments";
 import { logAudit } from "@/lib/audit";
+import { toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export const maxDuration = 60;
 
@@ -19,15 +20,17 @@ export async function GET(req: Request) {
     const lines = await prisma.budgetLine.findMany({
       orderBy: { department: "asc" },
     });
+    // Budget rows store integer paise — expose the rupee contract.
+    const linesR = fromPaiseRows("BudgetLine", lines);
 
-    const byDept = new Map<string, typeof lines>();
-    for (const l of lines) {
+    const byDept = new Map<string, typeof linesR>();
+    for (const l of linesR) {
       const key = matchDepartmentKey(l.department) || l.department;
       if (!byDept.has(key)) byDept.set(key, []);
       byDept.get(key)!.push(l);
     }
 
-    const rows = lines.map((l) => {
+    const rows = linesR.map((l) => {
       const allocated = Number(l.allocated) || 0;
       const spent = Number(l.spent) || 0;
       const pct = allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
@@ -106,7 +109,7 @@ export async function POST(req: Request) {
         );
       const line = await prisma.budgetLine.update({
         where: { id },
-        data: { spent: amt, notes: notes || undefined },
+        data: { spent: toPaise(amt), notes: notes || undefined },
       });
 
       await logAudit({
@@ -117,7 +120,7 @@ export async function POST(req: Request) {
         details: `spent=${amt}`,
       });
 
-      return NextResponse.json({ line });
+      return NextResponse.json({ line: fromPaiseRow("BudgetLine", line) });
     }
 
     if (action === "create") {
@@ -133,7 +136,7 @@ export async function POST(req: Request) {
           fiscalYear,
           department,
           category,
-          allocated: amt,
+          allocated: toPaise(amt),
           spent: 0,
           notes: notes || null,
         },
@@ -147,7 +150,7 @@ export async function POST(req: Request) {
         details: `${fiscalYear} · ${department} · ${category} · ${amt}`,
       });
 
-      return NextResponse.json({ line }, { status: 201 });
+      return NextResponse.json({ line: fromPaiseRow("BudgetLine", line) }, { status: 201 });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

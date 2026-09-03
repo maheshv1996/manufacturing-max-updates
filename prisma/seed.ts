@@ -2436,7 +2436,7 @@ async function main() {
         { fiscalYear: "FY27", department: "Maintenance", category: "Spares", allocated: 18500000, spent: 6400000 },
         { fiscalYear: "FY27", department: "Quality", category: "Metrology", allocated: 9600000, spent: 2100000, notes: "CMM calibration contract." },
         { fiscalYear: "FY27", department: "IT", category: "Infrastructure", allocated: 14500000, spent: 7200000, notes: "Network refresh + backups." },
-      ],
+      ].map((r: any) => toPaiseRow("BudgetLine", r)),
     });
   }
 

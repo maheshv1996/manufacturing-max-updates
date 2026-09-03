@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
-import { toPaiseRow, fromPaiseRows } from "@/lib/money";
+import { toPaiseRow, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 // Map URL entity keys to the actual Prisma model names (plural route key -> camelCase model).
 // Entities whose rows store fixed-point paise → rupee contract at the API edge.
 const MONEY_MODEL_BY_ENTITY: Record<string, string> = {
   treasuryTransactions: "TreasuryTransaction",
+  budgetLines: "BudgetLine",
 };
 
 const ENTITY_MODELS: Record<string, string> = {
@@ -386,7 +387,9 @@ export async function POST(
       details: `${user.name || "Admin"} ${action} on ${entity}`,
     });
 
-    return NextResponse.json({ success: true, record: result });
+    // Mirror the GET contract: money-model rows expose rupees, never raw paise.
+    const out = moneyModel && result && typeof result === "object" ? fromPaiseRow(moneyModel, result) : result;
+    return NextResponse.json({ success: true, record: out });
   } catch (error) {
     console.error(`POST /api/register/${entity} error:`, error);
     return NextResponse.json(

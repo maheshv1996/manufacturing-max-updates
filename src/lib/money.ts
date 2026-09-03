@@ -68,6 +68,8 @@ export const MONEY_KEYS: Record<string, readonly string[]> = {
   TreasuryTransaction: ["amount"],
   BankStatementEntry: ["amount", "balanceAfter"],
   GoodsReceiptNoteLine: ["amount"],
+  BudgetLine: ["allocated", "spent"],
+  Customer: ["creditLimit"],
 };
 
 /** Map one row's money keys rupees→paise (for prisma writes). Keys absent → untouched. */

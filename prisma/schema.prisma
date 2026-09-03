@@ -1312,7 +1312,7 @@ model Customer {
   type            CustomerType   @default(DOMESTIC)
   pan             String?
   currency        String         @default("INR")
-  creditLimit     Float          @default(0) // 0 = no explicit limit
+  creditLimit     Float          @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees; 0 = no explicit limit
   creditDays      Int            @default(30)
   billingAddress  String?
   shippingAddress String?
@@ -2771,8 +2771,8 @@ model BudgetLine {
   fiscalYear String
   department String
   category   String
-  allocated  Float    @default(0)
-  spent      Float    @default(0)
+  allocated  Float    @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
+  spent      Float    @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
   notes      String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

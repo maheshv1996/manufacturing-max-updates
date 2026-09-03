@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
+import { toPaise, fromPaiseRow } from "@/lib/money";
 import { parseOr400 } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function GET(
     if (!customer) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
-    return NextResponse.json({ success: true, customer });
+    return NextResponse.json({ success: true, customer: fromPaiseRow("Customer", customer) });
   } catch (error) {
     console.error("GET /api/commercial/customers/[id] error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -81,7 +82,7 @@ export async function PATCH(
     const data: any = {};
     for (const [k, v] of Object.entries(parsed.data)) {
       if (v === undefined) continue;
-      data[k] = v === "" ? null : v;
+      data[k] = k === "creditLimit" ? toPaise(Number(v)) : v === "" ? null : v;
     }
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -101,7 +102,7 @@ export async function PATCH(
       details: `Updated customer ${customer.code} ${customer.name}: ${Object.keys(data).join(", ")}`,
     });
 
-    return NextResponse.json({ success: true, customer });
+    return NextResponse.json({ success: true, customer: fromPaiseRow("Customer", customer) });
   } catch (error: any) {
     if (error?.code === "P2025") {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
