@@ -21,7 +21,7 @@ import {
   AIAG_K2_K3,
   D2_STAR_G1,
   type GrrMeasurement,
-} from "../src/lib/grr";
+} from "../src/lib/grr.ts";
 
 /** Asserts `actual` is within `eps` of `expected`. */
 function closeTo(actual: number, expected: number, eps = 0.0005): void {

@@ -22,7 +22,7 @@ import {
   looksSecret,
   LIMITS,
   REDACTED,
-} from "../src/lib/diagnostics";
+} from "../src/lib/diagnostics.ts";
 
 /** Every credential literal used anywhere in this file. */
 const SECRETS = [

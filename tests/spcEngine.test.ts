@@ -20,8 +20,8 @@ import {
   computeSpcChart,
   SPC_CONSTANTS,
   type SpcSubgroup,
-} from "../src/lib/spcEngine";
-import { AIAG_K1 } from "../src/lib/grr";
+} from "../src/lib/spcEngine.ts";
+import { AIAG_K1 } from "../src/lib/grr.ts";
 
 const SIZES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
