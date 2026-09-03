@@ -21,6 +21,7 @@ import {
   Receipt,
   ShieldAlert,
   Wrench,
+  History,
 } from "lucide-react";
 import { format } from "date-fns";
 import { computeCoQ } from "@/lib/costOfQuality";
@@ -215,6 +216,11 @@ export default async function FinanceHub() {
             label: "GL Auto-Post Repair",
             href: "/finance/gl-repair",
             icon: <Wrench className="h-4 w-4" />,
+          },
+          {
+            label: "GL Backfill Workbench",
+            href: "/finance/gl-backfill",
+            icon: <History className="h-4 w-4" />,
           },
         ]}
         sections={[

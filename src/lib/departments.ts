@@ -965,9 +965,15 @@ export const DEPARTMENTS: Department[] = [
       },
       {
         name: "GL Auto-Post Repair",
-        desc: "Failed auto-posts — retry & backfill",
+        desc: "Failed auto-posts — retry queue",
         href: "/finance/gl-repair",
         icon: Wrench,
+      },
+      {
+        name: "GL Backfill Workbench",
+        desc: "Post pre-ledger documents — invoices, payments, payroll",
+        href: "/finance/gl-backfill",
+        icon: ClipboardCheck,
       },
     ],
   },
