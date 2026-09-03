@@ -78,3 +78,82 @@ surface them. Built this wave:
 - compliance digest category `Risk Register` + `risk-review-due` bell → flows
   into the MRM agenda automatically via the existing digest engine
 - shared `src/lib/riskRegister.ts` (scoring + review cadence) mirrored by tests
+
+## Tier-2 - still missing for a real-world org (prioritised)
+
+Everything below maps onto existing machinery (digest, bell, MRM agenda,
+register engine, RBAC) - nothing needs a new platform. Order = frequency x
+value in a real plant.
+
+1. **Org chart + RACI / reporting lines.** A real org runs on a defined
+   structure: departments -> heads -> team, with RACI for key processes.
+   MfgMax has departments, levels (MANAGER/WORKER) and 3 seeded roles, but
+   no org chart, no reporting lines, no ownership matrix. Build: OrgChart
+   nodes + RACI register linked to processes/risks.
+2. **Exit / offboarding management.** Onboarding exists; leaving does not.
+   Real orgs run: resignation -> notice -> handover checklist -> full & final
+   settlement -> asset recovery -> access revocation -> exit interview.
+   Build: OffboardingCase lifecycle + FnF computation + access auto-revoke.
+3. **Supplier audits.** Supplier scorecards (hard metrics) exist; a real
+   org also audits suppliers on a schedule (process/quality/CSR checks).
+   Build: SupplierAudit (due-date cadence, findings, CAPA linkage) -> digest.
+4. **Customer satisfaction (CSAT) / voice of customer.** Scorecards cover
+   PPM/OTD only. Real orgs run periodic CSAT surveys + complaint VOC tags.
+5. **TDS compliance tracker.** PF/ESI challan generator exists; TDS
+   (quarterly + annual returns, deductee reconciliation) does not.
+6. **Succession planning / key-man dependency.** Risk register now covers
+   dependency risks; the HR answer is a succession map per critical role.
+7. **Management of Change (MOC).** ECO/ECN covers engineering changes only.
+   Real orgs gate process/machine/organisation changes with MOC approval.
+8. **Policy acknowledgement tracking.** QMS doc control has the documents;
+   real orgs record signed acknowledgements per employee per policy.
+9. **Whistleblower / anonymous ethics channel.** Grievances are named.
+   Governance-grade orgs add a protected anonymous channel + audit trail.
+10. **Visitor / gate management.** Outbound gate passes exist; inbound
+    visitor logs, vehicle entries and badges are a security gap.
+11. **Contract expiry + milestone alerts.** Contracts register exists;
+    auto-expiry alerting into the digest does not (register is manual).
+
+## Roles & responsibilities - what the system has vs a real org
+
+**Today:** 16 workspace domains x (view/edit) + special keys
+(`users.manage`, `terminal.use`, `reports.print`, `records.edit`,
+`kpi.override`, `audit.view`, plus per-department `.approve` keys) in
+`src/lib/permissions.ts`; three seeded roles (ADMIN, SUPERVISOR, OPERATOR);
+two levels (MANAGER | WORKER). Domain wildcards (`ops.*`) and explicit key
+assignment work, and PO/discount/approval chains gate by threshold + level.
+
+| Real-world role | MfgMax today | Gap / recommendation |
+| --- | --- | --- |
+| Owner / Director | ADMIN + exec.* | OK |
+| Plant Head / GM | ADMIN-lite (exec.view + all view) | No preset - hand-rolled |
+| Dept Head (Prod/QC/SCM/Maint/HR/Fin/IT/EHS/Eng) | SUPERVISOR + own domain edit | No preset bundles; hand-rolled per user |
+| Shift supervisor | SUPERVISOR (MANAGER level) | OK |
+| Operator / technician | OPERATOR (WORKER level) | OK |
+| Buyer | supply.view + PO create | shares supply.edit with store; needs PO-only bundle |
+| Storekeeper | supply.view/edit | same key as buyer - no separation |
+| Accountant | finance.view | no preset; audit-view limited |
+| Finance manager | finance.edit + maker-checker | OK (thresholds) |
+| HR executive | people.view/edit | no preset |
+| EHS officer | ehs.view/edit | no preset |
+| IT admin | system.edit | OK |
+| Internal auditor | audit.view + domain views | exists as key only |
+| Risk champion / owner | risk.view/edit EXISTS in the key space but is seeded/used nowhere | wire risk.* into gates + role bundles |
+| Quality engineer | quality.view/edit | no preset |
+| Maintenance engineer | maintenance.view/edit | no preset |
+
+**Recommendations (zero schema change):**
+1. Seed ~10 functional role bundles reusing existing keys (PLANT_HEAD,
+   DEPT_HEAD, BUYER, STOREKEEPER, ACCOUNTANT, HR_EXEC, EHS_OFFICER, IT_ADMIN,
+   AUDITOR, RISK_OWNER) with the ADMIN/SUPERVISOR/OPERATOR pattern.
+2. Wire `risk.view`/`risk.edit` into the risk-register route gates.
+3. Add an OrgChart + RACI module (tier-2 item 1) so roles hang off real
+   reporting lines instead of flat permission bundles.
+
+## Verdict (updated)
+
+Wave 1 (risk management) is built and live. The honest tier-2 backlog above
+is the rest of "a complete real-world organisation": the highest-value next
+builds are (1) org chart + RACI with seeded functional role bundles,
+(2) exit/offboarding management, (3) supplier audits. Each plugs into the
+existing digest/bell/MRM machinery the same way risk management did.

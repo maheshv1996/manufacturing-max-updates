@@ -40,3 +40,15 @@ Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SE
 - ESLint `no-error-message-in-500` to lock `internalError()`
 - `vercel.json` cron or keep launcher prune (offline already)
 - Per-field `zod` for remaining 150 minimal-guarded POSTs as features land
+- Tier-2 org backlog (full analysis in `docs/ORG_GAP_ANALYSIS.md`):
+  1. Org chart + RACI + ~10 seeded functional role bundles (PLANT_HEAD,
+     DEPT_HEAD, BUYER, STOREKEEPER, ACCOUNTANT, HR_EXEC, EHS_OFFICER,
+     IT_ADMIN, AUDITOR, RISK_OWNER) - reuses existing permission keys,
+     zero schema change for the bundles; wire `risk.view`/`risk.edit` into
+     the risk-register gates.
+  2. Exit / offboarding management (notice -> handover -> FnF -> asset
+     recovery -> access revocation -> exit interview).
+  3. Supplier audits (cadence + findings + CAPA linkage) and CSAT / VOC.
+  4. TDS compliance tracker; MOC beyond ECO; policy acknowledgements;
+     anonymous whistleblower channel; visitor/gate inbound logs;
+     contract expiry alerts into the digest.
