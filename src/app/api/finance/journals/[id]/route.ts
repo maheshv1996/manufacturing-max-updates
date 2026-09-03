@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { reverseJournalEntry, GlError } from "@/lib/glEngine";
+import { reverseJournalEntry, journalEntryToRupees, GlError } from "@/lib/glEngine";
 import { checkIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
@@ -33,7 +33,8 @@ export async function GET(
     if (!entry) {
       return NextResponse.json({ error: "Journal entry not found" }, { status: 404 });
     }
-    return NextResponse.json({ success: true, entry });
+    // Ledger rows are stored as integer paise — expose the rupee contract.
+    return NextResponse.json({ success: true, entry: journalEntryToRupees(entry) });
   } catch (error) {
     console.error("GET /api/finance/journals/[id] error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

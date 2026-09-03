@@ -1434,7 +1434,7 @@ model PurchaseOrder {
   @@index([approvalStatus])
   @@index([createdAt])
   @@index([status, createdAt])
-}
+}
 
 model PurchaseOrderLine {
   id            String            @id @default(cuid())
@@ -4666,8 +4666,7 @@ model JournalEntry {
   status       JournalEntryStatus @default(DRAFT)
   source       JournalSource      @default(MANUAL)
   sourceId     String?            // originating doc (voucher / invoice id) when applicable
-  totalDebit   Float              @default(0)
-  totalCredit  Float              @default(0)
+  totalDebit   Float              @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
   createdBy    String
   postedBy     String?
   postedAt     DateTime?
@@ -4694,8 +4693,7 @@ model JournalLine {
   entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   accountId String
   account   GlAccount   @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  debit     Float       @default(0)
-  credit    Float       @default(0)
+  debit     Float       @default(0) // INTEGER PAISE (fixed-point) — divide by 100 for rupees
   reference String?     // source doc number (invoice / voucher / PO)
   narration String?
   createdAt DateTime    @default(now())

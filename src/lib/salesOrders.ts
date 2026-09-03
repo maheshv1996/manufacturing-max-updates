@@ -34,6 +34,13 @@ export function computeSalesLineTotals(l: SalesLineCompute): SalesLineTotals {
   return { amount, discountAmt, taxAmt, total: round2(taxable + taxAmt) };
 }
 
+// Pure fulfilment/heal policy lives in ./salesOrderPolicy (DB-free, testable).
+export {
+  HEALABLE_TO_INVOICED,
+  computeSalesOrderFulfilment,
+} from "./salesOrderPolicy";
+export type { SalesOrderLineQty, SalesOrderFulfilment } from "./salesOrderPolicy";
+
 /** SO-YYYY-NNNN via the atomic SequenceCounter (inside a transaction). */
 export async function nextSalesOrderNumber(
   tx: any,

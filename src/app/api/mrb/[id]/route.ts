@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { headers } from "next/headers";
+import { normalizeMrbDisposition, normalizeMrbAuthority } from "@/lib/mrbPolicy";
 
 export async function PUT(
   request: Request,
@@ -38,27 +39,10 @@ export async function PUT(
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    // Enum-safe sanitization: only accept values the schema actually allows.
-    // Free text or stale option labels used to reach prisma and 500 the whole
-    // request — validate + coerce instead of crashing.
-    const DISPOSITIONS = [
-      "USE_AS_IS",
-      "REWORK",
-      "SCRAP",
-      "RETURN_TO_SUPPLIER",
-    ];
-    const AUTHORITIES = ["QUALITY", "ENGINEERING", "CUSTOMER"];
-    const normDisposition = (v: any) => {
-      if (!v) return undefined;
-      const s = String(v).trim();
-      if (s === "RETURN_TO_VENDOR") return "RETURN_TO_SUPPLIER"; // legacy UI label
-      return DISPOSITIONS.includes(s) ? s : undefined;
-    };
-    const normAuthority = (v: any) => {
-      if (!v) return undefined;
-      const s = String(v).trim().toUpperCase();
-      return AUTHORITIES.includes(s) ? s : undefined;
-    };
+    // Enum-safe sanitization (see src/lib/mrbPolicy.ts): only accept values
+    // the schema actually allows — validate + coerce instead of crashing.
+    const normDisposition = (v: any) => normalizeMrbDisposition(v) ?? undefined;
+    const normAuthority = (v: any) => normalizeMrbAuthority(v) ?? undefined;
 
     if (action === "DISPOSE") {
       if (!normDisposition(disposition)) {

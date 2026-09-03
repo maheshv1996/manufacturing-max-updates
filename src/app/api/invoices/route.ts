@@ -8,6 +8,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { autoPostToGL } from "@/lib/glPosting";
+import { computeSalesOrderFulfilment } from "@/lib/salesOrders";
 
 export const dynamic = "force-dynamic";
 
@@ -367,16 +368,8 @@ export async function POST(req: Request) {
             // read INVOICED even when the billing that completed it happened in an
             // earlier session (e.g. pre-self-heal data). Flip it and return a
             // notice instead of a hard error so the order book heals itself.
-            const allInvoiced = so.lines.every(
-              (l: any) =>
-                Number(l.invoicedQty || 0) >= Number(l.quantity) - 0.001,
-            );
-            const healable = [
-              "CONFIRMED",
-              "IN_PRODUCTION",
-              "PARTIALLY_DISPATCHED",
-              "DISPATCHED",
-            ].includes(so.status);
+            const { allInvoiced, healableToInvoiced: healable } =
+              computeSalesOrderFulfilment(so.status, so.lines);
             if (allInvoiced && healable && so.status !== "INVOICED") {
               await (tx as any).salesOrder.update({
                 where: { id: so.id },

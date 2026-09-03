@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { postJournalEntry, ensureChartOfAccounts, GlError, periodForDate } from "@/lib/glEngine";
+import { postJournalEntry, ensureChartOfAccounts, GlError, periodForDate, journalEntryToRupees } from "@/lib/glEngine";
+import { fromPaise } from "@/lib/money";
 import { checkIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { logAudit } from "@/lib/audit";
 import { z } from "zod";
@@ -39,13 +40,16 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      entries,
+      // Ledger rows are stored as integer paise — expose the rupee contract.
+      entries: entries.map((e) => journalEntryToRupees(e)),
       stats: {
         posted: stats.find((s) => s.status === "POSTED")?._count._all || 0,
         reversed: stats.find((s) => s.status === "REVERSED")?._count._all || 0,
-        postedValueYear: thisYear
-          .filter((e) => e.status === "POSTED")
-          .reduce((a, e) => a + e.totalDebit, 0),
+        postedValueYear: fromPaise(
+          thisYear
+            .filter((e) => e.status === "POSTED")
+            .reduce((a, e) => a + e.totalDebit, 0),
+        ),
       },
     });
   } catch (error) {

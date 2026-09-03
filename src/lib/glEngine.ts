@@ -1,12 +1,18 @@
 import { prisma } from "./prisma";
 import { nextSequenceTx } from "./sequence";
 import { reserveIdempotency } from "./idempotency";
-import {
+import { toPaise, fromPaise } from "./money";
+import { DEFAULT_COA, periodForDate, journalEntryToRupees } from "./glCore";
+import type {
   GlAccountType,
   GlAccountGroup,
-  GlNormalBalance,
   JournalSource,
 } from "@prisma/client";
+
+// Pure GL facts live in ./glCore (DB-free, unit-testable) — re-export so app
+// callers keep a single import site.
+export { DEFAULT_COA, periodForDate, journalEntryToRupees } from "./glCore";
+export type { CoaSeed } from "./glCore";
 
 /**
  * GL / Double-Entry Accounting Engine
@@ -18,7 +24,10 @@ import {
  *
  * Conventions:
  *  - Every journal entry is balanced: totalDebit === totalCredit.
- *  - Amounts are stored as Float (project-wide convention) rounded to 2dp.
+ *  - Amounts are FIXED-POINT: the API accepts rupees, but everything stored
+ *    in JournalEntry/JournalLine and everything summed internally is INTEGER
+ *    PAISE (see src/lib/money.ts). Integer arithmetic cannot drift, so the
+ *    ledger balances exactly and the audit trail is clean at the paise.
  *  - Entry numbers come from the atomic SequenceCounter (JE-YYYY-NNNN).
  *  - All mutations are transactional + audit-logged by the route layer.
  */
@@ -31,91 +40,10 @@ export class GlError extends Error {
   }
 }
 
-export function periodForDate(date: Date): string {
-  const d = date instanceof Date && !isNaN(date.getTime()) ? date : new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+/** Rupee display for paise-held error messages. */
+function rupees(paise: number): string {
+  return fromPaise(paise).toFixed(2);
 }
-
-function round2(n: number): number {
-  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
-}
-
-// ---------------------------------------------------------------------------
-// DEFAULT CHART OF ACCOUNTS (Indian manufacturing standard, schedules VI-ish)
-// ---------------------------------------------------------------------------
-export interface CoaSeed {
-  code: string;
-  name: string;
-  type: GlAccountType;
-  group: GlAccountGroup;
-  normalBalance: GlNormalBalance;
-  description?: string;
-}
-
-export const DEFAULT_COA: CoaSeed[] = [
-  // ---- ASSETS -------------------------------------------------------------
-  { code: "1010", name: "Cash on Hand", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Petty cash & physical cash" },
-  { code: "1020", name: "Bank Accounts", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "All operating bank balances" },
-  { code: "1030", name: "Accounts Receivable", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Customer invoice receivables" },
-  { code: "1040", name: "GST Input Credit (ITC)", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Input tax credit receivable" },
-  { code: "1050", name: "Inventory — Raw Materials", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Raw material stock value" },
-  { code: "1060", name: "Inventory — Work in Progress", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "WIP value on open work orders" },
-  { code: "1070", name: "Inventory — Finished Goods", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Finished goods stock value" },
-  { code: "1080", name: "Loans & Advances", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Employee / vendor advances" },
-  { code: "1090", name: "Prepaid Expenses", type: "ASSET", group: "CURRENT_ASSET", normalBalance: "DEBIT", description: "Insurance, rents paid in advance" },
-  { code: "1210", name: "Plant & Machinery", type: "ASSET", group: "FIXED_ASSET", normalBalance: "DEBIT", description: "CNC machines & equipment at cost" },
-  { code: "1220", name: "Tools, Jigs & Fixtures", type: "ASSET", group: "FIXED_ASSET", normalBalance: "DEBIT", description: "Tooling & fixtures register value" },
-  { code: "1230", name: "Furniture & Fixtures", type: "ASSET", group: "FIXED_ASSET", normalBalance: "DEBIT", description: "Office furniture & fittings" },
-  { code: "1240", name: "Vehicles", type: "ASSET", group: "FIXED_ASSET", normalBalance: "DEBIT", description: "Company vehicles at cost" },
-  { code: "1250", name: "Computers & IT Equipment", type: "ASSET", group: "FIXED_ASSET", normalBalance: "DEBIT", description: "IT assets at cost" },
-  { code: "1260", name: "Accumulated Depreciation", type: "ASSET", group: "FIXED_ASSET", normalBalance: "CREDIT", description: "Contra-asset — cumulative depreciation" },
-  { code: "1310", name: "Intangible Assets", type: "ASSET", group: "INTANGIBLE_ASSET", normalBalance: "DEBIT", description: "Software, IP, goodwill" },
-
-  // ---- LIABILITIES --------------------------------------------------------
-  { code: "2010", name: "Accounts Payable", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Supplier invoice payables" },
-  { code: "2020", name: "GST Output Payable", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Output tax collected" },
-  { code: "2030", name: "Statutory Dues (PF/ESI/PT)", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Payroll statutory payables" },
-  { code: "2040", name: "TDS Payable", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Tax deducted at source payable" },
-  { code: "2050", name: "Salary & Wages Payable", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Accrued payroll" },
-  { code: "2060", name: "Customer Advances", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Advances received from customers" },
-  { code: "2070", name: "Short-Term Loans", type: "LIABILITY", group: "CURRENT_LIABILITY", normalBalance: "CREDIT", description: "Working capital loans, OD" },
-  { code: "2210", name: "Long-Term Loans", type: "LIABILITY", group: "LONG_TERM_LIABILITY", normalBalance: "CREDIT", description: "Term loans, vehicle finance" },
-  { code: "2220", name: "Provisions", type: "LIABILITY", group: "LONG_TERM_LIABILITY", normalBalance: "CREDIT", description: "Gratuity, leave encashment provisions" },
-
-  // ---- EQUITY -------------------------------------------------------------
-  { code: "3010", name: "Owner's Capital", type: "EQUITY", group: "CAPITAL", normalBalance: "CREDIT", description: "Proprietor / partner capital" },
-  { code: "3020", name: "Share Capital", type: "EQUITY", group: "CAPITAL", normalBalance: "CREDIT", description: "Paid-up equity" },
-  { code: "3030", name: "Reserves & Surplus", type: "EQUITY", group: "RESERVES", normalBalance: "CREDIT", description: "General reserves, retained surplus" },
-  { code: "3040", name: "Retained Earnings", type: "EQUITY", group: "RETAINED_EARNINGS", normalBalance: "CREDIT", description: "Cumulative profit ploughed back" },
-
-  // ---- REVENUE ------------------------------------------------------------
-  { code: "4010", name: "Sales — Domestic", type: "REVENUE", group: "SALES_REVENUE", normalBalance: "CREDIT", description: "Domestic product sales" },
-  { code: "4020", name: "Sales — Export", type: "REVENUE", group: "SALES_REVENUE", normalBalance: "CREDIT", description: "Export product sales" },
-  { code: "4030", name: "Job Work / Machining Revenue", type: "REVENUE", group: "SALES_REVENUE", normalBalance: "CREDIT", description: "Contract machining & job work" },
-  { code: "4040", name: "Scrap Sales", type: "REVENUE", group: "OTHER_REVENUE", normalBalance: "CREDIT", description: "Scrap / surplus material sales" },
-  { code: "4050", name: "Interest Income", type: "REVENUE", group: "OTHER_REVENUE", normalBalance: "CREDIT", description: "Bank interest, delayed-payment interest" },
-  { code: "4060", name: "Other Income", type: "REVENUE", group: "OTHER_REVENUE", normalBalance: "CREDIT", description: "Miscellaneous income" },
-
-  // ---- EXPENSES -----------------------------------------------------------
-  { code: "5010", name: "Raw Material Consumed", type: "EXPENSE", group: "DIRECT_EXPENSE", normalBalance: "DEBIT", description: "Direct material cost of goods" },
-  { code: "5020", name: "Direct Labour", type: "EXPENSE", group: "DIRECT_EXPENSE", normalBalance: "DEBIT", description: "Shopfloor wages & OT" },
-  { code: "5030", name: "Subcontracting Charges", type: "EXPENSE", group: "DIRECT_EXPENSE", normalBalance: "DEBIT", description: "Special-process vendors" },
-  { code: "5040", name: "Tooling & Consumables", type: "EXPENSE", group: "DIRECT_EXPENSE", normalBalance: "DEBIT", description: "Cutting tools, inserts, coolant" },
-  { code: "5050", name: "Manufacturing Overheads", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Power, rent, indirect shopfloor costs" },
-  { code: "5060", name: "Quality & Calibration Costs", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Inspection, calibration, NDT" },
-  { code: "5070", name: "Scrap & Rework Loss", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Non-conformance losses" },
-  { code: "5080", name: "Salaries & Wages (Staff)", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Office & staff payroll" },
-  { code: "5090", name: "Rent & Utilities", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Factory & office rent, power, water" },
-  { code: "5100", name: "Repairs & Maintenance", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Machine & building maintenance" },
-  { code: "5110", name: "Depreciation", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Period depreciation charge" },
-  { code: "5120", name: "Travel & Conveyance", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Business travel" },
-  { code: "5130", name: "Marketing & Sales Expense", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Advertising, commissions, exhibitions" },
-  { code: "5140", name: "Administrative Expenses", type: "EXPENSE", group: "OPERATING_EXPENSE", normalBalance: "DEBIT", description: "Office, professional fees, insurance" },
-  { code: "5210", name: "Bank Charges", type: "EXPENSE", group: "FINANCE_EXPENSE", normalBalance: "DEBIT", description: "Bank & transaction charges" },
-  { code: "5220", name: "Interest Expense", type: "EXPENSE", group: "FINANCE_EXPENSE", normalBalance: "DEBIT", description: "Interest on loans & OD" },
-  { code: "5230", name: "Foreign Exchange Loss", type: "EXPENSE", group: "FINANCE_EXPENSE", normalBalance: "DEBIT", description: "FX realisation losses" },
-  { code: "5310", name: "Tax Expenses", type: "EXPENSE", group: "TAX_EXPENSE", normalBalance: "DEBIT", description: "Income tax provision" },
-];
 
 /** Idempotent bootstrap — seeds the standard COA once, on first use. */
 export async function ensureChartOfAccounts(): Promise<number> {
@@ -168,7 +96,8 @@ export async function postJournalEntry(input: JournalEntryInput) {
   const date = input.date instanceof Date ? input.date : new Date(input.date);
   if (isNaN(date.getTime())) throw new GlError("INVALID_DATE", "Invalid entry date.");
 
-  // Resolve accounts + validate every line
+  // Resolve accounts + validate every line. All amounts are converted to
+  // INTEGER paise up front so the balance check below is exact.
   const normalized: Array<{
     accountId: string;
     debit: number;
@@ -176,15 +105,15 @@ export async function postJournalEntry(input: JournalEntryInput) {
     reference: string | null;
     narration: string | null;
   }> = [];
-  let totalDebit = 0;
-  let totalCredit = 0;
+  let totalDebit = 0; // paise
+  let totalCredit = 0; // paise
 
   for (const raw of input.lines) {
     if (!raw || typeof raw !== "object") throw new GlError("LINE_INVALID", "Malformed journal line.");
-    const debit = round2(Number(raw.debit || 0));
-    const credit = round2(Number(raw.credit || 0));
+    const debit = toPaise(Number(raw.debit || 0));
+    const credit = toPaise(Number(raw.credit || 0));
     if (debit < 0 || credit < 0 || !Number.isFinite(debit) || !Number.isFinite(credit)) {
-      throw new GlError("LINE_AMOUNT", "Debit/credit must be non-negative finite numbers.");
+      throw new GlError("LINE_AMOUNT", "Debit/credit must be non-negative finite amounts.");
     }
     if (debit === 0 && credit === 0) throw new GlError("LINE_EMPTY", "Each line needs a debit or credit amount.");
     if (debit > 0 && credit > 0) {
@@ -215,12 +144,10 @@ export async function postJournalEntry(input: JournalEntryInput) {
     totalCredit += credit;
   }
 
-  totalDebit = round2(totalDebit);
-  totalCredit = round2(totalCredit);
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  if (totalDebit !== totalCredit) {
     throw new GlError(
       "UNBALANCED",
-      `Journal entry does not balance: debit ${totalDebit.toFixed(2)} vs credit ${totalCredit.toFixed(2)}.`,
+      `Journal entry does not balance: debit ${rupees(totalDebit)} vs credit ${rupees(totalCredit)}.`,
     );
   }
   if (totalDebit <= 0) throw new GlError("ZERO_AMOUNT", "Journal entry total must be positive.");
@@ -271,7 +198,7 @@ export async function postJournalEntry(input: JournalEntryInput) {
       },
       include: { lines: { include: { account: true } } },
     });
-    return entry;
+    return journalEntryToRupees(entry);
   });
 }
 
@@ -338,7 +265,7 @@ export async function reverseJournalEntry(
       where: { id: existing.id },
       data: { status: "REVERSED", reversedById: reversal.id },
     });
-    return reversal;
+    return journalEntryToRupees(reversal);
   });
 }
 
@@ -347,8 +274,8 @@ export async function reverseJournalEntry(
 // ---------------------------------------------------------------------------
 
 interface LineWithAccount {
-  debit: number;
-  credit: number;
+  debit: number; // paise
+  credit: number; // paise
   date: Date;
   account: { id: string; code: string; name: string; type: GlAccountType; group: GlAccountGroup | null };
 }
@@ -395,10 +322,10 @@ export async function getTrialBalance(opts: { from: Date; to: Date }) {
   const lines = await fetchPostedLines(to);
 
   const map = new Map<string, TrialBalanceRow>();
-  let movementDr = 0;
-  let movementCr = 0;
-  let closingDr = 0;
-  let closingCr = 0;
+  let movementDr = 0; // paise
+  let movementCr = 0; // paise
+  let closingDr = 0; // paise
+  let closingCr = 0; // paise
 
   for (const l of lines) {
     let row = map.get(l.account.id);
@@ -432,17 +359,25 @@ export async function getTrialBalance(opts: { from: Date; to: Date }) {
 
   const rows: TrialBalanceRow[] = [];
   for (const row of map.values()) {
-    row.debit = round2(row.debit);
-    row.credit = round2(row.credit);
-    row.openingDebit = round2(row.openingDebit);
-    row.openingCredit = round2(row.openingCredit);
-    const openingNet = row.openingDebit - row.openingCredit;
-    const closingNet = round2(openingNet + row.debit - row.credit);
-    row.closingDebit = closingNet > 0 ? closingNet : 0;
-    row.closingCredit = closingNet < 0 ? -closingNet : 0;
-    closingDr += row.closingDebit;
-    closingCr += row.closingCredit;
-    rows.push(row);
+    const openingNet = row.openingDebit - row.openingCredit; // paise
+    const closingNet = openingNet + row.debit - row.credit; // paise — exact integer math
+    const closingNetRupees = fromPaise(closingNet);
+    const rowRupees: TrialBalanceRow = {
+      accountId: row.accountId,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      group: row.group,
+      openingDebit: fromPaise(row.openingDebit),
+      openingCredit: fromPaise(row.openingCredit),
+      debit: fromPaise(row.debit),
+      credit: fromPaise(row.credit),
+      closingDebit: closingNetRupees > 0 ? closingNetRupees : 0,
+      closingCredit: closingNetRupees < 0 ? -closingNetRupees : 0,
+    };
+    closingDr += closingNet > 0 ? closingNet : 0;
+    closingCr += closingNet < 0 ? -closingNet : 0;
+    rows.push(rowRupees);
   }
 
   rows.sort((a, b) => a.code.localeCompare(b.code));
@@ -451,11 +386,11 @@ export async function getTrialBalance(opts: { from: Date; to: Date }) {
     to,
     rows,
     totals: {
-      movementDebit: round2(movementDr),
-      movementCredit: round2(movementCr),
-      closingDebit: round2(closingDr),
-      closingCredit: round2(closingCr),
-      balanced: Math.abs(closingDr - closingCr) < 0.01,
+      movementDebit: fromPaise(movementDr),
+      movementCredit: fromPaise(movementCr),
+      closingDebit: fromPaise(closingDr),
+      closingCredit: fromPaise(closingCr),
+      balanced: closingDr === closingCr, // integer paise — exact
     },
   };
 }
@@ -473,18 +408,18 @@ export async function getIncomeStatement(opts: { from: Date; to: Date }) {
 
   const revenue = new Map<string, IncomeStatementSection>();
   const expenses = new Map<string, IncomeStatementSection>();
-  let revenueTotal = 0;
-  let expenseTotal = 0;
+  let revenueTotal = 0; // paise
+  let expenseTotal = 0; // paise
 
   const push = (map: Map<string, IncomeStatementSection>, group: string, acc: { id: string; code: string; name: string }, net: number) => {
-    if (Math.abs(net) < 0.005) return;
+    if (net === 0) return;
     let sec = map.get(group);
     if (!sec) {
       sec = { group, accounts: [], total: 0 };
       map.set(group, sec);
     }
-    sec.accounts.push({ code: acc.code, name: acc.name, amount: round2(net) });
-    sec.total += net;
+    sec.accounts.push({ code: acc.code, name: acc.name, amount: fromPaise(net) });
+    sec.total += net; // keep paise internally for the section total
   };
 
   for (const l of lines) {
@@ -502,7 +437,7 @@ export async function getIncomeStatement(opts: { from: Date; to: Date }) {
   }
 
   const toSections = (map: Map<string, IncomeStatementSection>) =>
-    [...map.values()].map((s) => ({ ...s, total: round2(s.total) })).sort((a, b) => a.group.localeCompare(b.group));
+    [...map.values()].map((s) => ({ ...s, total: fromPaise(s.total) })).sort((a, b) => a.group.localeCompare(b.group));
 
   return {
     from,
@@ -510,9 +445,9 @@ export async function getIncomeStatement(opts: { from: Date; to: Date }) {
     revenue: toSections(revenue),
     expenses: toSections(expenses),
     totals: {
-      revenue: round2(revenueTotal),
-      expenses: round2(expenseTotal),
-      netProfit: round2(revenueTotal - expenseTotal),
+      revenue: fromPaise(revenueTotal),
+      expenses: fromPaise(expenseTotal),
+      netProfit: fromPaise(revenueTotal - expenseTotal),
     },
   };
 }
@@ -521,11 +456,11 @@ export async function getBalanceSheet(opts: { asOf: Date }) {
   const asOf = opts.asOf instanceof Date && !isNaN(opts.asOf.getTime()) ? opts.asOf : new Date();
   const lines = await fetchPostedLines(asOf);
 
-  let assetsTotal = 0;
-  let liabilitiesTotal = 0;
-  let equityTotal = 0;
-  let revenueNet = 0;
-  let expenseNet = 0;
+  let assetsTotal = 0; // paise
+  let liabilitiesTotal = 0; // paise
+  let equityTotal = 0; // paise
+  let revenueNet = 0; // paise
+  let expenseNet = 0; // paise
   const assets: Array<{ code: string; name: string; amount: number }> = [];
   const liabilities: Array<{ code: string; name: string; amount: number }> = [];
   const equity: Array<{ code: string; name: string; amount: number }> = [];
@@ -537,45 +472,47 @@ export async function getBalanceSheet(opts: { asOf: Date }) {
       acc = { code: l.account.code, name: l.account.name, type: l.account.type, net: 0 };
       map.set(l.account.id, acc);
     }
-    acc.net += l.debit - l.credit;
+    acc.net += l.debit - l.credit; // exact integer paise
   }
 
   for (const acc of map.values()) {
-    const amount = round2(acc.net);
-    if (Math.abs(amount) < 0.005) continue;
+    const paise = acc.net;
+    if (paise === 0) continue;
+    const amount = fromPaise(paise);
     switch (acc.type) {
       case "ASSET":
         if (acc.code === "1260") {
           // Accumulated depreciation is a contra-asset — still an asset section item
           assets.push({ code: acc.code, name: acc.name, amount: -amount });
-          assetsTotal += -amount;
+          assetsTotal += -paise;
         } else {
           assets.push({ code: acc.code, name: acc.name, amount });
-          assetsTotal += amount;
+          assetsTotal += paise;
         }
         break;
       case "LIABILITY":
         liabilities.push({ code: acc.code, name: acc.name, amount: -amount });
-        liabilitiesTotal += -amount;
+        liabilitiesTotal += -paise;
         break;
       case "EQUITY":
         equity.push({ code: acc.code, name: acc.name, amount: -amount });
-        equityTotal += -amount;
+        equityTotal += -paise;
         break;
       case "REVENUE":
-        revenueNet += amount;
+        revenueNet += paise;
         break;
       case "EXPENSE":
-        expenseNet += amount;
+        expenseNet += paise;
         break;
     }
   }
 
   // Revenue accounts carry negative net (credited); expenses carry positive net (debited).
   // Net profit (positive when profitable) = revenue − expenses = -(revenueNet + expenseNet).
-  const netProfit = round2(-(revenueNet + expenseNet));
+  const netProfitPaise = -(revenueNet + expenseNet);
+  const netProfit = fromPaise(netProfitPaise);
 
-  const totalLiabEquity = round2(liabilitiesTotal + equityTotal + netProfit);
+  const totalLiabEquity = fromPaise(liabilitiesTotal + equityTotal + netProfitPaise);
   return {
     asOf,
     assets,
@@ -583,11 +520,11 @@ export async function getBalanceSheet(opts: { asOf: Date }) {
     equity,
     netProfit,
     totals: {
-      assets: round2(assetsTotal),
-      liabilities: round2(liabilitiesTotal),
-      equity: round2(equityTotal),
+      assets: fromPaise(assetsTotal),
+      liabilities: fromPaise(liabilitiesTotal),
+      equity: fromPaise(equityTotal),
       liabilitiesPlusEquity: totalLiabEquity,
-      balanced: Math.abs(assetsTotal - totalLiabEquity) < 0.01,
+      balanced: assetsTotal === liabilitiesTotal + equityTotal + netProfitPaise, // integer paise — exact
     },
   };
 }
