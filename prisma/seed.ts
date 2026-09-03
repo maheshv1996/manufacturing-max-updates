@@ -3,6 +3,7 @@ import { prisma } from "../src/lib/prisma";
 import { scryptSync, randomBytes } from "crypto";
 import { DEFAULT_COA } from "../src/lib/glEngine";
 import { toPaiseRow, toPaise } from "../src/lib/money";
+import { ROLE_CATALOG } from "../src/lib/roleCatalog";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -227,6 +228,25 @@ async function main() {
     update: { permissions: OPERATOR_PERMS },
     create: { name: "OPERATOR", description: "Shop-floor terminal user", permissions: OPERATOR_PERMS, isSystem: true },
   });
+
+  // Full organizational role catalog - every role a real plant runs, seeded
+  // as assignable Role rows (see src/lib/roleCatalog.ts). isSystem stays false:
+  // the three system roles above are untouched.
+  for (const r of ROLE_CATALOG) {
+    await prisma.role.upsert({
+      where: { name: r.code },
+      update: {
+        description: `${r.title} - ${r.description}`.slice(0, 300),
+        permissions: r.perms,
+      },
+      create: {
+        name: r.code,
+        description: `${r.title} - ${r.description}`.slice(0, 300),
+        permissions: r.perms,
+        isSystem: false,
+      },
+    });
+  }
 
   const adminHash = hashPassword("factory123");
   await prisma.user.create({

@@ -182,6 +182,12 @@ export const DEPARTMENTS: Department[] = [
         icon: ShieldAlert,
       },
       {
+        name: "Role Catalog",
+        desc: "Dept roles · grades · permissions",
+        href: "/system/role-catalog",
+        icon: Users,
+      },
+      {
         name: "Notifications & Alerts",
         desc: "Alert centre",
         href: "/notifications",
