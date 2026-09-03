@@ -6,6 +6,10 @@ export async function POST(request: Request) {
     await logAudit({ actor: "system", action: "DATA_PACKAGE_CREATED", entityType: "WorkOrderDataPackage", details: "Data package created" });
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { workOrderId, createdBy = "System" } = body;
 
     if (!workOrderId) {
@@ -64,7 +68,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Error creating data package:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create data package" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

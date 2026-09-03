@@ -86,7 +86,7 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("GET /api/tool-life error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -107,6 +107,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action, toolId, woNumber, woId, costRupees, units, note } = body;
     if (!toolId)
       return NextResponse.json({ error: "toolId required" }, { status: 400 });
@@ -268,6 +272,6 @@ export async function POST(request: Request) {
     );
   } catch (error: any) {
     console.error("POST /api/tool-life error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

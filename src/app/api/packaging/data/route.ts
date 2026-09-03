@@ -111,7 +111,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load packaging data:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load packaging data" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

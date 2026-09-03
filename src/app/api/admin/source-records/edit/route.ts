@@ -24,6 +24,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { entityType, entityId, updates, reason } = body;
 
     if (!entityType || !entityId || !updates) {
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("Error editing source record:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to edit source record" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

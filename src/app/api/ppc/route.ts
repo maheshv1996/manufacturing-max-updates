@@ -98,7 +98,7 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("GET /api/ppc error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -115,6 +115,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { orderedIds } = body;
     if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
       return NextResponse.json(
@@ -152,6 +156,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, updates });
   } catch (error: any) {
     console.error("POST /api/ppc error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

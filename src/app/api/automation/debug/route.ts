@@ -72,7 +72,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load automation debug events:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load events" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

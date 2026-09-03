@@ -6,84 +6,85 @@ import { checkFixtureGate } from "@/lib/fixtureGate";
 import { requireManagerLevel } from "@/lib/managerGate";
 import { computeCalibrationStatus } from "@/lib/calibration";
 import { getUserFromHeaders } from "@/lib/permissions";
+import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
+import { nextSequenceTx } from "@/lib/sequence";
 
-const processedClientIds = new Set<string>();
-
-async function incrementAssignedToolCycles(
+async function incrementAssignedToolCyclesTx(
+  tx: any,
   machineId: string,
   addCycles: number,
 ) {
   try {
-    const assignedTools = await (prisma as any).tool.findMany({
+    const assignedTools = await tx.tool.findMany({
       where: { assignedMachineId: machineId, status: { not: "RETIRED" } },
     });
-
     for (const t of assignedTools) {
       const newCycles = t.currentCycles + addCycles;
       const wearPct = (newCycles / t.maxLifeCycles) * 100;
       let newStatus = t.status;
-
-      if (wearPct >= 100) {
-        newStatus = "MAINTENANCE";
-      } else if (wearPct >= (t.warningThreshold || 85.0)) {
-        newStatus = "WARNING";
-      } else {
-        newStatus = "ACTIVE";
-      }
-
-      await (prisma as any).tool.update({
-        where: { id: t.id },
-        data: {
-          currentCycles: newCycles,
-          status: newStatus,
-        },
-      });
+      if (wearPct >= 100) newStatus = "MAINTENANCE";
+      else if (wearPct >= (t.warningThreshold || 85.0)) newStatus = "WARNING";
+      else newStatus = "ACTIVE";
+      await tx.tool.update({ where: { id: t.id }, data: { currentCycles: newCycles, status: newStatus } });
     }
   } catch (err) {
     console.error("Tool cycle increment error:", err);
   }
 }
 
-async function incrementMaintenanceToolUnits(
+async function incrementMaintenanceToolUnitsTx(
+  tx: any,
   machineId: string,
   addUnits: number,
 ) {
   try {
-    const mTools = await (prisma as any).maintenanceTool.findMany({
-      where: { machineId },
-    });
+    const mTools = await tx.maintenanceTool.findMany({ where: { machineId } });
     for (const t of mTools) {
       const newUsed = t.usedUnits + addUnits;
-      await (prisma as any).maintenanceTool.update({
-        where: { id: t.id },
-        data: { usedUnits: newUsed },
-      });
+      await tx.maintenanceTool.update({ where: { id: t.id }, data: { usedUnits: newUsed } });
     }
   } catch (err) {
     console.error("MaintenanceTool unit increment error:", err);
   }
 }
 
+// Backwards compat shim — retained for non-tx callers (e.g., legacy REPORT_DOWNTIME); suppress unused warning
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function incrementAssignedToolCycles(machineId: string, addCycles: number) {
+  try {
+    const assignedTools = await (prisma as any).tool.findMany({ where: { assignedMachineId: machineId, status: { not: "RETIRED" } } });
+    for (const t of assignedTools) {
+      const newCycles = t.currentCycles + addCycles;
+      const wearPct = (newCycles / t.maxLifeCycles) * 100;
+      let newStatus = t.status;
+      if (wearPct >= 100) newStatus = "MAINTENANCE";
+      else if (wearPct >= (t.warningThreshold || 85.0)) newStatus = "WARNING";
+      else newStatus = "ACTIVE";
+      await (prisma as any).tool.update({ where: { id: t.id }, data: { currentCycles: newCycles, status: newStatus } });
+    }
+  } catch (err) { console.error("Tool cycle increment error:", err); }
+}
+void incrementAssignedToolCycles;
+
+// incrementMaintenanceToolUnits shim removed — use Tx variant inside transactions
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
     const headerList = await headers();
 
-    const clientId = body.clientId || headerList.get("x-client-id");
-    if (clientId && processedClientIds.has(clientId)) {
-      return NextResponse.json({
-        success: true,
-        duplicate: true,
-        message:
-          "Action already processed (idempotent duplicate request ignored)",
-      });
-    }
+    const clientId: string | null = (body.clientId ? String(body.clientId).trim() : null) || (headerList.get("x-client-id") ? String(headerList.get("x-client-id")!).trim() : null);
     if (clientId) {
-      processedClientIds.add(clientId);
-      if (processedClientIds.size > 5000) {
-        const arr = Array.from(processedClientIds);
-        arr.slice(0, 1000).forEach((id) => processedClientIds.delete(id));
+      const dup = await checkIdempotency(clientId);
+      if (dup.duplicate) {
+        const cached: any = (dup.existing as any)?.response;
+        if (cached) return NextResponse.json(cached);
+        return NextResponse.json({ success: true, duplicate: true, message: "Action already processed (idempotent duplicate request ignored)" });
       }
     }
 
@@ -172,64 +173,66 @@ export async function POST(request: Request) {
           });
         }
 
-        // State Locking Rule: Check if machine was modified by another terminal after clientTimestamp
-        if (clientTimestamp) {
-          const targetMachine = await prisma.machine.findUnique({
-            where: { id: machineId },
-          });
-          if (
-            targetMachine &&
-            targetMachine.updatedAt.getTime() > clientTimestamp + 3000
-          ) {
-            return NextResponse.json(
-              {
-                conflict: true,
-                message: `State Conflict: Machine '${targetMachine.name}' status (${targetMachine.status}) was updated by another terminal. Preserved server authority.`,
-                serverTimestamp: targetMachine.updatedAt.getTime(),
-              },
-              { status: 412 },
-            );
+        // State Locking + atomic START_JOB (single transaction, idempotent)
+        const startJobResult = await prisma.$transaction(async (tx) => {
+          if (clientId) {
+            const reserved = await reserveIdempotency(tx as any, clientId, "/api/operator/action:START_JOB");
+            if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
           }
+
+          if (clientTimestamp) {
+            const targetMachine = await (tx as any).machine.findUnique({ where: { id: machineId } });
+            if (targetMachine && targetMachine.updatedAt.getTime() > clientTimestamp + 3000) {
+              throw Object.assign(
+                new Error(`State Conflict: Machine '${targetMachine.name}' status (${targetMachine.status}) was updated by another terminal. Preserved server authority.`),
+                { code: "STATE_CONFLICT", serverTimestamp: targetMachine.updatedAt.getTime() },
+              );
+            }
+          }
+
+          await (tx as any).workOrder.update({ where: { id: workOrderId }, data: { status: "IN_PROGRESS" } });
+          await (tx as any).productionLog.create({
+            data: {
+              workOrderId,
+              machineId,
+              operatorId: operatorId || null,
+              shiftId: shiftId || null,
+              goodQuantity: 0,
+              scrapQuantity: 0,
+              reworkQuantity: 0,
+              startTime: new Date(),
+            },
+          });
+          await (tx as any).machine.update({ where: { id: machineId }, data: { status: "RUNNING" } });
+          await (tx as any).auditLog.create({
+            data: {
+              actor: headerList.get("x-user-name") || "Operator",
+              action: "START_JOB",
+              entityType: "MACHINE",
+              entityId: machineId,
+              details: `Started job for WO ${workOrderId} on machine ${machineId}`,
+            },
+          });
+          // Fixture override already audited outside tx (best-effort)
+          return { ok: true };
+        }).catch((e: any) => {
+          if (e?.code === "STATE_CONFLICT") {
+            return { conflict: true, message: e.message, serverTimestamp: e.serverTimestamp } as any;
+          }
+          if (e?.code === "DUPLICATE") throw e;
+          throw e;
+        });
+
+        if ((startJobResult as any)?.conflict) {
+          return NextResponse.json(
+            { conflict: true, message: (startJobResult as any).message, serverTimestamp: (startJobResult as any).serverTimestamp },
+            { status: 412 },
+          );
         }
 
-        // Update Work Order status to IN_PROGRESS
-        await prisma.workOrder.update({
-          where: { id: workOrderId },
-          data: { status: "IN_PROGRESS" },
-        });
-
-        // Create or ensure initial production log
-        await prisma.productionLog.create({
-          data: {
-            workOrderId,
-            machineId,
-            operatorId: operatorId || null,
-            shiftId: shiftId || null,
-            goodQuantity: 0,
-            scrapQuantity: 0,
-            reworkQuantity: 0,
-            startTime: new Date(),
-          },
-        });
-
-        // Set machine status to RUNNING
-        await prisma.machine.update({
-          where: { id: machineId },
-          data: { status: "RUNNING" },
-        });
-
-        await logAudit({
-          actor: headerList.get("x-user-name") || "Operator",
-          action: "START_JOB",
-          entityType: "MACHINE",
-          entityId: machineId,
-          details: `Started job for WO ${workOrderId} on machine ${machineId}`,
-        });
-
-        return NextResponse.json({
-          success: true,
-          message: "Job started successfully",
-        });
+        const payloadStart = { success: true, message: "Job started successfully" };
+        if (clientId) await completeIdempotency(clientId, payloadStart);
+        return NextResponse.json(payloadStart);
       }
 
       case "LOG_GOOD": {
@@ -281,112 +284,93 @@ export async function POST(request: Request) {
           }
         }
 
-        // Find active open log or create one
-        let activeLog = await prisma.productionLog.findFirst({
-          where: { workOrderId, machineId, endTime: null },
-          orderBy: { startTime: "desc" },
-        });
+        // Atomic LOG_GOOD: log increment + tool life + serials + audit in one transaction, idempotent
+        await prisma.$transaction(async (tx) => {
+          if (clientId) {
+            const reserved = await reserveIdempotency(tx as any, clientId, "/api/operator/action:LOG_GOOD");
+            if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+          }
 
-        if (!activeLog) {
-          activeLog = await prisma.productionLog.create({
-            data: {
-              workOrderId,
-              machineId,
-              operatorId: operatorId || null,
-              shiftId: shiftId || null,
-              goodQuantity: addQty,
-              scrapQuantity: 0,
-              reworkQuantity: 0,
-              startTime: new Date(),
-            },
+          let activeLog = await (tx as any).productionLog.findFirst({
+            where: { workOrderId, machineId, endTime: null },
+            orderBy: { startTime: "desc" },
           });
-        } else {
-          await prisma.productionLog.update({
-            where: { id: activeLog.id },
-            data: {
-              goodQuantity: { increment: addQty },
-            },
-          });
-        }
 
-        // Automatically increment tool cycles for machine's active tools
-        await incrementAssignedToolCycles(machineId, addQty);
-        // Accumulate maintenance tool life units
-        await incrementMaintenanceToolUnits(machineId, addQty);
-
-        // --- SERIALIZATION LOGIC ---
-        const wo = await prisma.workOrder.findUnique({
-          where: { id: workOrderId },
-        });
-        if (wo && wo.trackingMode === "SERIAL") {
-          let serialsToCreate: string[] = [];
-
-          if (serialCaptureType === "MANUAL" && serialInput) {
-            serialsToCreate = serialInput
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean);
-          } else if (serialCaptureType === "AUTO") {
-            const currentUnits = await prisma.serialUnit.count({
-              where: { workOrderId },
+          if (!activeLog) {
+            activeLog = await (tx as any).productionLog.create({
+              data: {
+                workOrderId,
+                machineId,
+                operatorId: operatorId || null,
+                shiftId: shiftId || null,
+                goodQuantity: addQty,
+                scrapQuantity: 0,
+                reworkQuantity: 0,
+                startTime: new Date(),
+              },
             });
-            for (let i = 0; i < addQty; i++) {
-              serialsToCreate.push(
-                `${wo.woNumber}-S${(currentUnits + i + 1).toString().padStart(3, "0")}`,
-              );
+          } else {
+            await (tx as any).productionLog.update({
+              where: { id: activeLog.id },
+              data: { goodQuantity: { increment: addQty } },
+            });
+          }
+
+          await incrementAssignedToolCyclesTx(tx as any, machineId, addQty);
+          await incrementMaintenanceToolUnitsTx(tx as any, machineId, addQty);
+
+          const wo = await (tx as any).workOrder.findUnique({ where: { id: workOrderId } });
+          if (wo && wo.trackingMode === "SERIAL") {
+            let serialsToCreate: string[] = [];
+            if (serialCaptureType === "MANUAL" && serialInput) {
+              serialsToCreate = serialInput.split(",").map((s: string) => s.trim()).filter(Boolean);
+            } else if (serialCaptureType === "AUTO") {
+              const currentUnits = await (tx as any).serialUnit.count({ where: { workOrderId } });
+              for (let i = 0; i < addQty; i++) {
+                serialsToCreate.push(`${wo.woNumber}-S${(currentUnits + i + 1).toString().padStart(3, "0")}`);
+              }
+            }
+            const actorName = headerList.get("x-user-name") || "Operator";
+            for (const s of serialsToCreate) {
+              const unit = await (tx as any).serialUnit.upsert({
+                where: { serialNo: s },
+                create: { serialNo: s, workOrderId, productId: wo.productId, status: "WIP" },
+                update: { status: "WIP" },
+              });
+              await (tx as any).serialEvent.create({
+                data: { serialUnitId: unit.id, type: "OPERATION_COMPLETE", description: `Operation completed on machine ${machineId}`, actorName },
+              });
+            }
+            if (serialsToCreate.length > 0) {
+              await (tx as any).auditLog.create({
+                data: {
+                  actor: headerList.get("x-user-name") || "Operator",
+                  action: "SERIAL_CREATED",
+                  entityType: "WORK_ORDER",
+                  entityId: workOrderId,
+                  details: `Created/Updated ${serialsToCreate.length} serials for WO ${wo.woNumber}`,
+                },
+              });
             }
           }
 
-          const actorName = headerList.get("x-user-name") || "Operator";
-          for (const s of serialsToCreate) {
-            // Upsert serial unit (it might exist from a previous step, but for this simple flow we assume it's created if not found, or updated)
-            const unit = await prisma.serialUnit.upsert({
-              where: { serialNo: s },
-              create: {
-                serialNo: s,
-                workOrderId,
-                productId: wo.productId,
-                status: "WIP",
-              },
-              update: {
-                status: "WIP", // ensure it's still WIP
-              },
-            });
-
-            await prisma.serialEvent.create({
-              data: {
-                serialUnitId: unit.id,
-                type: "OPERATION_COMPLETE",
-                description: `Operation completed on machine ${machineId}`,
-                actorName,
-              },
-            });
-          }
-
-          if (serialsToCreate.length > 0) {
-            await logAudit({
+          await (tx as any).auditLog.create({
+            data: {
               actor: headerList.get("x-user-name") || "Operator",
-              action: "SERIAL_CREATED",
-              entityType: "WORK_ORDER",
-              entityId: workOrderId,
-              details: `Created/Updated ${serialsToCreate.length} serials for WO ${wo.woNumber}`,
-            });
-          }
-        }
-        // ---------------------------
-
-        await logAudit({
-          actor: headerList.get("x-user-name") || "Operator",
-          action: "LOG_GOOD",
-          entityType: "MACHINE",
-          entityId: machineId,
-          details: `Logged ${addQty} good units for WO ${workOrderId}`,
+              action: "LOG_GOOD",
+              entityType: "MACHINE",
+              entityId: machineId,
+              details: `Logged ${addQty} good units for WO ${workOrderId}`,
+            },
+          });
+        }).catch((e: any) => {
+          if (e?.code === "DUPLICATE") throw e;
+          throw e;
         });
 
-        return NextResponse.json({
-          success: true,
-          message: `Logged ${addQty} good units`,
-        });
+        const payloadGood = { success: true, message: `Logged ${addQty} good units` };
+        if (clientId) await completeIdempotency(clientId, payloadGood);
+        return NextResponse.json(payloadGood);
       }
 
       case "LOG_SCRAP": {
@@ -411,33 +395,6 @@ export async function POST(request: Request) {
             },
             { status: 400 },
           );
-        }
-
-        let activeLog = await prisma.productionLog.findFirst({
-          where: { workOrderId, machineId, endTime: null },
-          orderBy: { startTime: "desc" },
-        });
-
-        if (!activeLog) {
-          activeLog = await prisma.productionLog.create({
-            data: {
-              workOrderId,
-              machineId,
-              operatorId: operatorId || null,
-              shiftId: shiftId || null,
-              goodQuantity: 0,
-              scrapQuantity: addQty,
-              reworkQuantity: 0,
-              startTime: new Date(),
-            },
-          });
-        } else {
-          await prisma.productionLog.update({
-            where: { id: activeLog.id },
-            data: {
-              scrapQuantity: { increment: addQty },
-            },
-          });
         }
 
         // --- CALIBRATION ENFORCEMENT (Nadcap) ---
@@ -489,117 +446,131 @@ export async function POST(request: Request) {
           }
         }
 
-        if (defectCodeId) {
-          await prisma.qualityInspection.create({
-            data: {
-              workOrderId,
-              inspectorId: operatorId || null,
-              totalInspected: addQty,
-              passed: 0,
-              failed: addQty,
-              defectCodeId,
-              calibratedToolId: calibratedToolId || null,
-              notes: notes || "Scrap logged by operator",
-            },
-          });
-        }
+        // PR4: Atomic scrap transaction (productionLog + inspection + quarantine + tool + serial NCR) with idempotency
+        const scrapPayload = await prisma.$transaction(async (tx) => {
+          if (clientId) {
+            const reserved = await reserveIdempotency(tx as any, clientId, "/api/operator/action:LOG_SCRAP");
+            if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+          }
 
-        // Auto-create ScrapQuarantine record in PENDING status for MRB Disposition review
-        let quarantineRecord = null;
-        try {
-          quarantineRecord = await (prisma as any).scrapQuarantine.create({
+          // Re-read activeLog inside tx to avoid duplicate log creation race
+          let activeLogTx = await (tx as any).productionLog.findFirst({
+            where: { workOrderId, machineId, endTime: null },
+            orderBy: { startTime: "desc" },
+          });
+          if (!activeLogTx) {
+            activeLogTx = await (tx as any).productionLog.create({
+              data: {
+                workOrderId,
+                machineId,
+                operatorId: operatorId || null,
+                shiftId: shiftId || null,
+                goodQuantity: 0,
+                scrapQuantity: addQty,
+                reworkQuantity: 0,
+                startTime: new Date(),
+              },
+            });
+          } else {
+            await (tx as any).productionLog.update({
+              where: { id: activeLogTx.id },
+              data: { scrapQuantity: { increment: addQty } },
+            });
+          }
+
+          if (defectCodeId) {
+            await (tx as any).qualityInspection.create({
+              data: {
+                workOrderId,
+                inspectorId: operatorId || null,
+                totalInspected: addQty,
+                passed: 0,
+                failed: addQty,
+                defectCodeId,
+                calibratedToolId: calibratedToolId || null,
+                notes: notes || "Scrap logged by operator",
+              },
+            });
+          }
+
+          const quarantineRecordTx = await (tx as any).scrapQuarantine.create({
             data: {
               workOrderId,
               quantity: addQty,
               defectCode: defectCodeId || "DEFECT_GENERIC",
               loggedBy: headerList.get("x-user-name") || "Operator",
               status: "PENDING",
-              dispositionNotes:
-                notes || "Auto-quarantined from Operator Station scrap log.",
+              dispositionNotes: notes || "Auto-quarantined from Operator Station scrap log.",
               costEstimate: addQty * 15.0,
             },
           });
-        } catch (qErr) {
-          console.error("Auto quarantine creation failed:", qErr);
-        }
 
-        // Automatically increment tool cycles for machine's active tools
-        await incrementAssignedToolCycles(machineId, addQty);
+          await incrementAssignedToolCyclesTx(tx as any, machineId, addQty);
 
-        // --- SERIALIZATION LOGIC ---
-        if (wo && wo.trackingMode === "SERIAL" && scrappedSerialNo) {
-          const unit = await prisma.serialUnit.findUnique({
-            where: { serialNo: scrappedSerialNo },
-          });
-          if (unit) {
-            await prisma.serialUnit.update({
-              where: { id: unit.id },
-              data: { status: "QUARANTINED" },
-            });
-            await prisma.serialEvent.create({
-              data: {
-                serialUnitId: unit.id,
-                type: "NCR",
-                description: `Scrapped/Defected on machine ${machineId} (Code: ${defectCodeId || "Unknown"})`,
-                actorName: headerList.get("x-user-name") || "Operator",
-              },
-            });
-
-            // Auto-create OPEN NCR for this Serial unit
-            if (quarantineRecord) {
-              const ncrNo = `NCR-${new Date().getFullYear()}-${Math.floor(
-                Math.random() * 10000,
-              )
-                .toString()
-                .padStart(4, "0")}`;
-              await (prisma as any).ncrReport.create({
+          if (wo && wo.trackingMode === "SERIAL" && scrappedSerialNo) {
+            const unit = await (tx as any).serialUnit.findUnique({ where: { serialNo: scrappedSerialNo } });
+            if (unit) {
+              await (tx as any).serialUnit.update({ where: { id: unit.id }, data: { status: "QUARANTINED" } });
+              await (tx as any).serialEvent.create({
+                data: {
+                  serialUnitId: unit.id,
+                  type: "NCR",
+                  description: `Scrapped/Defected on machine ${machineId} (Code: ${defectCodeId || "Unknown"})`,
+                  actorName: headerList.get("x-user-name") || "Operator",
+                },
+              });
+              const ncrNo = await nextSequenceTx(tx as any, "NCR", 4);
+              await (tx as any).ncrReport.create({
                 data: {
                   ncrNumber: ncrNo,
-                  quarantineId: quarantineRecord.id,
+                  quarantineId: quarantineRecordTx.id,
                   workOrderId: wo.id,
                   serialUnitId: unit.id,
                   productId: wo.productId,
                   quantity: 1,
                   defectCodeId: defectCodeId || null,
                   severity: "HIGH",
-                  description:
-                    notes ||
-                    `Auto-raised from Serial Quarantine (Unit: ${scrappedSerialNo})`,
+                  description: notes || `Auto-raised from Serial Quarantine (Unit: ${scrappedSerialNo})`,
                   status: "OPEN",
                   raisedBy: headerList.get("x-user-name") || "Operator",
                 },
               });
-              await logAudit({
-                actor: headerList.get("x-user-name") || "Operator",
-                action: "NCR_RAISED",
-                entityType: "NCR",
-                details: `Auto-raised NCR ${ncrNo} for Serial ${scrappedSerialNo}`,
+              await (tx as any).auditLog.create({
+                data: {
+                  actor: headerList.get("x-user-name") || "Operator",
+                  action: "NCR_RAISED",
+                  entityType: "NCR",
+                  entityId: quarantineRecordTx.id,
+                  details: `Auto-raised NCR ${ncrNo} for Serial ${scrappedSerialNo}`,
+                },
+              });
+              await (tx as any).auditLog.create({
+                data: {
+                  actor: headerList.get("x-user-name") || "Operator",
+                  action: "SERIAL_QUARANTINED",
+                  entityType: "WORK_ORDER",
+                  entityId: workOrderId,
+                  details: `Serial ${scrappedSerialNo} quarantined for WO ${wo.woNumber}`,
+                },
               });
             }
-
-            await logAudit({
-              actor: headerList.get("x-user-name") || "Operator",
-              action: "SERIAL_QUARANTINED",
-              entityType: "WORK_ORDER",
-              entityId: workOrderId,
-              details: `Serial ${scrappedSerialNo} quarantined for WO ${wo.woNumber}`,
-            });
           }
-        }
-        // ---------------------------
 
-        await logAudit({
-          actor: headerList.get("x-user-name") || "Operator",
-          action: "LOG_SCRAP",
-          entityType: "MACHINE",
-          entityId: machineId,
-          details: `Logged ${addQty} scrap units for WO ${workOrderId}`,
+          await (tx as any).auditLog.create({
+            data: {
+              actor: headerList.get("x-user-name") || "Operator",
+              action: "LOG_SCRAP",
+              entityType: "MACHINE",
+              entityId: machineId,
+              details: `Logged ${addQty} scrap units for WO ${workOrderId}`,
+            },
+          });
+
+          return { success: true, message: `Logged ${addQty} scrap units` };
         });
 
-        return NextResponse.json({
-          success: true,
-          message: `Logged ${addQty} scrap units`,
-        });
+        if (clientId) await completeIdempotency(clientId, scrapPayload);
+        return NextResponse.json(scrapPayload);
       }
 
       case "REPORT_DOWNTIME": {
@@ -876,9 +847,15 @@ export async function POST(request: Request) {
         );
     }
   } catch (error: any) {
+    if (error?.code === "DUPLICATE") {
+      return NextResponse.json({ success: true, duplicate: true, message: "Action already processed (idempotent duplicate request ignored)" });
+    }
+    if (error?.code === "STATE_CONFLICT") {
+      return NextResponse.json({ conflict: true, message: error.message, serverTimestamp: error.serverTimestamp }, { status: 412 });
+    }
     console.error("Error processing operator action:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to process operator action" },
+      { error: "Failed to process operator action" },
       { status: 500 },
     );
   }

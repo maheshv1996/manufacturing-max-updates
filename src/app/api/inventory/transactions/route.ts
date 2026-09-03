@@ -17,7 +17,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("GET /api/inventory/transactions error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch transactions", details: error.message },
+      { error: "Failed to fetch transactions" },
       { status: 500 },
     );
   }

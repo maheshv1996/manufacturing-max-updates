@@ -98,7 +98,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("PATCH /api/gst-recon/[id] error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update run" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

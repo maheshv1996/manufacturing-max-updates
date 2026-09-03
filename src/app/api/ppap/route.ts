@@ -101,6 +101,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const headerList = await headers();
     const userName = headerList.get("x-user-name") || "System";
 
@@ -271,7 +275,7 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("POST /api/ppap error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

@@ -129,7 +129,7 @@ export async function GET(request: Request) {
       isOwner: user.isOwner,
       level: user.level || "WORKER",
       mustChangePassword: user.mustChangePassword,
-      sess: user.sessionEpoch || 0,
+      sess: user.sessionEpoch ?? 0,
     });
 
     let landingPage = user.mustChangePassword
@@ -151,14 +151,17 @@ export async function GET(request: Request) {
     const redirectUrl = new URL(landingPage, request.url);
     const response = NextResponse.redirect(redirectUrl);
 
+    const proto = request.headers.get("x-forwarded-proto") || "";
+    const isHttps = proto === "https" || request.url.startsWith("https://");
+
     response.cookies.set({
       name: "app_session",
       value: token,
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: isHttps,
       path: "/",
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: 60 * 60 * 24 * 365, // 1 year
     });
 
     response.cookies.delete("google_oauth_state");

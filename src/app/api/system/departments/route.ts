@@ -42,7 +42,7 @@ export async function GET() {
     const departments = await getStoredDepartments();
     return NextResponse.json({ success: true, departments });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, department: newDept, departments: updated });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -117,7 +117,7 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ success: true, department: current[index], departments: current });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -142,6 +142,6 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ success: true, departments: filtered });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

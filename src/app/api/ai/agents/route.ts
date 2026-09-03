@@ -290,6 +290,10 @@ export async function POST(req: NextRequest) {
     await logAudit({ actor: "system", action: "AI_AGENT_ACTION", entityType: "AiAgent", details: "AI Agent action triggered" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { agentId, goal } = body;
 
     const agent =

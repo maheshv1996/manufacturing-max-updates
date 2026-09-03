@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { workOrderId, eanCode } = body;
 
     if (!workOrderId || !eanCode) {
@@ -34,7 +38,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Failed to assign EAN:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to assign EAN" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

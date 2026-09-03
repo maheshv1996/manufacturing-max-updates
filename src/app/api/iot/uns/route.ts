@@ -164,7 +164,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load Unified Namespace data:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load UNS" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

@@ -2,26 +2,93 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import { headers } from "next/headers";
+import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
+import { nextSequenceTx } from "@/lib/sequence";
 
 export const dynamic = "force-dynamic";
 
+import { poOrderedValue, poFullyReceived } from "@/lib/poLines";
+import { autoPostToGL } from "@/lib/glPosting";
+
 const MATCH_TOLERANCE_PCT = 0.5; // 0.5% value tolerance
 
+// Invoice shape that may carry line items (SupplierInvoiceLine rows mirroring
+// the billed materials at PO-line level).
+type InvoiceForMatch = {
+  amount: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  lines?: Array<{
+    lineNo?: number;
+    poLineId?: string | null;
+    qty?: number;
+    unitCost?: number;
+    amount?: number;
+  }>;
+} | null;
+
+// Per-line invoice checks: a billed line that references a PO line may not
+// bill more than was actually received for that line, nor drift from the
+// agreed unit cost. Freeform lines (no poLineId) are covered by the
+// invoice-level value check instead.
+function invoiceLineIssues(
+  po: { qty: number; unitCost: number; receivedQty?: number; lines?: any[] },
+  invoice: InvoiceForMatch,
+): string[] {
+  if (!invoice || !Array.isArray(invoice.lines) || invoice.lines.length === 0) {
+    return [];
+  }
+  const poLines = po.lines || [];
+  const tolerance = MATCH_TOLERANCE_PCT / 100;
+  const issues: string[] = [];
+  for (const l of invoice.lines) {
+    if (!l.poLineId) continue;
+    const pol = poLines.find((x: any) => x.id === l.poLineId);
+    const where = `Line ${l.lineNo ?? "?"}${pol && pol.lineNo != null ? ` (PO line ${pol.lineNo})` : ""}`;
+    if (!pol) {
+      issues.push(`${where}: billed against a PO line that does not belong to this PO`);
+      continue;
+    }
+    const received = Number(pol.receivedQty || 0);
+    const billed = Number(l.qty ?? 0);
+    if (billed > received + Math.max(0.001, received * tolerance)) {
+      issues.push(`${where}: bills ${billed} but only ${received} received on this PO line`);
+    }
+    const agreed = Number(pol.unitCost || 0);
+    const cost = Number(l.unitCost ?? 0);
+    if (agreed > 0 && Math.abs(cost - agreed) > Math.max(0.001, agreed * tolerance)) {
+      issues.push(`${where}: unit cost ${cost} differs from agreed ${agreed}`);
+    }
+  }
+  return issues;
+}
+
 // Compute the 3-way match status for a GRN against its PO and supplier invoice.
+// Multi-line aware on both documents: the expected value comes from the PO's
+// line items, the billed value from the invoice's line items, and a receipt is
+// partial until every PO line is fully received.
 function computeMatch(
-  grn: { receivedQty: number },
-  po: { qty: number; unitCost: number },
-  invoice?: { amount: number; taxAmount: number; totalAmount: number } | null,
+  _grn: { receivedQty: number },
+  po: { qty: number; unitCost: number; receivedQty?: number; lines?: any[] },
+  invoice?: InvoiceForMatch,
 ) {
   if (!invoice) return "UNMATCHED";
-  const expectedQty = po.qty;
-  const expectedValue = po.qty * po.unitCost;
-  // Short receipt (partial) still flagged unless fully received
-  const partial = grn.receivedQty < expectedQty - 0.001;
-  const valueTolerance = expectedValue * (MATCH_TOLERANCE_PCT / 100);
-  const valueOk = Math.abs(invoice.amount - expectedValue) <= valueTolerance;
+  const expectedValue = poOrderedValue(po);
+  let billedValue = Number(invoice.amount || 0);
+  if (Array.isArray(invoice.lines) && invoice.lines.length > 0) {
+    billedValue = 0;
+    for (const l of invoice.lines) {
+      billedValue += Number(l.amount ?? Number(l.qty ?? 0) * Number(l.unitCost ?? 0));
+    }
+  }
+  // Short receipt (partial) still flagged unless every line is fully received
+  const partial = !poFullyReceived(po);
+  const valueTolerance = Math.max(1, expectedValue * (MATCH_TOLERANCE_PCT / 100));
+  const valueOk = Math.abs(billedValue - expectedValue) <= valueTolerance;
   // Value disagreement is the harder control failure — flag it first
   if (!valueOk) return "MISMATCHED";
+  const issues = invoiceLineIssues(po, invoice);
+  if (issues.length > 0) return "MISMATCHED";
   if (partial) return "PARTIAL";
   return "MATCHED";
 }
@@ -32,7 +99,7 @@ export async function GET() {
       await Promise.all([
         prisma.goodsReceiptNote.findMany({
           include: {
-            po: true,
+            po: { include: { lines: true } },
             supplier: { select: { id: true, name: true, code: true } },
             rawMaterial: {
               select: {
@@ -50,8 +117,33 @@ export async function GET() {
         prisma.supplierInvoice.findMany({
           include: {
             supplier: { select: { name: true } },
-            po: { select: { poNumber: true, qty: true, unitCost: true } },
+            po: {
+              select: {
+                poNumber: true,
+                qty: true,
+                unitCost: true,
+                receivedQty: true,
+                lines: {
+                  select: {
+                    id: true,
+                    lineNo: true,
+                    qty: true,
+                    unitCost: true,
+                    receivedQty: true,
+                  },
+                },
+              },
+            },
             grn: { select: { grnNumber: true, receivedQty: true } },
+            lines: {
+              include: {
+                rawMaterial: {
+                  select: { id: true, sku: true, name: true, unit: true },
+                },
+                poLine: { select: { lineNo: true } },
+              },
+              orderBy: { lineNo: "asc" },
+            },
           },
           orderBy: { invoiceDate: "desc" },
         }),
@@ -61,6 +153,12 @@ export async function GET() {
             supplier: { select: { id: true, name: true } },
             rawMaterial: {
               select: { id: true, sku: true, name: true, unit: true },
+            },
+            lines: {
+              include: {
+                rawMaterial: { select: { id: true, sku: true, name: true, unit: true } },
+              },
+              orderBy: { lineNo: "asc" },
             },
           },
           orderBy: { createdAt: "desc" },
@@ -81,6 +179,16 @@ export async function GET() {
         }),
         prisma.aqlPlan.findMany({ orderBy: { materialClass: "asc" } }),
       ]);
+
+    // Posted-ledger reference for each supplier invoice (accrual voucher)
+    const invIds = invoices.map((i) => i.id);
+    const glVouchers = invIds.length
+      ? await prisma.journalEntry.findMany({
+          where: { source: "VOUCHER", sourceId: { in: invIds } },
+          select: { sourceId: true, entryNumber: true },
+        })
+      : [];
+    const glByInvId = new Map(glVouchers.map((g) => [g.sourceId, g.entryNumber]));
 
     const enriched = grns.map((g) => ({
       ...g,
@@ -113,6 +221,7 @@ export async function GET() {
       return {
         ...inv,
         matchStatus,
+        glRef: glByInvId.get(inv.id) || null,
         aging: { daysSinceInvoice, daysOverdue, bucket },
       };
     });
@@ -174,19 +283,34 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const headerList = await headers();
     const userName = headerList.get("x-user-name") || "System";
+    const headerClientId = headerList.get("x-client-id");
+    const bodyClientId = (body as any)?.clientId || (body as any)?.data?.clientId;
+    const clientId: string | null = (bodyClientId ? String(bodyClientId).trim() : null) || (headerClientId ? String(headerClientId).trim() : null);
+    if (clientId) {
+      const dup = await checkIdempotency(clientId);
+      if (dup.duplicate) {
+        const cached: any = (dup.existing as any)?.response;
+        if (cached) return NextResponse.json(cached);
+        return NextResponse.json({ success: true, duplicate: true, message: "Duplicate request ignored (idempotent)" });
+      }
+    }
 
-    // ---- Goods Receipt Note: receives stock, updates PO + inventory ----
+    // ---- Goods Receipt Note: receives stock, updates PO + inventory (ATOMIC) ----
     if (body.entity === "grn") {
-      const { poId, receivedQty, batchNo, notes } = body.data || {};
-      if (!poId || !receivedQty)
+      const { poId, receivedQty, batchNo, notes, poLineId } = body.data || {};
+      if (!poId || receivedQty == null)
         return NextResponse.json(
           { error: "poId and receivedQty required" },
           { status: 400 },
         );
       const qty = Number(receivedQty);
-      if (qty <= 0)
+      if (!Number.isFinite(qty) || qty <= 0)
         return NextResponse.json(
           { error: "receivedQty must be positive" },
           { status: 400 },
@@ -194,69 +318,138 @@ export async function POST(request: Request) {
 
       const po = await prisma.purchaseOrder.findUnique({
         where: { id: poId },
-        include: { rawMaterial: true, supplier: true },
+        include: {
+          rawMaterial: true,
+          supplier: true,
+          lines: { include: { rawMaterial: { select: { name: true, unit: true } } } },
+        },
       });
       if (!po)
         return NextResponse.json({ error: "PO not found" }, { status: 404 });
 
-      const count = await prisma.goodsReceiptNote.count();
-      const grnNumber = `GRN-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, "0")}`;
+      // Resolve the material shown in the audit trail (the line being received,
+      // or the header material for legacy single-line POs).
+      const poLines = po.lines || [];
+      const shownLine =
+        poLines.length > 1 && poLineId
+          ? poLines.find((l: any) => l.id === poLineId)
+          : poLines.length === 1
+            ? poLines[0]
+            : null;
+      const shownMaterial = (shownLine as any)?.rawMaterial || po.rawMaterial;
+      const shownName: string = shownMaterial?.name || "material";
+      const shownUnit: string = shownMaterial?.unit || "units";
 
-      // Create GRN
-      const grn = await prisma.goodsReceiptNote.create({
-        data: {
-          grnNumber,
-          poId: po.id,
-          supplierId: po.supplierId,
-          rawMaterialId: po.rawMaterialId,
-          receivedQty: qty,
-          receivedBy: userName,
-          batchNo: batchNo || null,
-          notes: notes || null,
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        if (clientId) {
+          const reserved = await reserveIdempotency(tx as any, clientId, "/api/grn");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+        }
+
+        const grnNumber = await nextSequenceTx(tx as any, "GRN", 4);
+
+        // Re-read PO inside tx to avoid concurrent over-receipt drift
+        const freshPo: any = await (tx as any).purchaseOrder.findUnique({
+          where: { id: poId },
+          include: { lines: { orderBy: { lineNo: "asc" } } },
+        });
+        if (!freshPo) throw new Error("PO not found");
+        if (freshPo.status === "CANCELLED" || freshPo.status === "RECEIVED") {
+          throw Object.assign(new Error(`Cannot receive items for PO in status ${freshPo.status}`), { code: "BAD_STATUS" });
+        }
+
+        // Resolve the PO line being received. POs created before multi-line
+        // support have no line rows — synthesize one from the header mirror.
+        let lines = freshPo.lines || [];
+        if (lines.length === 0) {
+          const synthesized: any = await (tx as any).purchaseOrderLine.create({
+            data: {
+              poId: freshPo.id,
+              rawMaterialId: freshPo.rawMaterialId,
+              lineNo: 1,
+              qty: freshPo.qty,
+              unitCost: freshPo.unitCost,
+            },
+          });
+          lines = [synthesized];
+        }
+        let line: any;
+        if (lines.length > 1) {
+          if (!poLineId) {
+            throw Object.assign(new Error("This PO has multiple lines — choose which line is being received"), { code: "LINE_REQUIRED" });
+          }
+          line = lines.find((l: any) => l.id === poLineId);
+          if (!line) throw Object.assign(new Error("PO line not found"), { code: "LINE_NOT_FOUND" });
+        } else {
+          line = lines[0];
+        }
+
+        const grn = await (tx as any).goodsReceiptNote.create({
+          data: {
+            grnNumber,
+            poId: freshPo.id,
+            poLineId: line.id,
+            supplierId: freshPo.supplierId,
+            rawMaterialId: line.rawMaterialId,
+            receivedQty: qty,
+            receivedBy: userName,
+            batchNo: batchNo || null,
+            notes: notes || null,
+          },
+        });
+
+        await (tx as any).rawMaterial.update({
+          where: { id: line.rawMaterialId },
+          data: { currentStock: { increment: qty } },
+        });
+
+        await (tx as any).inventoryTransaction.create({
+          data: {
+            rawMaterialId: line.rawMaterialId,
+            type: "IN",
+            qty,
+            unitCost: line.unitCost,
+            batchNo: batchNo || null,
+            reference: grnNumber,
+            actorName: userName,
+          },
+        });
+
+        const newLineReceived = Number(line.receivedQty || 0) + qty;
+        await (tx as any).purchaseOrderLine.update({
+          where: { id: line.id },
+          data: { receivedQty: newLineReceived },
+        });
+
+        const allLines = await (tx as any).purchaseOrderLine.findMany({ where: { poId: freshPo.id } });
+        const newReceived = allLines.reduce((s: number, l: any) => s + Number(l.receivedQty || 0), 0);
+        const poStatus = allLines.every((l: any) => Number(l.receivedQty || 0) >= Number(l.qty) - 0.001)
+          ? "RECEIVED"
+          : "PARTIAL";
+        await (tx as any).purchaseOrder.update({
+          where: { id: freshPo.id },
+          data: { receivedQty: newReceived, receivedAt: new Date(), status: poStatus },
+        });
+
+        await (tx as any).auditLog.create({
+          data: {
+            actor: userName,
+            action: "GRN_CREATED",
+            entityType: "GRN",
+            entityId: grn.id,
+            details: `GRN ${grnNumber}: received ${qty} ${shownUnit} of ${shownName} against ${po.poNumber} (line ${line.lineNo || 1})`,
+          },
+        });
+
+        return grn;
       });
 
-      // Post stock IN
-      await prisma.rawMaterial.update({
-        where: { id: po.rawMaterialId },
-        data: { currentStock: { increment: qty } },
-      });
-      await prisma.inventoryTransaction.create({
-        data: {
-          rawMaterialId: po.rawMaterialId,
-          type: "IN",
-          qty,
-          unitCost: po.unitCost,
-          batchNo: batchNo || null,
-          reference: grnNumber,
-          actorName: userName,
-        },
-      });
-
-      // Update PO received qty/status
-      const newReceived = po.receivedQty + qty;
-      const poStatus = newReceived >= po.qty - 0.001 ? "RECEIVED" : "PARTIAL";
-      await prisma.purchaseOrder.update({
-        where: { id: po.id },
-        data: {
-          receivedQty: newReceived,
-          receivedAt: new Date(),
-          status: poStatus,
-        },
-      });
-
-      await logAudit({
-        actor: userName,
-        action: "GRN_CREATED",
-        entityType: "GRN",
-        entityId: grn.id,
-        details: `GRN ${grnNumber}: received ${qty} ${po.rawMaterial.unit} of ${po.rawMaterial.name} against ${po.poNumber}`,
-      });
-
-      return NextResponse.json({ success: true, item: grn });
+      const payload = { success: true, item: result };
+      if (clientId) await completeIdempotency(clientId, payload);
+      return NextResponse.json(payload);
     }
 
-    // ---- Supplier Invoice: creates invoice, runs 3-way match ----
+    // ---- Supplier Invoice: creates invoice (+ line items), runs 3-way match ----
     if (body.entity === "invoice") {
       const {
         supplierId,
@@ -267,27 +460,111 @@ export async function POST(request: Request) {
         invoiceDate,
         dueDate,
         notes,
+        items,
       } = body.data || {};
-      if (!supplierId || !invoiceNumber || amount === undefined) {
+      const itemList: any[] = Array.isArray(items) ? items : [];
+      if (!supplierId || !invoiceNumber || (amount === undefined && itemList.length === 0)) {
         return NextResponse.json(
-          { error: "supplierId, invoiceNumber, amount required" },
+          { error: "supplierId, invoiceNumber and amount (or items) required" },
           { status: 400 },
         );
       }
-      const netAmount = Number(amount);
+
+      // Multi-material invoices: resolve payload items into line rows. Each
+      // item may reference a PO line (poLineId) or a raw material directly.
+      const poRows: any[] = [];
+      for (let i = 0; i < itemList.length; i++) {
+        const it = itemList[i];
+        let rawMaterialId = it.rawMaterialId ? String(it.rawMaterialId) : null;
+        const poLineId = it.poLineId ? String(it.poLineId) : null;
+        const qty = Number(it.qty);
+        const unitCost = Number(it.unitCost);
+        if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unitCost) || unitCost < 0) {
+          return NextResponse.json(
+            { error: `Line ${i + 1}: needs a positive qty and a valid unit cost` },
+            { status: 400 },
+          );
+        }
+        if (poLineId) {
+          if (!poId) {
+            return NextResponse.json(
+              { error: `Line ${i + 1}: a poLineId needs a linked PO` },
+              { status: 400 },
+            );
+          }
+          const pol = await prisma.purchaseOrderLine.findFirst({
+            where: { id: poLineId, poId: String(poId) },
+            select: { rawMaterialId: true },
+          });
+          if (!pol) {
+            return NextResponse.json(
+              { error: `Line ${i + 1}: PO line not found on this PO` },
+              { status: 400 },
+            );
+          }
+          if (!rawMaterialId) rawMaterialId = pol.rawMaterialId;
+        }
+        if (!rawMaterialId) {
+          return NextResponse.json(
+            { error: `Line ${i + 1}: needs a rawMaterialId or poLineId` },
+            { status: 400 },
+          );
+        }
+        poRows.push({
+          rawMaterialId,
+          poLineId,
+          lineNo: i + 1,
+          qty,
+          unitCost,
+          amount: qty * unitCost,
+        });
+      }
+
+      const linesValue = poRows.reduce((s: number, r: any) => s + r.amount, 0);
+      let netAmount = amount !== undefined ? Number(amount) : linesValue;
+      if (!Number.isFinite(netAmount) || netAmount < 0) {
+        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      }
+      if (poRows.length > 0) {
+        const tol = Math.max(1, linesValue * (MATCH_TOLERANCE_PCT / 100));
+        if (Math.abs(netAmount - linesValue) > tol) {
+          return NextResponse.json(
+            { error: `Amount ${netAmount} does not match the line total ${linesValue}` },
+            { status: 400 },
+          );
+        }
+        netAmount = linesValue; // line items are the source of truth
+      }
       const tax = taxAmount ? Number(taxAmount) : 0;
-      const inv = await prisma.supplierInvoice.create({
-        data: {
-          invoiceNumber,
-          supplierId,
-          poId: poId || null,
-          amount: netAmount,
-          taxAmount: tax,
-          totalAmount: netAmount + tax,
-          invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
-          dueDate: dueDate ? new Date(dueDate) : null,
-          notes: notes || null,
-        },
+
+      const created = await prisma.$transaction(async (tx) => {
+        const inv = await (tx as any).supplierInvoice.create({
+          data: {
+            invoiceNumber,
+            supplierId,
+            poId: poId || null,
+            amount: netAmount,
+            taxAmount: tax,
+            totalAmount: netAmount + tax,
+            invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
+            dueDate: dueDate ? new Date(dueDate) : null,
+            notes: notes || null,
+          },
+        });
+        if (poRows.length > 0) {
+          await (tx as any).supplierInvoiceLine.createMany({
+            data: poRows.map((r: any) => ({
+              invoiceId: inv.id,
+              poLineId: r.poLineId || null,
+              rawMaterialId: r.rawMaterialId,
+              lineNo: r.lineNo,
+              qty: r.qty,
+              unitCost: r.unitCost,
+              amount: r.amount,
+            })),
+          });
+        }
+        return inv;
       });
 
       // Link to the latest GRN for the PO (if any) and run 3-way match
@@ -300,9 +577,10 @@ export async function POST(request: Request) {
         if (grn) {
           const po = await prisma.purchaseOrder.findUnique({
             where: { id: poId },
+            include: { lines: true },
           });
           await prisma.supplierInvoice.update({
-            where: { id: inv.id },
+            where: { id: created.id },
             data: { grnId: grn.id },
           });
           matchStatus = po
@@ -310,6 +588,13 @@ export async function POST(request: Request) {
                 amount: netAmount,
                 taxAmount: tax,
                 totalAmount: netAmount + tax,
+                lines: poRows.map((r: any) => ({
+                  lineNo: r.lineNo,
+                  poLineId: r.poLineId || null,
+                  qty: r.qty,
+                  unitCost: r.unitCost,
+                  amount: r.amount,
+                })),
               })
             : "UNMATCHED";
           await prisma.goodsReceiptNote.update({
@@ -319,7 +604,7 @@ export async function POST(request: Request) {
         }
       }
       const finalInv = await prisma.supplierInvoice.update({
-        where: { id: inv.id },
+        where: { id: created.id },
         data: {
           status:
             matchStatus === "MATCHED"
@@ -330,18 +615,59 @@ export async function POST(request: Request) {
         },
       });
 
+      // GL auto-post: purchase voucher — Dr Inventory (net), Dr GST ITC (tax),
+      // Cr Accounts Payable. Best-effort; failures surface as GL_AUTOPOST_FAILED.
+      if (netAmount + tax > 0.01) {
+        const glLines = [
+          {
+            accountCode: "1050",
+            debit: netAmount,
+            reference: invoiceNumber,
+            narration: "Goods purchases per supplier invoice",
+          },
+          ...(tax > 0.01
+            ? [
+                {
+                  accountCode: "1040",
+                  debit: tax,
+                  reference: invoiceNumber,
+                  narration: "Input GST credit (ITC)",
+                },
+              ]
+            : []),
+          {
+            accountCode: "2010",
+            credit: netAmount + tax,
+            reference: invoiceNumber,
+            narration: `Payable ${invoiceNumber}`,
+          },
+        ];
+        await autoPostToGL({
+          source: "VOUCHER",
+          sourceId: created.id,
+          memo: `Supplier invoice ${invoiceNumber} — purchases ${netAmount} + GST ${tax}`,
+          createdBy: userName,
+          date: invoiceDate ? new Date(invoiceDate) : new Date(),
+          lines: glLines as any,
+        });
+      }
+
       await logAudit({
         actor: userName,
         action: "SUPPLIER_INVOICE_CREATED",
         entityType: "SUPPLIER_INVOICE",
-        entityId: inv.id,
-        details: `Invoice ${invoiceNumber} (${netAmount + tax}) — 3-way match: ${matchStatus}`,
+        entityId: created.id,
+        details: `Invoice ${invoiceNumber} (${netAmount + tax}) — 3-way match: ${matchStatus}${poRows.length > 0 ? `, ${poRows.length} line item(s)` : ""}`,
       });
 
-      return NextResponse.json({ success: true, item: finalInv });
+      const withLines = await prisma.supplierInvoice.findUnique({
+        where: { id: created.id },
+        include: { lines: true },
+      });
+      return NextResponse.json({ success: true, item: withLines || finalInv });
     }
 
-    // ---- Inspection decision on a GRN (M6 — IQC AQL) ----
+    // ---- Inspection decision on a GRN (M6 — IQC AQL) — ATOMIC ----
     if (body.entity === "inspect") {
       const { id, inspectionStatus, inspector, notes } = body.data || {};
       if (!["PASSED", "REJECTED"].includes(inspectionStatus)) {
@@ -350,82 +676,86 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const existing = await prisma.goodsReceiptNote.findUnique({
-        where: { id },
-        include: {
-          rawMaterial: {
-            select: { sku: true, name: true, materialClass: true },
+
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await (tx as any).goodsReceiptNote.findUnique({
+          where: { id },
+          include: {
+            rawMaterial: { select: { sku: true, name: true, materialClass: true } },
+            supplier: { select: { name: true } },
           },
-          supplier: { select: { name: true } },
-        },
-      });
-      if (!existing)
-        return NextResponse.json({ error: "GRN not found" }, { status: 404 });
+        });
+        if (!existing) throw Object.assign(new Error("GRN not found"), { code: "NOT_FOUND" });
 
-      // AQL sample size per material class
-      const aql = await prisma.aqlPlan.findUnique({
-        where: { materialClass: existing.rawMaterial.materialClass || "C" },
-      });
-      const aqlSampleSize = aql?.sampleSize ?? null;
+        const aql = await (tx as any).aqlPlan.findUnique({
+          where: { materialClass: existing.rawMaterial.materialClass || "C" },
+        });
+        const aqlSampleSize = aql?.sampleSize ?? null;
 
-      let lotHeld = existing.lotHeld;
-      let ncrId = existing.ncrId;
-      if (inspectionStatus === "REJECTED") {
-        lotHeld = true; // M6 — IQC fail auto-holds the lot
-        if (!ncrId) {
-          // Auto supplier NCR draft
-          const year = new Date().getFullYear();
-          const ncrCount = await prisma.ncrReport.count({
-            where: { ncrNumber: { startsWith: `NCR-SUP-${year}-` } },
-          });
-          const ncrNumber = `NCR-SUP-${year}-${String(ncrCount + 1).padStart(3, "0")}`;
-          const ncr = await prisma.ncrReport.create({
-            data: {
-              ncrNumber,
-              supplierId: existing.supplierId,
-              grnId: existing.id,
-              quantity: existing.receivedQty,
-              severity: "HIGH",
-              description: `IQC AQL rejection — GRN ${existing.grnNumber} (batch ${existing.batchNo || "—"}, ${existing.rawMaterial.sku}) failed incoming inspection. AQL class ${existing.rawMaterial.materialClass || "C"}, sample ${aqlSampleSize ?? "?"} pcs. Lot HELD pending supplier disposition.`,
-              status: "OPEN",
-              raisedBy: inspector || userName,
-              raisedAt: new Date(),
-            },
-          });
-          ncrId = ncr.id;
-          await logAudit({
-            actor: inspector || userName,
-            action: "NCR_RAISED",
-            entityType: "NCR",
-            entityId: ncr.id,
-            details: `Auto-raised supplier NCR ${ncrNumber} from IQC rejection of GRN ${existing.grnNumber}`,
-          });
+        let lotHeld = existing.lotHeld;
+        let ncrId = existing.ncrId;
+        let ncrNumber: string | null = null;
+        if (inspectionStatus === "REJECTED") {
+          lotHeld = true;
+          if (!ncrId) {
+            ncrNumber = await nextSequenceTx(tx as any, "NCR-SUP", 3);
+            const ncr = await (tx as any).ncrReport.create({
+              data: {
+                ncrNumber,
+                supplierId: existing.supplierId,
+                grnId: existing.id,
+                quantity: existing.receivedQty,
+                severity: "HIGH",
+                description: `IQC AQL rejection — GRN ${existing.grnNumber} (batch ${existing.batchNo || "—"}, ${existing.rawMaterial.sku}) failed incoming inspection. AQL class ${existing.rawMaterial.materialClass || "C"}, sample ${aqlSampleSize ?? "?"} pcs. Lot HELD pending supplier disposition.`,
+                status: "OPEN",
+                raisedBy: inspector || userName,
+                raisedAt: new Date(),
+              },
+            });
+            ncrId = ncr.id;
+            await (tx as any).auditLog.create({
+              data: {
+                actor: inspector || userName,
+                action: "NCR_RAISED",
+                entityType: "NCR",
+                entityId: ncr.id,
+                details: `Auto-raised supplier NCR ${ncrNumber} from IQC rejection of GRN ${existing.grnNumber}`,
+              },
+            });
+          }
         }
+
+        const grn = await (tx as any).goodsReceiptNote.update({
+          where: { id },
+          data: {
+            inspectionStatus,
+            lotHeld,
+            aqlSampleSize,
+            ncrId,
+            inspector: inspector || userName,
+            inspectedAt: new Date(),
+            notes: notes || undefined,
+          },
+        });
+
+        await (tx as any).auditLog.create({
+          data: {
+            actor: userName,
+            action: "GRN_INSPECTED",
+            entityType: "GRN",
+            entityId: grn.id,
+            details: `GRN ${grn.grnNumber} — ${inspectionStatus}${lotHeld ? " · LOT HELD + supplier NCR draft" : ""} (AQL ${aqlSampleSize ?? "n/a"} pcs)`,
+          },
+        });
+
+        return { grn, aqlSampleSize, lotHeld, ncrId };
+      });
+
+      if ((result as any)?.code === "NOT_FOUND") {
+        return NextResponse.json({ error: "GRN not found" }, { status: 404 });
       }
 
-      const grn = await prisma.goodsReceiptNote.update({
-        where: { id },
-        data: {
-          inspectionStatus,
-          lotHeld,
-          aqlSampleSize,
-          ncrId,
-          inspector: inspector || userName,
-          inspectedAt: new Date(),
-          notes: notes || undefined,
-        },
-      });
-      await logAudit({
-        actor: userName,
-        action: "GRN_INSPECTED",
-        entityType: "GRN",
-        entityId: grn.id,
-        details: `GRN ${grn.grnNumber} — ${inspectionStatus}${lotHeld ? " · LOT HELD + supplier NCR draft" : ""} (AQL ${aqlSampleSize ?? "n/a"} pcs)`,
-      });
-      return NextResponse.json({
-        success: true,
-        item: { ...grn, aqlSampleSize, lotHeld, ncrId },
-      });
+      return NextResponse.json({ success: true, item: { ...result.grn, aqlSampleSize: result.aqlSampleSize, lotHeld: result.lotHeld, ncrId: result.ncrId } });
     }
 
     // ---- M6 — AQL plan upsert (sampling table per material class) ----
@@ -484,27 +814,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, item: plan });
     }
 
-    // ---- Payment against a matched supplier invoice ----
+    // ---- Payment against a matched supplier invoice (ATOMIC) ----
     if (body.entity === "pay") {
       const { id, amount, method, reference } = body.data || {};
-      const inv = await prisma.supplierInvoice.findUnique({ where: { id } });
+      const inv = await prisma.supplierInvoice.findUnique({
+        where: { id },
+        include: { lines: { orderBy: { lineNo: "asc" } } },
+      });
       if (!inv)
         return NextResponse.json(
           { error: "Invoice not found" },
           { status: 404 },
         );
-      // 3-way gate: only MATCHED invoices can be paid
       const po = inv.poId
-        ? await prisma.purchaseOrder.findUnique({ where: { id: inv.poId } })
+        ? await prisma.purchaseOrder.findUnique({ where: { id: inv.poId }, include: { lines: true } })
         : null;
-      const grn = inv.grnId
-        ? await prisma.goodsReceiptNote.findUnique({ where: { id: inv.grnId } })
-        : null;
-      const match = computeMatch(
-        grn || { receivedQty: 0 },
-        po || { qty: 0, unitCost: 0 },
-        inv,
-      );
+      const grnInv = inv.grnId ? await prisma.goodsReceiptNote.findUnique({ where: { id: inv.grnId } }) : null;
+      const match = computeMatch(grnInv || { receivedQty: 0 }, po || { qty: 0, unitCost: 0 }, inv);
       if (match !== "MATCHED") {
         return NextResponse.json(
           {
@@ -516,41 +842,88 @@ export async function POST(request: Request) {
         );
       }
       const payAmount = amount ? Number(amount) : inv.totalAmount;
-      const updated = await prisma.supplierInvoice.update({
-        where: { id },
-        data: {
-          status: "PAID",
-          notes: reference
-            ? `${inv.notes || ""} Ref: ${reference}`.trim()
-            : inv.notes,
-        },
+      let treasuryId: string | null = null;
+      const updated = await prisma.$transaction(async (tx) => {
+        if (clientId) {
+          const reserved = await reserveIdempotency(tx as any, clientId, "/api/grn:pay");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+        }
+        const freshInv = await (tx as any).supplierInvoice.findUnique({ where: { id } });
+        if (!freshInv) throw new Error("Invoice not found");
+        if (freshInv.status === "PAID") return freshInv; // idempotent pay replay
+        const u = await (tx as any).supplierInvoice.update({
+          where: { id },
+          data: {
+            status: "PAID",
+            notes: reference ? `${freshInv.notes || ""} Ref: ${reference}`.trim() : freshInv.notes,
+          },
+        });
+        const tt = await (tx as any).treasuryTransaction.create({
+          data: {
+            type: "OUTFLOW",
+            account: "Main",
+            amount: payAmount,
+            reference: freshInv.invoiceNumber,
+            category: "Supplier Payment",
+            notes: `Paid ${freshInv.invoiceNumber} (3-way matched) via ${method || "Bank"}`,
+          },
+        });
+        treasuryId = tt.id;
+        await (tx as any).auditLog.create({
+          data: {
+            actor: userName,
+            action: "SUPPLIER_PAYMENT",
+            entityType: "SUPPLIER_INVOICE",
+            entityId: freshInv.id,
+            details: `Paid ${freshInv.invoiceNumber} ${payAmount} (3-way matched)`,
+          },
+        });
+        return u;
       });
-      // Mirror into treasury ledger
-      await prisma.treasuryTransaction.create({
-        data: {
-          type: "OUTFLOW",
-          account: "Main",
-          amount: payAmount,
-          reference: inv.invoiceNumber,
-          category: "Supplier Payment",
-          notes: `Paid ${inv.invoiceNumber} (3-way matched) via ${method || "Bank"}`,
-        },
+      // GL auto-post: Dr Accounts Payable, Cr Bank for the settled amount
+      const glVoucher = await prisma.journalEntry.findFirst({
+        where: { source: "VOUCHER", sourceId: inv.id },
+        select: { id: true },
       });
-      await logAudit({
-        actor: userName,
-        action: "SUPPLIER_PAYMENT",
-        entityType: "SUPPLIER_INVOICE",
-        entityId: inv.id,
-        details: `Paid ${inv.invoiceNumber} ${payAmount} (3-way matched)`,
-      });
-      return NextResponse.json({ success: true, item: updated });
+      if (treasuryId && payAmount > 0 && glVoucher) {
+        await autoPostToGL({
+          source: "PAYMENT",
+          sourceId: treasuryId,
+          memo: `Supplier payment ${updated.invoiceNumber} via ${method || "Bank"}`,
+          createdBy: userName,
+          lines: [
+            {
+              accountCode: "2010",
+              debit: payAmount,
+              reference: updated.invoiceNumber,
+              narration: `Settled ${updated.invoiceNumber}`,
+            },
+            {
+              accountCode: "1020",
+              credit: payAmount,
+              reference: updated.invoiceNumber,
+              narration: `Bank — ${method || "Main"}`,
+            },
+          ],
+        });
+      }
+
+      const payloadPay = { success: true, item: updated };
+      if (clientId) await completeIdempotency(clientId, payloadPay);
+      return NextResponse.json(payloadPay);
     }
 
     return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
   } catch (error: any) {
+    if (error?.code === "DUPLICATE") {
+      return NextResponse.json({ success: true, duplicate: true, message: "Duplicate request ignored (idempotent)" });
+    }
+    if (error?.code === "LINE_REQUIRED" || error?.code === "LINE_NOT_FOUND" || error?.code === "BAD_STATUS") {
+      return NextResponse.json({ error: error?.message || "Bad request" }, { status: 400 });
+    }
     console.error("POST /api/grn error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save" },
+      { error: "Failed to save" },
       { status: 500 },
     );
   }

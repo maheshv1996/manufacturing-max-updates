@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 import { approvalFor } from "@/lib/poApproval";
+import { parseOr400, createPoSchema } from "@/lib/validate";
+import { nextSequenceTx } from "@/lib/sequence";
+import { normalizePoItems, poItemsTotal, poOrderedValue } from "@/lib/poLines";
 
 export async function GET() {
   try {
@@ -12,6 +15,14 @@ export async function GET() {
         include: {
           supplier: true,
           rawMaterial: true,
+          lines: {
+            include: {
+              rawMaterial: {
+                select: { id: true, sku: true, name: true, unit: true },
+              },
+            },
+            orderBy: { lineNo: "asc" },
+          },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -62,12 +73,18 @@ export async function GET() {
 
       const totalSpend = pos
         .filter((p) => p.status !== "CANCELLED")
-        .reduce(
-          (acc, p) =>
-            acc +
-            (p.status === "RECEIVED" ? p.receivedQty : p.qty) * p.unitCost,
-          0,
-        );
+        .reduce((acc, p: any) => {
+          const recognized = p.lines?.length
+            ? p.lines.reduce(
+                (s: number, l: any) =>
+                  s +
+                  (p.status === "RECEIVED" ? l.receivedQty || 0 : l.qty) *
+                    l.unitCost,
+                0,
+              )
+            : (p.status === "RECEIVED" ? p.receivedQty : p.qty) * p.unitCost;
+          return acc + recognized;
+        }, 0);
 
       return {
         supplier: s,
@@ -102,57 +119,99 @@ export async function POST(req: Request) {
     const { action } = body;
 
     if (action === "CREATE_PO") {
-      const { supplierId, rawMaterialId, qty, unitCost, expectedDate } = body;
-
-      if (!supplierId || !rawMaterialId || !qty || !unitCost) {
-        return NextResponse.json(
-          { error: "Missing required fields" },
-          { status: 400 },
-        );
+      // Accept the new multi-line `items: [...]` payload OR the legacy
+      // single-material shape (rawMaterialId / qty / unitCost).
+      const supplierId = body?.supplierId;
+      let expectedDate: string | null | undefined = body?.expectedDate;
+      let items: ReturnType<typeof normalizePoItems>;
+      try {
+        if (Array.isArray(body?.items) && body.items.length > 0) {
+          if (!supplierId) {
+            return NextResponse.json({ error: "supplierId required" }, { status: 400 });
+          }
+          items = normalizePoItems(body);
+        } else {
+          const parsed = parseOr400(createPoSchema, body);
+          if (!parsed.ok) return parsed.response;
+          expectedDate = parsed.data.expectedDate;
+          items = normalizePoItems({
+            rawMaterialId: parsed.data.rawMaterialId,
+            qty: parsed.data.qty,
+            unitCost: parsed.data.unitCost,
+          });
+        }
+      } catch (e: any) {
+        return NextResponse.json({ error: e?.message || "Invalid PO lines" }, { status: 400 });
+      }
+      if (!supplierId) {
+        return NextResponse.json({ error: "supplierId required" }, { status: 400 });
       }
 
-      const year = new Date().getFullYear();
-      const count = await prisma.purchaseOrder.count();
-      const poSeq = String(count + 1).padStart(3, "0");
-      const poNumber = `PO-${year}-${poSeq}`;
-
-      const rawMat = await prisma.rawMaterial.findUnique({
-        where: { id: rawMaterialId },
+      // Validate FKs before tx (for 404 semantics) — supplier + every material
+      const supplier = await prisma.supplier.findUnique({ where: { id: String(supplierId) } });
+      if (!supplier) return NextResponse.json({ error: "Supplier not found" }, { status: 404 });
+      const materialIds = [...new Set(items.map((it) => it.rawMaterialId))];
+      const materials = await prisma.rawMaterial.findMany({
+        where: { id: { in: materialIds } },
+        select: { id: true, name: true, unit: true },
       });
-      const supplier = await prisma.supplier.findUnique({
-        where: { id: supplierId },
-      });
+      if (materials.length !== materialIds.length) {
+        return NextResponse.json({ error: "One or more raw materials not found" }, { status: 404 });
+      }
+      const byId = new Map(materials.map((m) => [m.id, m]));
 
-      const qtyNum = parseFloat(qty);
-      const costNum = parseFloat(unitCost);
-      const total = qtyNum * costNum;
+      const total = poItemsTotal(items);
       const approval = approvalFor(total);
+      const first = items[0];
 
-      const newPO = await prisma.purchaseOrder.create({
-        data: {
-          poNumber,
-          supplierId,
-          rawMaterialId,
-          qty: qtyNum,
-          unitCost: costNum,
-          status: "ORDERED",
-          expectedDate: expectedDate ? new Date(expectedDate) : null,
-          createdBy: actorName,
-          approvalStatus: approval.approvalStatus,
-          approvalLevel: approval.approvalLevel,
-        },
-        include: {
-          supplier: true,
-          rawMaterial: true,
-        },
-      });
-
-      await logAudit({
-        actor: actorName,
-        action: "PO_CREATED",
-        entityType: "PURCHASE_ORDER",
-        entityId: newPO.id,
-        details: `Created ${poNumber} for ${rawMat?.name || "Material"} (${qtyNum} units from ${supplier?.name || "Supplier"}, ₹${total.toLocaleString("en-IN")}) → ${approval.approvalStatus}${approval.approvalStatus !== "APPROVED" ? " (needs " + approval.approvalLevel + " approval)" : ""}`,
+      const newPO = await prisma.$transaction(async (tx) => {
+        const poNumber = await nextSequenceTx(tx as any, "PO", 3);
+        const created = await (tx as any).purchaseOrder.create({
+          data: {
+            poNumber,
+            supplierId: String(supplierId),
+            rawMaterialId: first.rawMaterialId,
+            qty: first.qty,
+            unitCost: first.unitCost,
+            lines: {
+              create: items.map((it, i) => ({
+                rawMaterialId: it.rawMaterialId,
+                lineNo: i + 1,
+                qty: it.qty,
+                unitCost: it.unitCost,
+              })),
+            },
+            status: "ORDERED",
+            expectedDate: expectedDate ? new Date(expectedDate as string) : null,
+            createdBy: actorName,
+            approvalStatus: approval.approvalStatus,
+            approvalLevel: approval.approvalLevel,
+          },
+          include: {
+            supplier: true,
+            rawMaterial: true,
+            lines: {
+              include: {
+                rawMaterial: { select: { id: true, sku: true, name: true, unit: true } },
+              },
+              orderBy: { lineNo: "asc" },
+            },
+          },
+        });
+        const what =
+          items.length === 1
+            ? `${byId.get(first.rawMaterialId)?.name} (${first.qty} ${byId.get(first.rawMaterialId)?.unit || "units"} from ${supplier.name})`
+            : `${items.length} line items from ${supplier.name} (₹${total.toLocaleString("en-IN")})`;
+        await (tx as any).auditLog.create({
+          data: {
+            actor: actorName,
+            action: "PO_CREATED",
+            entityType: "PURCHASE_ORDER",
+            entityId: created.id,
+            details: `Created ${poNumber} for ${what} → ${approval.approvalStatus}${approval.approvalStatus !== "APPROVED" ? " (needs " + approval.approvalLevel + " approval)" : ""}`,
+          },
+        });
+        return created;
       });
 
       return NextResponse.json({ success: true, purchaseOrder: newPO });
@@ -184,7 +243,7 @@ export async function POST(req: Request) {
 
       const po = await prisma.purchaseOrder.findUnique({
         where: { id: poId },
-        include: { supplier: true, rawMaterial: true },
+        include: { supplier: true, rawMaterial: true, lines: true },
       });
       if (!po) {
         return NextResponse.json({ error: "PO not found" }, { status: 404 });
@@ -224,18 +283,18 @@ export async function POST(req: Request) {
             ? { ownerApprovedBy: actor, ownerApprovedAt: new Date() }
             : { managerApprovedBy: actor, managerApprovedAt: new Date() }),
         };
-        const updatedPO = await prisma.purchaseOrder.update({
-          where: { id: poId },
-          data: patch,
-          include: { supplier: true, rawMaterial: true },
-        });
+      const updatedPO = await prisma.purchaseOrder.update({
+        where: { id: poId },
+        data: patch,
+        include: { supplier: true, rawMaterial: true, lines: true },
+      });
 
         await logAudit({
           actor,
           action: "PO_APPROVED",
           entityType: "PURCHASE_ORDER",
           entityId: po.id,
-          details: `Approved ${po.poNumber} (${po.approvalStatus} → APPROVED, ₹${(po.qty * po.unitCost).toLocaleString("en-IN")}) by ${po.approvalStatus === "PENDING_OWNER" ? "owner" : "manager"}. Reason: ${reason}`,
+          details: `Approved ${po.poNumber} (${po.approvalStatus} → APPROVED, ₹${poOrderedValue(po).toLocaleString("en-IN")}) by ${po.approvalStatus === "PENDING_OWNER" ? "owner" : "manager"}. Reason: ${reason}`,
         });
 
         return NextResponse.json({ success: true, purchaseOrder: updatedPO });
@@ -272,16 +331,16 @@ export async function POST(req: Request) {
         action: "PO_REJECTED",
         entityType: "PURCHASE_ORDER",
         entityId: po.id,
-        details: `Rejected ${po.poNumber} (₹${(po.qty * po.unitCost).toLocaleString("en-IN")}). Reason: ${reason}`,
+        details: `Rejected ${po.poNumber} (₹${poOrderedValue(po).toLocaleString("en-IN")}). Reason: ${reason}`,
       });
 
       return NextResponse.json({ success: true, purchaseOrder: rejectedPO });
     }
 
     if (action === "RECEIVE_PO") {
-      const { poId, receiveQty, batchNo } = body;
+      const { poId, receiveQty, batchNo, poLineId } = body;
 
-      if (!poId || !receiveQty || parseFloat(receiveQty) <= 0) {
+      if (!poId || receiveQty == null || parseFloat(receiveQty) <= 0) {
         return NextResponse.json(
           { error: "Invalid receive quantity" },
           { status: 400 },
@@ -290,7 +349,7 @@ export async function POST(req: Request) {
 
       const po = await prisma.purchaseOrder.findUnique({
         where: { id: poId },
-        include: { rawMaterial: true, supplier: true },
+        include: { supplier: true, rawMaterial: true, lines: true },
       });
 
       if (!po) {
@@ -313,54 +372,108 @@ export async function POST(req: Request) {
         );
       }
 
-      const addQty = parseFloat(receiveQty);
-      const newReceivedQty = po.receivedQty + addQty;
-      const isFullyReceived = newReceivedQty >= po.qty;
-      const newStatus = isFullyReceived ? "RECEIVED" : "PARTIAL";
-      const now = new Date();
+      const addQty = Number(receiveQty);
+      if (!Number.isFinite(addQty) || addQty <= 0) {
+        return NextResponse.json({ error: "receiveQty must be positive" }, { status: 400 });
+      }
 
-      // Update PO
-      const updatedPO = await prisma.purchaseOrder.update({
-        where: { id: poId },
-        data: {
-          receivedQty: newReceivedQty,
-          status: newStatus,
-          receivedAt: isFullyReceived ? po.receivedAt || now : po.receivedAt,
-        },
-        include: {
-          supplier: true,
-          rawMaterial: true,
-        },
-      });
+      const updatedPO = await prisma.$transaction(async (tx) => {
+        const freshPo: any = await (tx as any).purchaseOrder.findUnique({
+          where: { id: poId },
+          include: { lines: { orderBy: { lineNo: "asc" } } },
+        });
+        if (!freshPo) throw new Error("PO not found");
+        if (freshPo.status === "CANCELLED" || freshPo.status === "RECEIVED") {
+          throw Object.assign(new Error(`Cannot receive items for PO in status ${freshPo.status}`), { code: "BAD_STATUS" });
+        }
+        if (freshPo.approvalStatus !== "APPROVED") {
+          throw Object.assign(new Error(`PO_PENDING_APPROVAL: ${freshPo.poNumber} cannot be received — approval status is ${freshPo.approvalStatus}`), { code: "PENDING_APPROVAL" });
+        }
 
-      // Create Inventory IN Transaction
-      await prisma.inventoryTransaction.create({
-        data: {
-          rawMaterialId: po.rawMaterialId,
-          type: "IN",
-          qty: addQty,
-          unitCost: po.unitCost,
-          batchNo: batchNo || `BATCH-PO-${po.poNumber}`,
-          reference: po.poNumber,
-          actorName: actorName,
-          at: now,
-        },
-      });
+        // Resolve the target line. POs created before multi-line support have no
+        // line rows — synthesize one from the header mirror so legacy receipts
+        // accumulate identically to before.
+        let lines = freshPo.lines || [];
+        if (lines.length === 0) {
+          const synthesized: any = await (tx as any).purchaseOrderLine.create({
+            data: {
+              poId: freshPo.id,
+              rawMaterialId: freshPo.rawMaterialId,
+              lineNo: 1,
+              qty: freshPo.qty,
+              unitCost: freshPo.unitCost,
+            },
+          });
+          lines = [synthesized];
+        }
+        let line: any;
+        if (lines.length > 1) {
+          if (!poLineId) {
+            throw Object.assign(new Error("This PO has multiple lines — choose which line is being received"), { code: "LINE_REQUIRED" });
+          }
+          line = lines.find((l: any) => l.id === poLineId);
+          if (!line) throw Object.assign(new Error("PO line not found"), { code: "LINE_NOT_FOUND" });
+        } else {
+          line = lines[0];
+        }
 
-      // Increase RawMaterial current stock
-      await prisma.rawMaterial.update({
-        where: { id: po.rawMaterialId },
-        data: {
-          currentStock: { increment: addQty },
-        },
-      });
+        const newLineReceived = Number(line.receivedQty || 0) + addQty;
+        await (tx as any).purchaseOrderLine.update({
+          where: { id: line.id },
+          data: { receivedQty: newLineReceived },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "PO_RECEIVED",
-        entityType: "PURCHASE_ORDER",
-        entityId: po.id,
-        details: `Received ${addQty} units for ${po.poNumber} (Batch: ${batchNo || "N/A"}). PO Status: ${newStatus}`,
+        const allLines = await (tx as any).purchaseOrderLine.findMany({
+          where: { poId: freshPo.id },
+        });
+        const newReceivedQty = allLines.reduce((s: number, l: any) => s + Number(l.receivedQty || 0), 0);
+        const isFullyReceived = allLines.every((l: any) => Number(l.receivedQty || 0) >= Number(l.qty) - 0.001);
+        const newStatus = isFullyReceived ? "RECEIVED" : "PARTIAL";
+        const now = new Date();
+        const updated = await (tx as any).purchaseOrder.update({
+          where: { id: poId },
+          data: {
+            receivedQty: newReceivedQty,
+            status: newStatus,
+            receivedAt: isFullyReceived ? freshPo.receivedAt || now : freshPo.receivedAt,
+          },
+          include: {
+            supplier: true,
+            rawMaterial: true,
+            lines: {
+              include: {
+                rawMaterial: { select: { id: true, sku: true, name: true, unit: true } },
+              },
+              orderBy: { lineNo: "asc" },
+            },
+          },
+        });
+        await (tx as any).inventoryTransaction.create({
+          data: {
+            rawMaterialId: line.rawMaterialId,
+            type: "IN",
+            qty: addQty,
+            unitCost: line.unitCost,
+            batchNo: batchNo || `BATCH-PO-${freshPo.poNumber}`,
+            reference: freshPo.poNumber,
+            actorName,
+            at: now,
+          },
+        });
+        await (tx as any).rawMaterial.update({ where: { id: line.rawMaterialId }, data: { currentStock: { increment: addQty } } });
+        await (tx as any).auditLog.create({
+          data: {
+            actor: actorName,
+            action: "PO_RECEIVED",
+            entityType: "PURCHASE_ORDER",
+            entityId: freshPo.id,
+            details: `Received ${addQty} units for ${freshPo.poNumber} (line ${line.lineNo}${line.rawMaterialId ? ", material " + line.rawMaterialId : ""}, batch ${batchNo || "N/A"}). PO status: ${newStatus}`,
+          },
+        });
+        return updated;
+      }).catch((e: any) => {
+        if (e?.code === "BAD_STATUS" || e?.code === "PENDING_APPROVAL" || e?.code === "LINE_REQUIRED" || e?.code === "LINE_NOT_FOUND") throw e;
+        throw e;
       });
 
       return NextResponse.json({ success: true, purchaseOrder: updatedPO });
@@ -395,7 +508,15 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
+  } catch (error: any) {
+    if (
+      error?.code === "BAD_STATUS" ||
+      error?.code === "PENDING_APPROVAL" ||
+      error?.code === "LINE_REQUIRED" ||
+      error?.code === "LINE_NOT_FOUND"
+    ) {
+      return NextResponse.json({ error: error?.message || "Bad request" }, { status: 400 });
+    }
     console.error("Purchasing API error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

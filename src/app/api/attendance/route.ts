@@ -291,6 +291,6 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("Failed to fetch attendance data:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

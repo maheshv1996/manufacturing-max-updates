@@ -5,6 +5,10 @@ import { logAudit } from "@/lib/audit";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { area, auditorName, notes, scores } = body; // scores: [{ itemId, score }]
 
     if (!area || !auditorName || !scores || scores.length === 0) {
@@ -57,6 +61,6 @@ export async function POST(request: Request) {
     return NextResponse.json(audit);
   } catch (error: any) {
     console.error("Create 5S audit error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

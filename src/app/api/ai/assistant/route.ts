@@ -9,6 +9,10 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "AI_ASSISTANT_QUERY", entityType: "AiAssistant", details: "AI Assistant queried" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { message, contextDomain } = body;
 
     if (!message) {
@@ -51,6 +55,6 @@ export async function POST(req: Request) {
       model: result.model,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

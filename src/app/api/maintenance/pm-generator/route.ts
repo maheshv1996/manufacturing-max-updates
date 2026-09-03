@@ -40,7 +40,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, schedules });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -63,6 +63,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, message: `Generated PM Service Work Order for ${machineCode}!`, job: created });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

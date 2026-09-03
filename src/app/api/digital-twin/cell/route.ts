@@ -103,7 +103,7 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Cell digital twin error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load cell data" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

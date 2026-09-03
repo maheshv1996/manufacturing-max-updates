@@ -128,6 +128,10 @@ export async function POST(req: Request) {
     const actor = user.name || "Admin";
 
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
 
     if (action === "create" || action === "update") {
@@ -348,7 +352,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("POST /api/fixed-assets error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save asset" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

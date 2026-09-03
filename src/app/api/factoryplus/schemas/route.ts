@@ -172,6 +172,10 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "FACTORYPLUS_SCHEMA_SAVED", entityType: "FactoryPlusSchema", details: "Factory+ schema registered" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { schemaUuid, payload } = body;
 
     const schema =
@@ -204,7 +208,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Schema validation error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to validate schema" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

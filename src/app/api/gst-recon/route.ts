@@ -52,6 +52,10 @@ export async function POST(req: Request) {
     const actor = user.name || "Admin";
 
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
 
     if (action !== "create-run") {
@@ -220,7 +224,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("POST /api/gst-recon error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create run" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

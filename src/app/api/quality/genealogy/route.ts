@@ -200,7 +200,7 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Genealogy trace error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to trace genealogy" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

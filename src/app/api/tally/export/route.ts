@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
+import { poReceivedValue } from "@/lib/poLines";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -133,7 +134,7 @@ async function paymentsCsv() {
 async function payablesCsv() {
   const suppliers = await prisma.supplier.findMany({
     include: {
-      purchaseOrders: { where: { status: "RECEIVED" } },
+      purchaseOrders: { where: { status: "RECEIVED" }, include: { lines: true } },
       payments: true,
     },
     orderBy: { name: "asc" },
@@ -150,7 +151,7 @@ async function payablesCsv() {
   const rows: any[][] = [];
   for (const s of suppliers) {
     for (const po of s.purchaseOrders) {
-      const poValue = po.receivedQty * po.unitCost;
+      const poValue = poReceivedValue(po);
       const paid = s.payments
         .filter((p: any) => p.purchaseOrderId === po.id)
         .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
@@ -173,7 +174,7 @@ async function partiesCsv() {
   const invoices = await (prisma as any).invoice.findMany();
   const suppliers = await prisma.supplier.findMany({
     include: {
-      purchaseOrders: { where: { status: "RECEIVED" } },
+      purchaseOrders: { where: { status: "RECEIVED" }, include: { lines: true } },
       payments: true,
     },
     orderBy: { name: "asc" },
@@ -232,7 +233,7 @@ async function partiesCsv() {
   }
   for (const s of suppliers) {
     const purchased = s.purchaseOrders.reduce(
-      (sum: number, po: any) => sum + po.receivedQty * po.unitCost,
+      (sum: number, po: any) => sum + poReceivedValue(po),
       0,
     );
     const paid = s.payments.reduce(

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { headers } from "next/headers";
+import { poReceivedValue } from "@/lib/poLines";
 
 export async function GET(req: Request) {
   try {
@@ -24,6 +25,7 @@ export async function GET(req: Request) {
         include: {
           purchaseOrders: {
             where: { status: "RECEIVED" },
+            include: { lines: true },
           },
           payments: {
             orderBy: { paymentDate: "desc" },
@@ -34,7 +36,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
 
       const purchasedValue = supplier.purchaseOrders.reduce(
-        (sum, po) => sum + po.receivedQty * po.unitCost,
+        (sum, po) => sum + poReceivedValue(po),
         0,
       );
       const paidValue = supplier.payments.reduce((sum, p) => sum + p.amount, 0);
@@ -54,6 +56,7 @@ export async function GET(req: Request) {
       include: {
         purchaseOrders: {
           where: { status: "RECEIVED" },
+          include: { lines: true },
         },
         payments: true,
       },
@@ -64,7 +67,7 @@ export async function GET(req: Request) {
 
     const supplierBalances = suppliers.map((s) => {
       const purchasedValue = s.purchaseOrders.reduce(
-        (sum, po) => sum + po.receivedQty * po.unitCost,
+        (sum, po) => sum + poReceivedValue(po),
         0,
       );
       const paidValue = s.payments.reduce((sum, p) => sum + p.amount, 0);
@@ -99,7 +102,7 @@ export async function GET(req: Request) {
     });
   } catch (error: any) {
     console.error("Payables fetch error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -113,6 +116,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const {
       supplierId,
       amount,
@@ -149,6 +156,6 @@ export async function POST(req: Request) {
     return NextResponse.json(payment);
   } catch (error: any) {
     console.error("Payables POST error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

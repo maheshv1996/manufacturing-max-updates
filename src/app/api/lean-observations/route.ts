@@ -64,7 +64,7 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("GET /api/lean-observations error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -77,6 +77,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
 
     if (action === "create") {
@@ -147,6 +151,6 @@ export async function POST(request: Request) {
     );
   } catch (error: any) {
     console.error("POST /api/lean-observations error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { challanId, receivedQty, rejectedQty, status, remarks } = body;
 
     if (!challanId || receivedQty === undefined) {
@@ -44,7 +48,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Failed to record inward receipt:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to record inward" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

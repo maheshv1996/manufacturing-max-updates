@@ -104,7 +104,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load BOM tree data:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load BOM trees" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -113,6 +113,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { productId, rawMaterialId, qtyPerUnit } = body;
 
     if (!productId || !rawMaterialId || !qtyPerUnit) {
@@ -155,7 +159,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Failed to save BOM line:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save BOM line" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

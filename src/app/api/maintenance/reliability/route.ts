@@ -142,7 +142,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load maintenance reliability data:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load reliability data" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -151,6 +151,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { machineId, type, priority, description, requestedByName } = body;
 
     if (!machineId || !description) {
@@ -194,7 +198,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Failed to create maintenance job:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create maintenance job" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -239,7 +243,7 @@ export async function PATCH(req: Request) {
   } catch (error: any) {
     console.error("Failed to update maintenance job:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update maintenance job" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

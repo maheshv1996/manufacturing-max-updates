@@ -128,6 +128,10 @@ export async function POST(req: NextRequest) {
     await logAudit({ actor: "system", action: "AI_CORTEX_PROMPT", entityType: "AiCortex", details: "AI Cortex query executed" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action, payload } = body;
 
     if (action === "resolve_conflict") {

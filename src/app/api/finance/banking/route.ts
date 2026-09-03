@@ -59,8 +59,12 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "BANK_TRANSACTION_RECORDED", entityType: "BankTransaction", details: "Bank transaction logged" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     return NextResponse.json({ success: true, message: "Bank Guarantee logged", record: body });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

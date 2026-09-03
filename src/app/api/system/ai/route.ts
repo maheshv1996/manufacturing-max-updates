@@ -10,7 +10,7 @@ export async function GET() {
     const config = await getActiveLLMConfig();
     return NextResponse.json({ success: true, config });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -18,6 +18,10 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "AI_SETTINGS_UPDATED", entityType: "SystemAi", details: "AI Settings updated" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { provider, apiKey, model, baseUrl } = body;
 
     const config = {
@@ -35,6 +39,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, config });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

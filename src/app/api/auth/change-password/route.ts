@@ -78,10 +78,11 @@ export async function POST(req: Request) {
       isOwner: user.isOwner,
       level: user.level || "WORKER",
       mustChangePassword: false,
-      sess: user.sessionEpoch || 0,
+      sess: user.sessionEpoch ?? 0,
     });
 
-    const isProd = process.env.NODE_ENV === "production";
+    const proto = headersList.get("x-forwarded-proto") || "";
+    const isHttps = proto === "https" || req.url.startsWith("https://");
 
     // Log success
     await logAudit({
@@ -99,9 +100,9 @@ export async function POST(req: Request) {
       value: token,
       httpOnly: true,
       sameSite: "lax",
-      secure: isProd,
+      secure: isHttps,
       path: "/",
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: 60 * 60 * 24 * 365, // 1 year session
     });
 
     return response;

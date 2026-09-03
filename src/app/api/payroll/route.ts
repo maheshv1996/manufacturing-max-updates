@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
 import { logAudit } from "@/lib/audit";
+import { autoPostToGL } from "@/lib/glPosting";
 
 const STRUCTURE_FIELDS = [
   "employeeName",
@@ -83,6 +84,10 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { entity, action, data } = body;
     if (!action || !data) {
       return NextResponse.json(
@@ -136,6 +141,57 @@ export async function POST(req: Request) {
           entityId: run.id,
           details: `${month} approved — ${data.reason.slice(0, 80)}`,
         });
+
+        // GL auto-post: monthly salary voucher (accrual) —
+        //   Dr 5080 Salaries & Wages = Σ gross(+OT) + bonus + arrears − LOP
+        //   Cr 2030 Statutory Dues  = Σ (PF + ESI + PT)
+        //   Cr 2050 Wages Payable   = Σ net pay
+        const sums = await (prisma as any).payslip.aggregate({
+          where: { month },
+          _sum: {
+            grossPay: true,
+            pfDeduction: true,
+            ptDeduction: true,
+            esiDeduction: true,
+            netPay: true,
+            bonus: true,
+            arrears: true,
+            lopDeduction: true,
+          },
+        });
+        const s = sums._sum || {};
+        const statu = (s.pfDeduction || 0) + (s.esiDeduction || 0) + (s.ptDeduction || 0);
+        const netSum = s.netPay || 0;
+        const expense =
+          (s.grossPay || 0) + (s.bonus || 0) + (s.arrears || 0) - (s.lopDeduction || 0);
+        if (netSum > 0.01) {
+          const glLines: any[] = [
+            {
+              accountCode: "5080",
+              debit: Math.round(expense * 100) / 100,
+              narration: `Payroll ${month} — net ${Math.round(netSum)} + statutory ${Math.round(statu)}`,
+            },
+          ];
+          if (statu > 0.01)
+            glLines.push({
+              accountCode: "2030",
+              credit: Math.round(statu * 100) / 100,
+              narration: "PF / ESI / PT statutory dues",
+            });
+          glLines.push({
+            accountCode: "2050",
+            credit: Math.round(netSum * 100) / 100,
+            narration: "Net wages payable (bank transfer)",
+          });
+          await autoPostToGL({
+            source: "VOUCHER",
+            sourceId: run.id,
+            memo: `Payroll run ${month} approved — salaries & wages accrual`,
+            createdBy: user.name || "System",
+            date: run.approvedAt || new Date(),
+            lines: glLines,
+          });
+        }
       } else {
         if (run.status !== "APPROVED")
           return NextResponse.json(
@@ -159,6 +215,124 @@ export async function POST(req: Request) {
         });
       }
       return NextResponse.json({ run });
+    }
+
+    // P— payroll settlement: pays net wages and remits PF/ESI/PT statutory dues.
+    // Accrual (posted at approval) reverses out — Dr Wages Payable + Statutory
+    // Dues, Cr Bank — and a treasury outflow records the actual cash movement.
+    if (action === "settle-run") {
+      const month = String(data.month || "");
+      if (!/^\d{4}-\d{2}$/.test(month))
+        return NextResponse.json(
+          { error: "Month must be YYYY-MM" },
+          { status: 400 },
+        );
+      if (!data.reason)
+        return NextResponse.json(
+          { error: "reason required" },
+          { status: 400 },
+        );
+      const mgr = await requireManagerLevel(user);
+      if (!mgr.ok)
+        return NextResponse.json(
+          { error: "Manager level required" },
+          { status: 403 },
+        );
+      const run = await prisma.payrollRun.findUnique({ where: { month } });
+      if (!run)
+        return NextResponse.json(
+          { error: `No payroll run for ${month} — generate it first` },
+          { status: 400 },
+        );
+      if (run.status !== "APPROVED" && run.status !== "LOCKED")
+        return NextResponse.json(
+          { error: `Run is ${run.status} — approve it before settling` },
+          { status: 400 },
+        );
+      if (run.settledAt)
+        return NextResponse.json(
+          { error: `Run ${month} was already settled on ${run.settledAt.toISOString?.() || run.settledAt}` },
+          { status: 400 },
+        );
+
+      const sums = await (prisma as any).payslip.aggregate({
+        where: { month },
+        _sum: {
+          pfDeduction: true,
+          ptDeduction: true,
+          esiDeduction: true,
+          netPay: true,
+        },
+      });
+      const s = sums._sum || {};
+      const netSum = s.netPay || 0;
+      const statu = (s.pfDeduction || 0) + (s.esiDeduction || 0) + (s.ptDeduction || 0);
+      if (netSum <= 0.01)
+        return NextResponse.json(
+          { error: `No net pay to settle for ${month}` },
+          { status: 400 },
+        );
+      const total = Math.round((netSum + statu) * 100) / 100;
+      const method = data.method || "Bank";
+
+      const treasury = await prisma.treasuryTransaction.create({
+        data: {
+          type: "OUTFLOW",
+          account: "Main",
+          amount: total,
+          reference: `Payroll-${month}`,
+          category: "Payroll Settlement",
+          notes: `${(data.reason || "").slice(0, 200)} — net ${Math.round(netSum)} + statutory ${Math.round(statu)}`,
+        },
+      });
+      const settled = await prisma.payrollRun.update({
+        where: { month },
+        data: {
+          status: "LOCKED",
+          settledBy: user.name || "System",
+          settledAt: new Date(),
+        },
+      });
+      await logAudit({
+        actor: user.name || "System",
+        action: "PAYROLL_RUN_SETTLED",
+        entityType: "PAYROLL",
+        entityId: run.id,
+        details: `${month} settled ${total} via ${method} (net ${Math.round(netSum)} + statutory ${Math.round(statu)}) — ${(data.reason || "").slice(0, 80)}`,
+      });
+
+      await autoPostToGL({
+        source: "PAYMENT",
+        sourceId: treasury.id,
+        memo: `Payroll settlement ${month} — net wages + PF/ESI/PT remittance`,
+        createdBy: user.name || "System",
+        date: settled.settledAt || new Date(),
+        lines: [
+          {
+            accountCode: "2050",
+            debit: Math.round(netSum * 100) / 100,
+            narration: `Net wages paid ${month}`,
+          },
+          ...(statu > 0.01
+            ? [
+                {
+                  accountCode: "2030",
+                  debit: Math.round(statu * 100) / 100,
+                  narration: "PF / ESI / PT remitted to authorities",
+                },
+              ]
+            : []),
+          {
+            accountCode: "1020",
+            credit: total,
+            narration: `Bank — ${method}`,
+          },
+        ],
+      });
+
+      return NextResponse.json({
+        settled: { ...settled, settledAmount: total },
+      });
     }
 
     if (action === "override-payslip") {
@@ -239,6 +413,64 @@ export async function POST(req: Request) {
       return NextResponse.json({ payslip: updated });
     }
 
+    if (action === "adjust-payslip") {
+      // Draft-run adjustments: LOP days / bonus / arrears per payslip, recomputed with deductions.
+      const { payslipId, month, lopDays, bonus, arrears, reason } = data;
+      if (!payslipId)
+        return NextResponse.json(
+          { error: "payslipId required" },
+          { status: 400 },
+        );
+      const m = String(month || "");
+      if (m) {
+        const run = await prisma.payrollRun.findUnique({ where: { month: m } });
+        if (run && run.status === "LOCKED")
+          return NextResponse.json(
+            { error: "Run is LOCKED — use override-payslip for locked runs" },
+            { status: 400 },
+          );
+      }
+      const slip = await prisma.payslip.findUnique({
+        where: { id: payslipId },
+        include: { salaryStructure: true },
+      });
+      if (!slip)
+        return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
+      const s = slip.salaryStructure;
+      const gross =
+        s.basicPay + s.hra + s.specialAllowance + s.conveyance + s.otherAllowance;
+      const pf = Math.round(
+        (Math.min(s.basicPay, 15000) * (s.pfPercent || 12)) / 100,
+      );
+      const pt = s.professionalTax || 0;
+      const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+      const lopD = Math.round((gross / 30) * (Number(lopDays) || 0));
+      const b = Number(bonus) || 0;
+      const ar = Number(arrears) || 0;
+      const net =
+        gross + (slip.otPay || 0) + b + ar - pf - pt - esi - lopD;
+      const updated = await prisma.payslip.update({
+        where: { id: payslipId },
+        data: {
+          esiDeduction: esi,
+          lopDays: Number(lopDays) || 0,
+          lopDeduction: lopD,
+          bonus: b,
+          arrears: ar,
+          netPay: net,
+          generatedAt: new Date(),
+        },
+      });
+      await logAudit({
+        actor: user.name || "System",
+        action: "PAYSLIP_ADJUSTED",
+        entityType: "PAYROLL",
+        entityId: payslipId,
+        details: `${slip.month} LOP ${Number(lopDays) || 0}d / bonus ${b} / arrears ${ar} — ${(reason || "adjustment").slice(0, 80)}`,
+      });
+      return NextResponse.json({ payslip: updated });
+    }
+
     if (action === "generate") {
       const month = String(data.month || "");
       if (!/^\d{4}-\d{2}$/.test(month)) {
@@ -264,6 +496,10 @@ export async function POST(req: Request) {
         const key = o.user.employeeNumber || o.user.name || o.userId;
         otByUser.set(key, { hours: (otByUser.get(key)?.hours || 0) + o.hours });
       }
+      // Optional per-employee adjustments keyed by employeeCode: { "1001": 2 }
+      const lopByCode: Record<string, number> = data.lopByCode || {};
+      const bonusByCode: Record<string, number> = data.bonusByCode || {};
+      const arrearsByCode: Record<string, number> = data.arrearsByCode || {};
       let created = 0;
       for (const s of structures) {
         const gross =
@@ -275,12 +511,18 @@ export async function POST(req: Request) {
         const pfBase = Math.min(s.basicPay, 15000);
         const pf = Math.round((pfBase * (s.pfPercent || 12)) / 100);
         const pt = s.professionalTax || 0;
+        // ESI: 0.75% employee share when gross <= 21000 (statutory threshold)
+        const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
         const hourly = gross / 208;
         const otMatch = otByUser.get(s.employeeCode) ||
           otByUser.get(s.employeeName) || { hours: 0 };
         const otPay = Number((otMatch.hours * hourly * 1.5).toFixed(0)); // 1.5× statutory OT rate
+        const lopDays = Number(lopByCode[s.employeeCode] || 0) || 0;
+        const lopDeduction = Math.round((gross / 30) * lopDays);
+        const bonus = Number(bonusByCode[s.employeeCode] || 0) || 0;
+        const arrears = Number(arrearsByCode[s.employeeCode] || 0) || 0;
         const grossWithOt = gross + otPay;
-        const net = grossWithOt - pf - pt;
+        const net = grossWithOt + bonus + arrears - pf - pt - esi - lopDeduction;
         await prisma.payslip.upsert({
           where: {
             salaryStructureId_month: { salaryStructureId: s.id, month },
@@ -289,6 +531,11 @@ export async function POST(req: Request) {
             grossPay: grossWithOt,
             pfDeduction: pf,
             ptDeduction: pt,
+            esiDeduction: esi,
+            lopDays,
+            lopDeduction,
+            bonus,
+            arrears,
             netPay: net,
             otHours: otMatch.hours,
             otPay,
@@ -300,6 +547,11 @@ export async function POST(req: Request) {
             grossPay: grossWithOt,
             pfDeduction: pf,
             ptDeduction: pt,
+            esiDeduction: esi,
+            lopDays,
+            lopDeduction,
+            bonus,
+            arrears,
             netPay: net,
             otHours: otMatch.hours,
             otPay,

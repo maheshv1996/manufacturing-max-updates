@@ -8,6 +8,10 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "QUOTATION_ESTIMATED", entityType: "Quotation", details: "Quotation cost estimation generated" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { lines, quotedPrice } = body;
 
     if (!lines || !Array.isArray(lines)) {
@@ -22,7 +26,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("POST /api/quotations/estimate error:", error);
     return NextResponse.json(
-      { error: "Failed to calculate estimate", details: error.message },
+      { error: "Failed to calculate estimate" },
       { status: 500 },
     );
   }

@@ -21,7 +21,7 @@ export async function GET() {
     return NextResponse.json(state);
   } catch (error: any) {
     console.error("GET /api/access-review error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -38,6 +38,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
 
     if (action === "create-cycle") {
@@ -173,6 +177,6 @@ export async function POST(request: Request) {
     );
   } catch (error: any) {
     console.error("POST /api/access-review error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

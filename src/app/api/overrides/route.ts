@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ overrides });
   } catch (error: any) {
     console.error("Failed to fetch overrides:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -42,6 +42,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { entityType, entityId, field, value } = body;
 
     if (!entityType || !entityId || !field || value === undefined) {
@@ -84,7 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, override });
   } catch (error: any) {
     console.error("Failed to set override:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -118,6 +122,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Failed to clear override:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

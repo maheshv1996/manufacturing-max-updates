@@ -49,6 +49,10 @@ export async function GET(_request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { logId, type, data } = body;
     const headerList = await headers();
     const actorName = headerList.get("x-user-name") || "Supervisor";

@@ -50,6 +50,10 @@ export async function POST(req: Request) {
       can(user, "commercial.edit");
 
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { action } = body;
 
     if (action === "create_statement") {
@@ -250,6 +254,14 @@ export async function POST(req: Request) {
           rawMaterialId: statement.rawMaterialId,
           qty: statement.qty,
           unitCost: quote.unitRate,
+          lines: {
+            create: {
+              rawMaterialId: statement.rawMaterialId,
+              lineNo: 1,
+              qty: statement.qty,
+              unitCost: quote.unitRate,
+            },
+          },
           status: "ORDERED",
           expectedDate: statement.requiredBy,
           createdBy: actor,

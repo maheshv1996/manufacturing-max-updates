@@ -36,7 +36,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, transfers, plants, rawMaterials });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -44,6 +44,10 @@ export async function POST(req: Request) {
     await logAudit({ actor: "system", action: "PLANT_TRANSFER_CREATED", entityType: "PlantTransfer", details: "Plant transfer initiated" });
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const stnNumber = `STN-2026-${Math.floor(100 + Math.random() * 900)}`;
     return NextResponse.json({
       success: true,
@@ -51,6 +55,6 @@ export async function POST(req: Request) {
       stnNumber,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

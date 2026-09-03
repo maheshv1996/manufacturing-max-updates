@@ -34,7 +34,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("GET /api/certs error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch certs", details: error.message },
+      { error: "Failed to fetch certs" },
       { status: 500 },
     );
   }

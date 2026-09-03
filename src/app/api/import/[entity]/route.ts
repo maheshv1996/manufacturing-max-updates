@@ -363,6 +363,10 @@ export async function POST(
 
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const rows: Row[] = Array.isArray(body?.rows) ? body.rows : [];
     if (rows.length === 0)
       return NextResponse.json({ error: "No rows to import" }, { status: 400 });

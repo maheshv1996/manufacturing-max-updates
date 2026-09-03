@@ -32,12 +32,15 @@ export async function GET(request: Request) {
 
   const response = NextResponse.redirect(googleAuthUrl.toString());
 
+  const proto = request.headers.get("x-forwarded-proto") || "";
+  const isHttps = proto === "https" || request.url.startsWith("https://");
+
   response.cookies.set({
     name: "google_oauth_state",
     value: state,
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps,
     path: "/",
     maxAge: 60 * 10, // 10 minutes
   });

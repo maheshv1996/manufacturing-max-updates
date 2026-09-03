@@ -193,7 +193,7 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Failed to load ECO diff data:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load ECO diff" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -202,6 +202,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { ecoId, signerRole, signerName } = body;
 
     await logAudit({
@@ -220,7 +224,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Failed to sign ECO:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to sign ECO" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

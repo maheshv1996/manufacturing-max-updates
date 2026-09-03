@@ -90,6 +90,6 @@ export async function PATCH(
       tool: { ...updated, lifePct: Number(lifePct.toFixed(1)), toolStatus },
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

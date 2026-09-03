@@ -12,6 +12,10 @@ export async function POST(
   const { id } = await params;
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { parameterName, unit, target, min, max, actual, notes } = body;
 
     if (!parameterName) {

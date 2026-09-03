@@ -119,7 +119,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to load automation flows:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load flows" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -128,6 +128,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { flowId, testPayload, action } = body;
 
     if (action === "DEPLOY") {
@@ -163,7 +167,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Deploy flow error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to execute flow action" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

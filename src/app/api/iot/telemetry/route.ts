@@ -102,7 +102,7 @@ export async function GET(req: Request) {
   } catch (error: any) {
     console.error("Telemetry error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load telemetry" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

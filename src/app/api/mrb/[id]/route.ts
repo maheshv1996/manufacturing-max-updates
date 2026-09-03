@@ -38,6 +38,43 @@ export async function PUT(
       return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
+    // Enum-safe sanitization: only accept values the schema actually allows.
+    // Free text or stale option labels used to reach prisma and 500 the whole
+    // request — validate + coerce instead of crashing.
+    const DISPOSITIONS = [
+      "USE_AS_IS",
+      "REWORK",
+      "SCRAP",
+      "RETURN_TO_SUPPLIER",
+    ];
+    const AUTHORITIES = ["QUALITY", "ENGINEERING", "CUSTOMER"];
+    const normDisposition = (v: any) => {
+      if (!v) return undefined;
+      const s = String(v).trim();
+      if (s === "RETURN_TO_VENDOR") return "RETURN_TO_SUPPLIER"; // legacy UI label
+      return DISPOSITIONS.includes(s) ? s : undefined;
+    };
+    const normAuthority = (v: any) => {
+      if (!v) return undefined;
+      const s = String(v).trim().toUpperCase();
+      return AUTHORITIES.includes(s) ? s : undefined;
+    };
+
+    if (action === "DISPOSE") {
+      if (!normDisposition(disposition)) {
+        return NextResponse.json(
+          { error: "A valid disposition (USE_AS_IS/REWORK/SCRAP/RETURN_TO_SUPPLIER) is required" },
+          { status: 400 },
+        );
+      }
+      if (!normAuthority(dispositionAuthority)) {
+        return NextResponse.json(
+          { error: "Disposition authority (QUALITY/ENGINEERING/CUSTOMER) is required" },
+          { status: 400 },
+        );
+      }
+    }
+
     const updateData: any = {
       containmentAction:
         containmentAction !== undefined
@@ -56,10 +93,13 @@ export async function PUT(
         preventiveAction !== undefined
           ? preventiveAction
           : report.preventiveAction,
-      disposition: disposition !== undefined ? disposition : report.disposition,
+      disposition:
+        normDisposition(disposition) !== undefined
+          ? normDisposition(disposition)
+          : report.disposition,
       dispositionAuthority:
-        dispositionAuthority !== undefined
-          ? dispositionAuthority
+        normAuthority(dispositionAuthority) !== undefined
+          ? normAuthority(dispositionAuthority)
           : report.dispositionAuthority,
       customerNotification:
         customerNotification !== undefined

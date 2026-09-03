@@ -86,7 +86,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("MRP execution error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to execute MRP run" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

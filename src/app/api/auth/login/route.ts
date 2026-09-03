@@ -68,6 +68,10 @@ async function pruneAttempts() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { username, password, requestedPath } = body;
 
     if (!username || !password) {
@@ -250,7 +254,8 @@ export async function POST(request: Request) {
       mustChangePassword,
       sess: sessionEpoch,
     });
-    const isProd = process.env.NODE_ENV === "production";
+    const proto = request.headers.get("x-forwarded-proto") || "";
+    const isHttps = proto === "https" || request.url.startsWith("https://");
 
     // Contextual login: if the user asked for a specific page, verify server-side
     // that their role grants access to that department; otherwise fall back to their hub.
@@ -279,7 +284,7 @@ export async function POST(request: Request) {
       value: token,
       httpOnly: true,
       sameSite: "lax",
-      secure: isProd,
+      secure: isHttps,
       path: "/",
       maxAge: 60 * 60 * 24 * 365, // 1 Year permanent session
     });

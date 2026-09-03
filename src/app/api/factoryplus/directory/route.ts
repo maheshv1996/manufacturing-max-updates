@@ -79,7 +79,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Factory+ Directory error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load directory" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

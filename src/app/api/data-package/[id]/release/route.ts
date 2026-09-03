@@ -11,6 +11,10 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { releasedBy = "System" } = body;
 
     const dataPackage = await prisma.dataPackage.findUnique({
@@ -66,7 +70,7 @@ export async function POST(
   } catch (error: any) {
     console.error("Error releasing data package:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to release data package" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

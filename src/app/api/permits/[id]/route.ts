@@ -191,6 +191,6 @@ export async function PATCH(
     return NextResponse.json({ permit: updated });
   } catch (error: any) {
     console.error("PATCH /api/permits/[id] error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

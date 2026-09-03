@@ -170,7 +170,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("Failed to calculate job costing:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load job costing ledger" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

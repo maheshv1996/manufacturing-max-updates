@@ -23,7 +23,7 @@ export async function GET() {
       quarantinedCount: ncrs.filter((n) => n.disposition === "SCRAP" || n.disposition === "REWORK").length,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
@@ -66,6 +66,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: false, error: "Unknown action" }, { status: 400 });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

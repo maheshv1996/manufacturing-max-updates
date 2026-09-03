@@ -25,6 +25,6 @@ export async function POST(req: Request) {
       standard: standard || "MIL-STD-130N Construct 2",
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

@@ -26,13 +26,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ jobs });
   } catch (error: any) {
     console.error("GET /api/maintenance/jobs error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { machineId, requestedByName, type, priority, description } = body;
 
     if (!machineId || !requestedByName || !description) {
@@ -68,6 +72,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ job }, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/maintenance/jobs error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

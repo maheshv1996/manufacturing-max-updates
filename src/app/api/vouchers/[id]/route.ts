@@ -148,7 +148,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("PATCH /api/vouchers/[id] error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update voucher" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

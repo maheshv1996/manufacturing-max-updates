@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { logAudit } from "@/lib/audit";
+import { autoPostToGL } from "@/lib/glPosting";
 
 export async function POST(
   request: Request,
@@ -24,6 +25,10 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { amount, method, paymentDate, reference, notes } = body;
 
     if (!amount || amount <= 0 || !method) {
@@ -81,6 +86,35 @@ export async function POST(
 
       return { payment, updatedInvoice };
     });
+
+    // GL auto-post: Dr Bank, Cr Accounts Receivable for the received amount
+    const glInvoice = await (prisma as any).journalEntry.findFirst({
+      where: { source: "INVOICE", sourceId: invoice.id },
+      select: { id: true },
+    });
+    if (result?.payment?.id && Number(amount) > 0 && glInvoice) {
+      await autoPostToGL({
+        source: "PAYMENT",
+        sourceId: result.payment.id,
+        memo: `Customer payment ${Number(amount)} via ${method} — invoice ${invoice.invoiceNumber}`,
+        createdBy: userName,
+        date: paymentDate ? new Date(paymentDate) : undefined,
+        lines: [
+          {
+            accountCode: "1020",
+            debit: Number(amount),
+            reference: invoice.invoiceNumber,
+            narration: "Bank receipt",
+          },
+          {
+            accountCode: "1030",
+            credit: Number(amount),
+            reference: invoice.invoiceNumber,
+            narration: `Against ${invoice.invoiceNumber}`,
+          },
+        ],
+      });
+    }
 
     return NextResponse.json({ success: true, result });
   } catch (error: any) {

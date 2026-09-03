@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
-
-const processedClockClientIds = new Set<string>();
+import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { operatorId, shiftId, action, clientId } = body;
 
-    if (clientId && processedClockClientIds.has(clientId)) {
-      return NextResponse.json({
-        success: true,
-        duplicate: true,
-        message: "Attendance action already processed (idempotent)",
-      });
-    }
-    if (clientId) {
-      processedClockClientIds.add(clientId);
+    const trimmedClientId: string | null = clientId ? String(clientId).trim() : null;
+    if (trimmedClientId) {
+      const dup = await checkIdempotency(trimmedClientId);
+      if (dup.duplicate) {
+        const cached: any = (dup.existing as any)?.response;
+        if (cached) return NextResponse.json(cached);
+        return NextResponse.json({ success: true, duplicate: true, message: "Attendance action already processed (idempotent)" });
+      }
     }
 
     if (!operatorId || !action) {
@@ -74,61 +75,53 @@ export async function POST(req: Request) {
       }
 
       // Check if already clocked in today without clocking out
-      const existingOpen = await prisma.attendanceLog.findFirst({
-        where: {
-          userId: operatorId,
-          clockOut: null,
-          clockIn: { gte: todayStart },
-        },
-      });
-
-      if (existingOpen) {
-        return NextResponse.json(
-          { error: "Operator is already clocked in today.", log: existingOpen },
-          { status: 400 },
-        );
-      }
-
-      // Fetch grace minutes setting
-      const graceSetting = await prisma.setting.findUnique({
-        where: { key: "attendance_grace_minutes" },
-      });
-      const graceMins = parseInt(graceSetting?.value || "10", 10);
-
-      let status: "PRESENT" | "LATE" = "PRESENT";
-
-      if (shift) {
-        const now = new Date();
-        const [startH, startM] = shift.startTime.split(":").map(Number);
-        const shiftStartCutoff = new Date(now);
-        shiftStartCutoff.setHours(startH, startM + graceMins, 0, 0);
-
-        if (now > shiftStartCutoff) {
-          status = "LATE";
+      // Atomic CLOCK_IN with idempotency + race guard
+      const newLog = await prisma.$transaction(async (tx) => {
+        if (trimmedClientId) {
+          const reserved = await reserveIdempotency(tx as any, trimmedClientId, "/api/attendance/clock:CLOCK_IN");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
         }
-      }
 
-      const newLog = await prisma.attendanceLog.create({
-        data: {
-          userId: operatorId,
-          shiftId: resolvedShiftId,
-          clockIn: new Date(),
-          status,
-        },
-        include: {
-          shift: true,
-          user: true,
-        },
+        const existingOpenTx = await (tx as any).attendanceLog.findFirst({
+          where: { userId: operatorId, clockOut: null, clockIn: { gte: todayStart } },
+        });
+        if (existingOpenTx) {
+          throw Object.assign(new Error("ALREADY_CLOCKED_IN"), { code: "ALREADY_CLOCKED_IN", log: existingOpenTx });
+        }
+
+        const graceSettingTx = await (tx as any).setting.findUnique({ where: { key: "attendance_grace_minutes" } });
+        const graceMinsTx = parseInt(graceSettingTx?.value || "10", 10);
+        let statusTx: "PRESENT" | "LATE" = "PRESENT";
+        if (shift) {
+          const nowTx = new Date();
+          const [startH, startM] = shift.startTime.split(":").map(Number);
+          const shiftStartCutoff = new Date(nowTx);
+          shiftStartCutoff.setHours(startH, startM + graceMinsTx, 0, 0);
+          if (nowTx > shiftStartCutoff) statusTx = "LATE";
+        }
+
+        const created = await (tx as any).attendanceLog.create({
+          data: { userId: operatorId, shiftId: resolvedShiftId, clockIn: new Date(), status: statusTx },
+          include: { shift: true, user: true },
+        });
+
+        await (tx as any).auditLog.create({
+          data: {
+            actor: "system",
+            action: "CLOCK_IN",
+            entityType: "AttendanceLog",
+            entityId: created.id,
+            details: `operator ${operatorId} · shift ${resolvedShiftId} · ${statusTx}`,
+          },
+        });
+        return created;
+      }).catch((e: any) => {
+        if (e?.code === "ALREADY_CLOCKED_IN") throw e;
+        if (e?.code === "DUPLICATE") throw e;
+        throw e;
       });
 
-      await logAudit({
-        actor: "system",
-        action: "CLOCK_IN",
-        entityType: "AttendanceLog",
-        entityId: newLog.id,
-        details: `operator ${operatorId} · shift ${resolvedShiftId} · ${status}`,
-      });
-
+      if (trimmedClientId) await completeIdempotency(trimmedClientId, newLog);
       return NextResponse.json(newLog);
     }
 
@@ -148,31 +141,43 @@ export async function POST(req: Request) {
         );
       }
 
-      const updatedLog = await prisma.attendanceLog.update({
-        where: { id: openLog.id },
-        data: {
-          clockOut: new Date(),
-        },
-        include: {
-          shift: true,
-          user: true,
-        },
+      const updatedLog = await prisma.$transaction(async (tx) => {
+        if (trimmedClientId) {
+          const reserved = await reserveIdempotency(tx as any, trimmedClientId, "/api/attendance/clock:CLOCK_OUT");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+        }
+        // Re-validate inside tx to avoid double CLOCK_OUT race
+        const freshOpen = await (tx as any).attendanceLog.findUnique({ where: { id: openLog.id } });
+        if (!freshOpen || freshOpen.clockOut) {
+          throw Object.assign(new Error("ALREADY_CLOCKED_OUT"), { code: "ALREADY_CLOCKED_OUT" });
+        }
+        const updated = await (tx as any).attendanceLog.update({
+          where: { id: openLog.id },
+          data: { clockOut: new Date() },
+          include: { shift: true, user: true },
+        });
+        await (tx as any).auditLog.create({
+          data: { actor: "system", action: "CLOCK_OUT", entityType: "AttendanceLog", entityId: updated.id, details: `operator ${operatorId}` },
+        });
+        return updated;
       });
 
-      await logAudit({
-        actor: "system",
-        action: "CLOCK_OUT",
-        entityType: "AttendanceLog",
-        entityId: updatedLog.id,
-        details: `operator ${operatorId}`,
-      });
-
+      if (trimmedClientId) await completeIdempotency(trimmedClientId, updatedLog);
       return NextResponse.json(updatedLog);
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
+    if (error?.code === "DUPLICATE") {
+      return NextResponse.json({ success: true, duplicate: true, message: "Attendance action already processed (idempotent)" });
+    }
+    if (error?.code === "ALREADY_CLOCKED_IN") {
+      return NextResponse.json({ error: "Operator is already clocked in today.", log: error.log }, { status: 400 });
+    }
+    if (error?.code === "ALREADY_CLOCKED_OUT") {
+      return NextResponse.json({ error: "No active clock-in log found for operator." }, { status: 404 });
+    }
     console.error("Attendance clock error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to process attendance" }, { status: 500 });
   }
 }

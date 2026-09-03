@@ -50,6 +50,10 @@ export async function POST(req: Request) {
     // Handle Manual Archive Action via JSON
     if (contentType.includes("application/json")) {
       const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
       const { action, documentId } = body;
 
       if (action === "ARCHIVE" && documentId) {

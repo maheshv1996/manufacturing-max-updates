@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
 import { getSettings } from "@/lib/settings";
+import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,6 +45,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const {
       action,
       rawMaterialId,
@@ -62,7 +66,23 @@ export async function POST(request: Request) {
       certFileBase64,
       certMimeType,
       certSizeKb,
+      clientId: bodyClientId,
     } = body;
+
+    const headersList = await headers();
+    const actorName = headersList.get("x-user-name") || "Storekeeper";
+    const headerClientId = headersList.get("x-client-id");
+    const clientId: string | null = (bodyClientId ? String(bodyClientId).trim() : null) || (headerClientId ? String(headerClientId).trim() : null);
+
+    // Idempotency fast-path: return cached result without re-executing side effects
+    if (clientId) {
+      const dup = await checkIdempotency(clientId);
+      if (dup.duplicate) {
+        const cached: any = (dup.existing as any)?.response;
+        if (cached) return NextResponse.json(cached);
+        return NextResponse.json({ success: true, duplicate: true, message: "Duplicate request ignored (idempotent)" });
+      }
+    }
 
     const settings = await getSettings();
 
@@ -71,6 +91,11 @@ export async function POST(request: Request) {
         { error: "Raw Material ID and Quantity are required." },
         { status: 400 },
       );
+    }
+
+    const numericQty = Number(qty);
+    if (!Number.isFinite(numericQty)) {
+      return NextResponse.json({ error: "Quantity must be a valid number" }, { status: 400 });
     }
 
     const material = await prisma.rawMaterial.findUnique({
@@ -84,158 +109,223 @@ export async function POST(request: Request) {
       );
     }
 
-    const headersList = await headers();
-    const actorName = headersList.get("x-user-name") || "Storekeeper";
-
-    let updatedMaterial;
-    let transaction;
+    let result: { material: any; transaction: any } | null = null;
 
     if (action === "IN") {
-      // Enforce heat number when requireMillCerts is ON
       if (settings.requireMillCerts && !heatNumber) {
         return NextResponse.json(
-          {
-            error:
-              "Heat number is required. requireMillCerts is ON (Aerospace Mode).",
-          },
+          { error: "Heat number is required. requireMillCerts is ON (Aerospace Mode)." },
           { status: 400 },
         );
       }
 
-      const addedQty = Math.abs(Number(qty));
-      const costPerUnit = unitCost ? Number(unitCost) : material.unitCost;
-
-      // Update stock & unitCost
-      updatedMaterial = await prisma.rawMaterial.update({
-        where: { id: rawMaterialId },
-        data: {
-          currentStock: material.currentStock + addedQty,
-          unitCost: costPerUnit,
-        },
-      });
-
-      transaction = await prisma.inventoryTransaction.create({
-        data: {
-          rawMaterialId,
-          type: "IN",
-          qty: addedQty,
-          unitCost: costPerUnit,
-          batchNo: batchNo || null,
-          reference: reference || "PO-RECEIPT",
-          actorName,
-        },
-      });
-
-      // Create MaterialCert if heatNumber provided
-      if (heatNumber) {
-        let fileDataBuf: Buffer | null = null;
-        if (certFileBase64) {
-          fileDataBuf = Buffer.from(certFileBase64, "base64");
-        }
-        await (prisma as any).materialCert.create({
-          data: {
-            inventoryTransactionId: transaction.id,
-            rawMaterialId,
-            supplierId: material.supplierId || null,
-            heatNumber,
-            certNumber: certNumber || null,
-            certType: certType || "MILL_CERT",
-            specGrade: specGrade || null,
-            mimeType: certMimeType || null,
-            fileData: fileDataBuf,
-            sizeKb: certSizeKb || null,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
-            uploadedBy: actorName,
-          },
-        });
-        await logAudit({
-          actor: actorName,
-          action: "CERT_UPLOADED",
-          entityType: "RAW_MATERIAL",
-          entityId: rawMaterialId,
-          details: `Mill cert uploaded: Heat# ${heatNumber}, Cert# ${certNumber || "N/A"} for ${material.name}`,
-        });
+      const addedQty = Math.abs(numericQty);
+      if (addedQty <= 0 || !Number.isFinite(addedQty)) {
+        return NextResponse.json({ error: "Quantity must be positive" }, { status: 400 });
       }
-    } else if (action === "OUT") {
-      // Enforce no-cert block when requireMillCerts is ON
-      if (settings.requireMillCerts) {
-        const uncertifiedIn = await (
-          prisma as any
-        ).inventoryTransaction.findFirst({
-          where: {
+      const costPerUnit = unitCost != null && String(unitCost).trim() !== "" ? Number(unitCost) : material.unitCost;
+      if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+        return NextResponse.json({ error: "unitCost must be a non-negative number" }, { status: 400 });
+      }
+
+      result = await prisma.$transaction(async (tx) => {
+        if (clientId) {
+          const reserved = await reserveIdempotency(tx as any, clientId, "/api/inventory");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+        }
+
+        // Re-read inside tx to guard against concurrent OUT/ADJUST
+        const freshMat = await tx.rawMaterial.findUnique({ where: { id: rawMaterialId } });
+        if (!freshMat) throw new Error("Raw Material not found");
+
+        const updatedMaterial = await tx.rawMaterial.update({
+          where: { id: rawMaterialId },
+          data: { currentStock: { increment: addedQty }, unitCost: costPerUnit },
+        });
+
+        const transaction = await tx.inventoryTransaction.create({
+          data: {
             rawMaterialId,
             type: "IN",
-            materialCert: null,
+            qty: addedQty,
+            unitCost: costPerUnit,
+            batchNo: batchNo || null,
+            reference: reference || "PO-RECEIPT",
+            actorName,
           },
         });
-        if (uncertifiedIn) {
-          await logAudit({
+
+        if (heatNumber) {
+          let fileDataBuf: Buffer | null = null;
+          if (certFileBase64) fileDataBuf = Buffer.from(certFileBase64, "base64");
+          await (tx as any).materialCert.create({
+            data: {
+              inventoryTransactionId: transaction.id,
+              rawMaterialId,
+              supplierId: freshMat.supplierId || null,
+              heatNumber: String(heatNumber).trim(),
+              certNumber: certNumber ? String(certNumber).trim() : null,
+              certType: certType || "MILL_CERT",
+              specGrade: specGrade || null,
+              mimeType: certMimeType || null,
+              fileData: fileDataBuf,
+              sizeKb: certSizeKb || null,
+              expiresAt: expiresAt ? new Date(expiresAt) : null,
+              uploadedBy: actorName,
+            },
+          });
+        }
+
+        await (tx as any).auditLog.create({
+          data: {
             actor: actorName,
-            action: "ISSUE_BLOCKED_NO_CERT",
+            action: "INVENTORY_IN",
             entityType: "RAW_MATERIAL",
             entityId: rawMaterialId,
-            details: `Issuance blocked: ${material.name} (SKU: ${material.sku}) has uncertified IN batch (tx: ${uncertifiedIn.id}). requireMillCerts is ON.`,
-          });
-          return NextResponse.json(
-            {
-              error: `ISSUE BLOCKED: ${material.name} has an uncertified batch on file. Attach a Mill Cert before issuing.`,
-            },
-            { status: 400 },
-          );
-        }
-      }
-
-      const issuedQty = Math.abs(Number(qty));
-
-      if (material.currentStock < issuedQty) {
-        return NextResponse.json(
-          {
-            error: `Insufficient stock! Requested ${issuedQty} ${material.unit}, but only ${material.currentStock} ${material.unit} available.`,
+            details: `IN transaction of ${addedQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku})`,
           },
-          { status: 400 },
-        );
+        });
+
+        if (heatNumber) {
+          await (tx as any).auditLog.create({
+            data: {
+              actor: actorName,
+              action: "CERT_UPLOADED",
+              entityType: "RAW_MATERIAL",
+              entityId: rawMaterialId,
+              details: `Mill cert uploaded: Heat# ${heatNumber}, Cert# ${certNumber || "N/A"} for ${freshMat.name}`,
+            },
+          });
+        }
+
+        return { material: updatedMaterial, transaction };
+      });
+    } else if (action === "OUT") {
+      const issuedQty = Math.abs(numericQty);
+      if (issuedQty <= 0 || !Number.isFinite(issuedQty)) {
+        return NextResponse.json({ error: "Quantity must be positive" }, { status: 400 });
       }
 
-      updatedMaterial = await prisma.rawMaterial.update({
-        where: { id: rawMaterialId },
-        data: {
-          currentStock: Math.max(0, material.currentStock - issuedQty),
-        },
-      });
+      try {
+        result = await prisma.$transaction(async (tx) => {
+          if (clientId) {
+            const reserved = await reserveIdempotency(tx as any, clientId, "/api/inventory");
+            if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+          }
 
-      transaction = await prisma.inventoryTransaction.create({
-        data: {
-          rawMaterialId,
-          type: "OUT",
-          qty: issuedQty,
-          unitCost: material.unitCost,
-          batchNo: batchNo || null,
-          reference: reference || (workOrderId ? `WO-ISSUANCE` : "JOB-ISSUE"),
-          workOrderId: workOrderId || null,
-          actorName,
-        },
-      });
+          if (settings.requireMillCerts) {
+            const uncertifiedIn = await (tx as any).inventoryTransaction.findFirst({
+              where: { rawMaterialId, type: "IN", materialCert: null },
+            });
+            if (uncertifiedIn) {
+              await (tx as any).auditLog.create({
+                data: {
+                  actor: actorName,
+                  action: "ISSUE_BLOCKED_NO_CERT",
+                  entityType: "RAW_MATERIAL",
+                  entityId: rawMaterialId,
+                  details: `Issuance blocked: ${material.name} has uncertified IN batch (tx: ${uncertifiedIn.id}). requireMillCerts ON.`,
+                },
+              });
+              throw Object.assign(new Error(`ISSUE BLOCKED: ${material.name} has an uncertified batch on file. Attach a Mill Cert before issuing.`), { code: "BLOCKED_NO_CERT" });
+            }
+          }
+
+          // Atomic conditional decrement: fails if insufficient stock without race window
+          const updatedMaterial = await tx.rawMaterial.updateMany({
+            where: { id: rawMaterialId, currentStock: { gte: issuedQty } },
+            data: { currentStock: { decrement: issuedQty } },
+          });
+          if (updatedMaterial.count === 0) {
+            const fresh = await tx.rawMaterial.findUnique({ where: { id: rawMaterialId }, select: { currentStock: true } });
+            throw Object.assign(
+              new Error(`Insufficient stock! Requested ${issuedQty} ${material.unit}, but only ${fresh?.currentStock ?? material.currentStock} ${material.unit} available.`),
+              { code: "INSUFFICIENT_STOCK" },
+            );
+          }
+
+          const freshMat = await tx.rawMaterial.findUnique({ where: { id: rawMaterialId } });
+          const transaction = await tx.inventoryTransaction.create({
+            data: {
+              rawMaterialId,
+              type: "OUT",
+              qty: issuedQty,
+              unitCost: freshMat?.unitCost ?? material.unitCost,
+              batchNo: batchNo || null,
+              reference: reference || (workOrderId ? `WO-ISSUANCE` : "JOB-ISSUE"),
+              workOrderId: workOrderId || null,
+              actorName,
+            },
+          });
+
+          await (tx as any).auditLog.create({
+            data: {
+              actor: actorName,
+              action: "INVENTORY_OUT",
+              entityType: "RAW_MATERIAL",
+              entityId: rawMaterialId,
+              details: `OUT transaction of ${issuedQty} ${freshMat?.unit ?? material.unit} for ${freshMat?.name ?? material.name} (SKU: ${freshMat?.sku ?? material.sku})`,
+            },
+          });
+
+          return { material: freshMat!, transaction };
+        });
+      } catch (e: any) {
+        if (e?.code === "BLOCKED_NO_CERT") {
+          return NextResponse.json({ error: e.message }, { status: 400 });
+        }
+        if (e?.code === "INSUFFICIENT_STOCK") {
+          return NextResponse.json({ error: e.message }, { status: 400 });
+        }
+        if (e?.code === "DUPLICATE") {
+          return NextResponse.json({ success: true, duplicate: true, message: "Duplicate request ignored (idempotent)" });
+        }
+        throw e;
+      }
     } else if (action === "ADJUST") {
-      const newStock = Math.max(0, Number(qty));
-      const deltaQty = newStock - material.currentStock;
+      const newStock = Math.max(0, numericQty);
+      if (!Number.isFinite(newStock)) {
+        return NextResponse.json({ error: "new stock must be a finite number" }, { status: 400 });
+      }
 
-      updatedMaterial = await prisma.rawMaterial.update({
-        where: { id: rawMaterialId },
-        data: {
-          currentStock: newStock,
-        },
-      });
+      result = await prisma.$transaction(async (tx) => {
+        if (clientId) {
+          const reserved = await reserveIdempotency(tx as any, clientId, "/api/inventory");
+          if (!reserved) throw Object.assign(new Error("DUPLICATE"), { code: "DUPLICATE" });
+        }
 
-      transaction = await prisma.inventoryTransaction.create({
-        data: {
-          rawMaterialId,
-          type: "ADJUST",
-          qty: deltaQty,
-          unitCost: material.unitCost,
-          batchNo: batchNo || "PHYSICAL-COUNT",
-          reference: reference || "STOCK-ADJUSTMENT",
-          actorName,
-        },
+        const freshMat = await tx.rawMaterial.findUnique({ where: { id: rawMaterialId } });
+        if (!freshMat) throw new Error("Raw Material not found");
+        const deltaQty = newStock - freshMat.currentStock;
+
+        const updatedMaterial = await tx.rawMaterial.update({
+          where: { id: rawMaterialId },
+          data: { currentStock: newStock },
+        });
+
+        const transaction = await tx.inventoryTransaction.create({
+          data: {
+            rawMaterialId,
+            type: "ADJUST",
+            qty: deltaQty,
+            unitCost: freshMat.unitCost,
+            batchNo: batchNo || "PHYSICAL-COUNT",
+            reference: reference || "STOCK-ADJUSTMENT",
+            actorName,
+          },
+        });
+
+        await (tx as any).auditLog.create({
+          data: {
+            actor: actorName,
+            action: "INVENTORY_ADJUST",
+            entityType: "RAW_MATERIAL",
+            entityId: rawMaterialId,
+            details: `ADJUST transaction delta ${deltaQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku}) -> ${newStock}`,
+          },
+        });
+
+        return { material: updatedMaterial, transaction };
       });
     } else {
       return NextResponse.json(
@@ -244,23 +334,17 @@ export async function POST(request: Request) {
       );
     }
 
-    await logAudit({
-      actor: actorName,
-      action: `INVENTORY_${action}`,
-      entityType: "RAW_MATERIAL",
-      entityId: rawMaterialId,
-      details: `${action} transaction of ${qty} ${material.unit} for ${material.name} (SKU: ${material.sku})`,
-    });
+    const payload = { success: true, material: result!.material, transaction: result!.transaction };
+    if (clientId) await completeIdempotency(clientId, payload);
 
-    return NextResponse.json({
-      success: true,
-      material: updatedMaterial,
-      transaction,
-    });
+    return NextResponse.json(payload);
   } catch (error: any) {
+    if (error?.code === "DUPLICATE") {
+      return NextResponse.json({ success: true, duplicate: true, message: "Duplicate request ignored (idempotent)" });
+    }
     console.error("Error in inventory transaction API:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to process inventory transaction" },
+      { error: "Failed to process inventory transaction" },
       { status: 500 },
     );
   }
