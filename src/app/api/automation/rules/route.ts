@@ -1,6 +1,8 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -98,27 +100,41 @@ async function getStoredRules() {
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["system.view", "ops.view", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const rules = await getStoredRules();
     return NextResponse.json({ success: true, rules });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "AUTOMATION_RULE_SAVED", entityType: "AutomationRule", details: "Automation rule created or updated" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { action, ruleId, newRule } = body;
+    const action = typeof body.action === "string" ? body.action : "";
+    const ruleId = typeof body.ruleId === "string" ? body.ruleId : "";
+    const newRule = body.newRule as Record<string, unknown> | undefined;
 
     let rules = await getStoredRules();
+    let auditDetails = `Automation action: ${action}`;
 
     if (action === "TOGGLE_ACTIVE") {
       rules = rules.map((r: AutomationRule) => (r.id === ruleId ? { ...r, isActive: !r.isActive } : r));
+      auditDetails = `Toggled active state for automation rule ${ruleId}`;
     } else if (action === "TEST_FIRE") {
       rules = rules.map((r: AutomationRule) =>
         r.id === ruleId
@@ -129,28 +145,41 @@ export async function POST(req: Request) {
             }
           : r
       );
+      auditDetails = `Test-fired automation rule ${ruleId}`;
     } else if (action === "ADD_RULE" && newRule) {
       const created: AutomationRule = {
         id: "rule-" + Date.now().toString().slice(-6),
-        name: newRule.name,
-        domain: newRule.domain || "QUALITY",
-        triggerEvent: newRule.triggerEvent,
-        conditionDescription: newRule.conditionDescription || "Universal Condition",
-        actions: newRule.actions || ["Alert Supervisor"],
+        name: typeof newRule.name === "string" ? newRule.name.slice(0, 100) : "Custom Rule",
+        domain: (typeof newRule.domain === "string" ? newRule.domain : "QUALITY") as AutomationRule["domain"],
+        triggerEvent: typeof newRule.triggerEvent === "string" ? newRule.triggerEvent.slice(0, 100) : "EVENT",
+        conditionDescription: typeof newRule.conditionDescription === "string" ? newRule.conditionDescription.slice(0, 200) : "Universal Condition",
+        actions: Array.isArray(newRule.actions) ? newRule.actions.map(String) : ["Alert Supervisor"],
         isActive: true,
         triggerCount: 0,
       };
       rules = [created, ...rules];
+      auditDetails = `Created new automation rule "${created.name}"`;
     }
 
-    await prisma.setting.upsert({
-      where: { key: "automation_rules_v2" },
-      update: { value: JSON.stringify(rules) },
-      create: { key: "automation_rules_v2", value: JSON.stringify(rules) },
+    const actor = user.name || user.id || "Admin";
+
+    await prisma.$transaction(async (tx) => {
+      await tx.setting.upsert({
+        where: { key: "automation_rules_v2" },
+        update: { value: JSON.stringify(rules) },
+        create: { key: "automation_rules_v2", value: JSON.stringify(rules) },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "AUTOMATION_RULE_SAVED",
+        entityType: "Setting",
+        details: auditDetails,
+      });
     });
 
     return NextResponse.json({ success: true, rules });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

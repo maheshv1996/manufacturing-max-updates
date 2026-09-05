@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -137,27 +137,30 @@ export async function POST(req: Request) {
           { status: 404 },
         );
       const issueNumber = await nextSeqNumber("ppeIssue", "issueNumber", "PPE");
-      result = await prisma.ppeIssue.create({
-        data: {
-          issueNumber,
-          userId,
-          category,
-          itemName,
-          quantity:
-            quantity !== undefined && quantity !== null
-              ? Math.max(1, parseInt(quantity, 10) || 1)
-              : 1,
-          issuedAt: issuedAt ? new Date(issuedAt) : new Date(),
-          issuedBy: actor,
-          notes: notes || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "PPE_ISSUED",
-        entityType: "PPE_ISSUE",
-        entityId: result.id,
-        details: `${issueNumber} · ${category} · ${itemName} ×${result.quantity} → ${employee.name}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.ppeIssue.create({
+          data: {
+            issueNumber,
+            userId,
+            category,
+            itemName,
+            quantity:
+              quantity !== undefined && quantity !== null
+                ? Math.max(1, parseInt(quantity, 10) || 1)
+                : 1,
+            issuedAt: issuedAt ? new Date(issuedAt) : new Date(),
+            issuedBy: actor,
+            notes: notes || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "PPE_ISSUED",
+          entityType: "PPE_ISSUE",
+          entityId: created.id,
+          details: `${issueNumber} · ${category} · ${itemName} ×${created.quantity} → ${employee.name}`,
+        });
+        return created;
       });
     } else if (action === "return-issue") {
       const issue = await prisma.ppeIssue.findUnique({
@@ -173,18 +176,21 @@ export async function POST(req: Request) {
           { error: "Already returned" },
           { status: 400 },
         );
-      result = await prisma.ppeIssue.update({
-        where: { id: issue.id },
-        data: {
-          returnedAt: data.returnedAt ? new Date(data.returnedAt) : new Date(),
-        },
-      });
-      await logAudit({
-        actor,
-        action: "PPE_RETURNED",
-        entityType: "PPE_ISSUE",
-        entityId: issue.id,
-        details: `${issue.issueNumber} · ${issue.itemName}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.ppeIssue.update({
+          where: { id: issue.id },
+          data: {
+            returnedAt: data.returnedAt ? new Date(data.returnedAt) : new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "PPE_RETURNED",
+          entityType: "PPE_ISSUE",
+          entityId: issue.id,
+          details: `${issue.issueNumber} · ${issue.itemName}`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

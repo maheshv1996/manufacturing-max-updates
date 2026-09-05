@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { toPaise, fromPaiseRow } from "@/lib/money";
 import { parseOr400 } from "@/lib/validate";
@@ -18,7 +18,10 @@ export async function GET(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view"]))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const { id } = await params;
@@ -69,7 +72,10 @@ export async function PATCH(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, WRITE_GATE))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, WRITE_GATE)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -88,18 +94,22 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const customer = await prisma.customer.update({
-      where: { id },
-      data,
-      include: { contacts: true },
-    });
+    const customer = await prisma.$transaction(async (tx) => {
+      const updated = await tx.customer.update({
+        where: { id },
+        data,
+        include: { contacts: true },
+      });
 
-    await logAudit({
-      actor,
-      action: "CUSTOMER_UPDATED",
-      entityType: "Customer",
-      entityId: id,
-      details: `Updated customer ${customer.code} ${customer.name}: ${Object.keys(data).join(", ")}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "CUSTOMER_UPDATED",
+        entityType: "Customer",
+        entityId: id,
+        details: `Updated customer ${updated.code} ${updated.name}: ${Object.keys(data).join(", ")}`,
+      });
+
+      return updated;
     });
 
     return NextResponse.json({ success: true, customer: fromPaiseRow("Customer", customer) });
@@ -124,7 +134,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, WRITE_GATE))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, WRITE_GATE)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -141,18 +154,22 @@ export async function POST(
 
     const a = parsed.data.action;
     const isActive = a === "activate";
-    const updated = await prisma.customer.update({
-      where: { id },
-      data: { isActive },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.customer.update({
+        where: { id },
+        data: { isActive },
+      });
 
-    await logAudit({
-      actor,
-      action: a === "activate" ? "CUSTOMER_ACTIVATED" : a === "hold" ? "CUSTOMER_ON_HOLD" : "CUSTOMER_INACTIVATED",
-      entityType: "Customer",
-      entityId: id,
-      details: `${customer.code} ${customer.name} → ${a}${parsed.data.reason ? " — " + parsed.data.reason.slice(0, 120) : ""}`,
-      severity: a === "hold" || a === "inactivate" ? "WARN" : "INFO",
+      await logAuditTx(tx, {
+        actor,
+        action: a === "activate" ? "CUSTOMER_ACTIVATED" : a === "hold" ? "CUSTOMER_ON_HOLD" : "CUSTOMER_INACTIVATED",
+        entityType: "Customer",
+        entityId: id,
+        details: `${customer.code} ${customer.name} → ${a}${parsed.data.reason ? " — " + parsed.data.reason.slice(0, 120) : ""}`,
+        severity: a === "hold" || a === "inactivate" ? "WARN" : "INFO",
+      });
+
+      return rec;
     });
 
     return NextResponse.json({ success: true, customer: updated });

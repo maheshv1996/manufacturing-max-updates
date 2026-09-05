@@ -26,7 +26,9 @@ export default function ExportCsvButton({
 
   return (
     <button
+      type="button"
       onClick={handleExport}
+      aria-label={label}
       className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-mono font-bold border border-white/10 transition-colors flex items-center gap-2 cursor-pointer shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
     >
       <Download className="w-3.5 h-3.5 text-cyan-400" />

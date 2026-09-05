@@ -13,7 +13,11 @@ export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
 
-  if (!user.isOwner && !can(user, "system.edit")) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!user.isOwner && !can(user, "system.edit") && !can(user, "quality.view")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

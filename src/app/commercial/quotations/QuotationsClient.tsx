@@ -133,6 +133,19 @@ export default function QuotationsClient({
   const [paymentNotes, setPaymentNotes] = useState<string>("");
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (discountDecision) setDiscountDecision(null);
+        else if (showPrintModal) setShowPrintModal(false);
+        else if (payInvoice) setPayInvoice(null);
+        else if (showNewModal) setShowNewModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [discountDecision, showPrintModal, payInvoice, showNewModal]);
+
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -913,15 +926,24 @@ export default function QuotationsClient({
 
       {/* ── NEW QUOTATION & SMART ESTIMATING MODAL ── */}
       {showNewModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-6 my-8">
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowNewModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-quote-modal-title"
+            className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-6 my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-700 pb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-600 text-white rounded-xl">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-white">
+                  <h3 id="new-quote-modal-title" className="text-xl font-extrabold text-white">
                     New Quotation &amp; Smart Cost Estimating
                   </h3>
                   <p className="text-xs text-slate-400">
@@ -930,6 +952,8 @@ export default function QuotationsClient({
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close dialog"
                 onClick={() => setShowNewModal(false)}
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
               >
@@ -1239,17 +1263,27 @@ export default function QuotationsClient({
 
       {/* ── PRINT PROFORMA INVOICE / QUOTE MODAL ── */}
       {showPrintModal && selectedQuote && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-8 shadow-2xl space-y-6 my-8 print:p-0 print:shadow-none print:bg-transparent">
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowPrintModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="print-quote-modal-title"
+            className="bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-8 shadow-2xl space-y-6 my-8 print:p-0 print:shadow-none print:bg-transparent"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* NO-PRINT HEADER BAR */}
             <div className="flex items-center justify-between border-b pb-4 print:hidden">
-              <span className="font-extrabold text-sm text-slate-600 flex items-center gap-2">
+              <span id="print-quote-modal-title" className="font-extrabold text-sm text-slate-600 flex items-center gap-2">
                 <Printer className="w-5 h-5 text-blue-600" />
                 Proforma Invoice Preview — {selectedQuote.quoteNumber}
               </span>
               <div className="flex items-center gap-3">
                 <PrintButton />
                 <button
+                  type="button"
                   onClick={() => setShowPrintModal(false)}
                   className="px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl"
                 >
@@ -1432,14 +1466,25 @@ export default function QuotationsClient({
       )}
       {/* RECORD PAYMENT MODAL */}
       {payInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-slate-800/60 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-700">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setPayInvoice(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pay-invoice-modal-title"
+            className="bg-slate-800/60 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/60">
-              <h2 className="font-bold text-white flex items-center gap-2">
+              <h2 id="pay-invoice-modal-title" className="font-bold text-white flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-emerald-600" />
                 Record Payment
               </h2>
               <button
+                type="button"
+                aria-label="Close dialog"
                 onClick={() => setPayInvoice(null)}
                 className="p-1 hover:bg-slate-200 hover:bg-slate-700 rounded-lg transition-colors"
               >
@@ -1562,11 +1607,20 @@ export default function QuotationsClient({
 
       {/* M15 — Discount approval decision modal */}
       {discountDecision && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setDiscountDecision(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discount-modal-title"
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700">
               <div>
-                <h3 className="text-lg font-extrabold text-white">
+                <h3 id="discount-modal-title" className="text-lg font-extrabold text-white">
                   {discountDecision.approve
                     ? "Approve discount"
                     : "Reject discount"}
@@ -1579,6 +1633,8 @@ export default function QuotationsClient({
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close dialog"
                 onClick={() => setDiscountDecision(null)}
                 className="text-slate-400 hover:text-white text-2xl leading-none"
               >

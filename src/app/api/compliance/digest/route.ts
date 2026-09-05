@@ -14,7 +14,10 @@ export const maxDuration = 60;
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  if (!user.isOwner && !canAny(user, ["system.view", "ops.view"])) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["system.view", "ops.view", "quality.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

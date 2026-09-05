@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -12,7 +12,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -52,7 +55,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Gate";
@@ -62,28 +68,32 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const d = parsed.data;
 
-    const visit = await prisma.visitorLog.create({
-      data: {
-        visitorName: d.visitorName,
-        company: d.company || null,
-        phone: d.phone || null,
-        purpose: d.purpose || null,
-        hostName: d.hostName || null,
-        vehicleNumber: d.vehicleNumber || null,
-        idProofType: d.idProofType || null,
-        idProofNumber: d.idProofNumber || null,
-        notes: d.notes || null,
-        status: "IN_SITE",
-        createdBy: actor,
-      },
-    });
+    const visit = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).visitorLog.create({
+        data: {
+          visitorName: d.visitorName,
+          company: d.company || null,
+          phone: d.phone || null,
+          purpose: d.purpose || null,
+          hostName: d.hostName || null,
+          vehicleNumber: d.vehicleNumber || null,
+          idProofType: d.idProofType || null,
+          idProofNumber: d.idProofNumber || null,
+          notes: d.notes || null,
+          status: "IN_SITE",
+          createdBy: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "VISITOR_CHECKED_IN",
-      entityType: "VisitorLog",
-      entityId: visit.id,
-      details: `${d.visitorName}${d.company ? " (" + d.company + ")" : ""} checked in${d.hostName ? " to see " + d.hostName : ""}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "VISITOR_CHECKED_IN",
+        entityType: "VisitorLog",
+        entityId: created.id,
+        details: `${d.visitorName}${d.company ? " (" + d.company + ")" : ""} checked in${d.hostName ? " to see " + d.hostName : ""}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, visitor: visit });

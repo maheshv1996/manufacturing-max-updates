@@ -273,6 +273,7 @@ export default function Topbar({ user }: TopbarProps) {
             }
             className="p-1.5 text-text-2 hover:text-cyan-400 hover:bg-surface-3 rounded-control transition-colors cursor-pointer"
             title="Industrial & Aerospace Glossary (Definitions & Standards)"
+            aria-label="Industrial & Aerospace Glossary"
           >
             <HelpCircle className="w-5 h-5" />
           </button>
@@ -281,6 +282,7 @@ export default function Topbar({ user }: TopbarProps) {
             href="/system/admin"
             className="p-1.5 text-text-2 hover:text-white hover:bg-surface-3 rounded-control transition-colors cursor-pointer"
             title="System & AI Settings"
+            aria-label="System & AI Settings"
           >
             <Settings className="w-5 h-5" />
           </Link>
@@ -290,6 +292,8 @@ export default function Topbar({ user }: TopbarProps) {
           <div className="relative">
             <button
               onClick={handleNotificationsToggle}
+              aria-label="Notifications"
+              aria-expanded={showNotifications}
               className="relative p-1.5 text-text-2 hover:text-text-1 hover:bg-surface-3 rounded-control transition-colors"
             >
               <Bell className="w-5 h-5" />
@@ -299,7 +303,7 @@ export default function Topbar({ user }: TopbarProps) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-surface-1 rounded-card shadow-modal border border-border overflow-hidden z-50">
+              <div role="region" aria-label="Notifications panel" className="absolute right-0 mt-2 w-80 bg-surface-1 rounded-card shadow-modal border border-border overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-border bg-surface-2 flex justify-between items-center">
                   <h3 className="font-semibold text-text-1">Notifications</h3>
                   <span className="text-xs bg-surface-3 px-2 py-0.5 rounded-full text-text-2">

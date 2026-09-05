@@ -1,9 +1,6 @@
 "use client";
 
-import PageHeader from "@/app/components/shared/PageHeader";
-
-
-import {logClientError } from "@/lib/clientLogger";
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -20,7 +17,6 @@ import {
   Flag,
   ChevronDown,
   ChevronUp,
-  ShieldCheck
 } from "lucide-react";
 
 type Meeting = any;
@@ -99,6 +95,18 @@ export default function MrmClient() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (actionFor) setActionFor(null);
+        else if (closeFor) setCloseFor(null);
+        else if (createOpen) setCreateOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [actionFor, closeFor, createOpen]);
 
   const api = async (body: any): Promise<boolean> => {
     setSaving(true);
@@ -236,6 +244,7 @@ export default function MrmClient() {
         </div>
         {isManager && (
           <button
+            type="button"
             onClick={openCreate}
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 px-4 py-2 text-sm font-medium hover:bg-indigo-500/30 transition-colors"
           >
@@ -442,6 +451,7 @@ export default function MrmClient() {
                         </div>
                         {isManager && m.status === "OPEN" && (
                           <button
+                            type="button"
                             onClick={() => setActionFor(m)}
                             className="inline-flex items-center gap-1 text-xs rounded-lg bg-slate-700/40 border border-slate-600/40 px-2.5 py-1.5 text-slate-300 hover:text-white transition-colors"
                           >
@@ -465,13 +475,6 @@ export default function MrmClient() {
                                 key={a.id}
                                 className="flex items-center gap-2 rounded-lg bg-slate-900/50 border border-slate-700/40 px-3 py-2"
                               >
-      <PageHeader
-        title="Mrm"
-        description="Inspections, NCRs, audits and compliance control."
-        icon={<ShieldCheck className="w-6 h-6" />}
-        iconTone="emerald"
-      />
-
                                 <span
                                   className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${PRIO_CLS[a.priority] || PRIO_CLS.MEDIUM}`}
                                 >
@@ -505,6 +508,7 @@ export default function MrmClient() {
                                 {a.status === "OPEN" && isManager && (
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <button
+                                      type="button"
                                       onClick={() =>
                                         completeAction(a.id, a.description)
                                       }
@@ -513,6 +517,7 @@ export default function MrmClient() {
                                       <CheckCircle2 className="w-3 h-3" /> Done
                                     </button>
                                     <button
+                                      type="button"
                                       onClick={() =>
                                         escalateAction(a.id, a.description)
                                       }
@@ -536,6 +541,7 @@ export default function MrmClient() {
                     {/* Close */}
                     {isManager && m.status === "OPEN" && (
                       <button
+                        type="button"
                         onClick={() => {
                           setCloseFor(m);
                           setCloseForm({
@@ -564,16 +570,21 @@ export default function MrmClient() {
           onClick={() => setCreateOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mrm-create-title"
             className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-700/60 p-6 space-y-4 max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 id="mrm-create-title" className="text-lg font-semibold text-white">
                 New Management Review
               </h2>
               <button
+                type="button"
                 onClick={() => setCreateOpen(false)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -654,6 +665,7 @@ export default function MrmClient() {
               </div>
             </div>
             <button
+              type="button"
               onClick={createMeeting}
               disabled={saving || !createForm.title || !createForm.date}
               className="w-full rounded-xl bg-indigo-500 text-white text-sm font-semibold py-2.5 hover:bg-indigo-400 disabled:opacity-40 transition-colors"
@@ -675,16 +687,21 @@ export default function MrmClient() {
           onClick={() => setCloseFor(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mrm-close-title"
             className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-700/60 p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 id="mrm-close-title" className="text-lg font-semibold text-white">
                 Close {closeFor.meetingNumber}
               </h2>
               <button
+                type="button"
                 onClick={() => setCloseFor(null)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -738,6 +755,7 @@ export default function MrmClient() {
               auto-escalated to the Escalation Register.
             </div>
             <button
+              type="button"
               onClick={closeMeeting}
               disabled={saving || !closeForm.reason}
               className="w-full rounded-xl bg-rose-500/90 text-white text-sm font-semibold py-2.5 hover:bg-rose-400 disabled:opacity-40 transition-colors"
@@ -759,16 +777,21 @@ export default function MrmClient() {
           onClick={() => setActionFor(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mrm-action-title"
             className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/60 p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 id="mrm-action-title" className="text-lg font-semibold text-white">
                 Action Item · {actionFor.meetingNumber}
               </h2>
               <button
+                type="button"
                 onClick={() => setActionFor(null)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -822,6 +845,7 @@ export default function MrmClient() {
               </select>
             </div>
             <button
+              type="button"
               onClick={addAction}
               disabled={
                 saving || !actionForm.description || !actionForm.ownerName
@@ -843,6 +867,7 @@ export default function MrmClient() {
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-800 border border-slate-600/60 px-4 py-3 text-sm text-white shadow-xl">
           {toast}
           <button
+            type="button"
             onClick={() => setToast(null)}
             className="ml-3 text-slate-400 hover:text-white"
           >

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -127,23 +127,26 @@ export async function POST(req: Request) {
         "TRN",
         new Date(scheduledDate),
       );
-      result = await prisma.trainingProgram.create({
-        data: {
-          programNumber: number,
-          title,
-          category,
-          trainer: trainer || null,
-          scheduledDate: new Date(scheduledDate),
-          passingScore: score,
-          notes: notes || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "TRAINING_CREATED",
-        entityType: "TRAINING_PROGRAM",
-        entityId: result.id,
-        details: `${number} · ${title}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.trainingProgram.create({
+          data: {
+            programNumber: number,
+            title,
+            category,
+            trainer: trainer || null,
+            scheduledDate: new Date(scheduledDate),
+            passingScore: score,
+            notes: notes || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "TRAINING_CREATED",
+          entityType: "TRAINING_PROGRAM",
+          entityId: created.id,
+          details: `${number} · ${title}`,
+        });
+        return created;
       });
     } else if (action === "add-attendee") {
       if (!canEdit)
@@ -168,15 +171,18 @@ export async function POST(req: Request) {
           { error: "Attendee already on the program" },
           { status: 400 },
         );
-      result = await prisma.trainingAttendance.create({
-        data: { programId, userId },
-      });
-      await logAudit({
-        actor,
-        action: "TRAINING_ATTENDEE_ADDED",
-        entityType: "TRAINING_PROGRAM",
-        entityId: program.id,
-        details: `${program.programNumber} + user ${userId}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.trainingAttendance.create({
+          data: { programId, userId },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "TRAINING_ATTENDEE_ADDED",
+          entityType: "TRAINING_PROGRAM",
+          entityId: program.id,
+          details: `${program.programNumber} + user ${userId}`,
+        });
+        return created;
       });
     } else if (action === "remove-attendee") {
       if (!canEdit)
@@ -185,16 +191,18 @@ export async function POST(req: Request) {
           { status: 403 },
         );
       const { programId, userId } = data;
-      await prisma.trainingAttendance
-        .delete({ where: { programId_userId: { programId, userId } } })
-        .catch(() => null);
-      result = { programId, userId };
-      await logAudit({
-        actor,
-        action: "TRAINING_ATTENDEE_REMOVED",
-        entityType: "TRAINING_PROGRAM",
-        entityId: programId,
-        details: `user ${userId}`,
+      result = await prisma.$transaction(async (tx) => {
+        await tx.trainingAttendance
+          .delete({ where: { programId_userId: { programId, userId } } })
+          .catch(() => null);
+        await logAuditTx(tx, {
+          actor,
+          action: "TRAINING_ATTENDEE_REMOVED",
+          entityType: "TRAINING_PROGRAM",
+          entityId: programId,
+          details: `user ${userId}`,
+        });
+        return { programId, userId };
       });
     } else if (action === "mark-attended") {
       if (!canEdit)
@@ -216,16 +224,19 @@ export async function POST(req: Request) {
           { error: "Only SCHEDULED attendees can be marked attended" },
           { status: 400 },
         );
-      result = await prisma.trainingAttendance.update({
-        where: { id: rec.id },
-        data: { status: "ATTENDED" },
-      });
-      await logAudit({
-        actor,
-        action: "TRAINING_ATTENDED",
-        entityType: "TRAINING_PROGRAM",
-        entityId: programId,
-        details: `user ${userId}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.trainingAttendance.update({
+          where: { id: rec.id },
+          data: { status: "ATTENDED" },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "TRAINING_ATTENDED",
+          entityType: "TRAINING_PROGRAM",
+          entityId: programId,
+          details: `user ${userId}`,
+        });
+        return updated;
       });
     } else if (action === "record-score") {
       if (!canEdit)
@@ -262,35 +273,38 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       const status = s >= program.passingScore ? "PASSED" : "FAILED";
-      result = await prisma.trainingAttendance.update({
-        where: { id: rec.id },
-        data: { score: s, status, checkedAt: new Date(), checkedBy: actor },
-      });
-      await logAudit({
-        actor,
-        action: "TRAINING_CHECK_RECORDED",
-        entityType: "TRAINING_PROGRAM",
-        entityId: program.id,
-        details: `${program.programNumber} · user ${userId} · ${s}% → ${status} (pass ≥ ${program.passingScore})`,
-      });
-      // The post-training check closes the record: once every attendee is decided,
-      // the program itself closes as COMPLETED.
-      const open = await prisma.trainingAttendance.count({
-        where: { programId, status: { in: ["SCHEDULED", "ATTENDED"] } },
-      });
-      if (open === 0 && program.status === "PLANNED") {
-        await prisma.trainingProgram.update({
-          where: { id: program.id },
-          data: { status: "COMPLETED" },
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.trainingAttendance.update({
+          where: { id: rec.id },
+          data: { score: s, status, checkedAt: new Date(), checkedBy: actor },
         });
-        await logAudit({
+        await logAuditTx(tx, {
           actor,
-          action: "TRAINING_COMPLETED",
+          action: "TRAINING_CHECK_RECORDED",
           entityType: "TRAINING_PROGRAM",
           entityId: program.id,
-          details: program.programNumber,
+          details: `${program.programNumber} · user ${userId} · ${s}% → ${status} (pass ≥ ${program.passingScore})`,
         });
-      }
+        // The post-training check closes the record: once every attendee is decided,
+        // the program itself closes as COMPLETED.
+        const open = await tx.trainingAttendance.count({
+          where: { programId, status: { in: ["SCHEDULED", "ATTENDED"] } },
+        });
+        if (open === 0 && program.status === "PLANNED") {
+          await tx.trainingProgram.update({
+            where: { id: program.id },
+            data: { status: "COMPLETED" },
+          });
+          await logAuditTx(tx, {
+            actor,
+            action: "TRAINING_COMPLETED",
+            entityType: "TRAINING_PROGRAM",
+            entityId: program.id,
+            details: program.programNumber,
+          });
+        }
+        return updated;
+      });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }

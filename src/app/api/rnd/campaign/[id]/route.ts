@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -49,7 +51,16 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["engineering.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { status } = body;
 
     if (!status) {
@@ -59,17 +70,23 @@ export async function PATCH(
       );
     }
 
-    const updatedCampaign = await prisma.testCampaign.update({
-      where: { id },
-      data: { status },
-    });
+    const actor = user.name || user.id || "Operator";
 
-    await logAudit({
-      actor: "system",
-      action: "RND_CAMPAIGN_STATUS_CHANGED",
-      entityType: "TestCampaign",
-      entityId: id,
-      details: `status → ${status}`,
+    const updatedCampaign = await prisma.$transaction(async (tx) => {
+      const updated = await tx.testCampaign.update({
+        where: { id },
+        data: { status },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "RND_CAMPAIGN_STATUS_CHANGED",
+        entityType: "TestCampaign",
+        entityId: id,
+        details: `status → ${status}`,
+      });
+
+      return updated;
     });
 
     return NextResponse.json({ success: true, campaign: updatedCampaign });

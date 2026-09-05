@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -22,7 +22,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -71,7 +74,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -81,29 +87,32 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const d = parsed.data;
 
-    const policy = await prisma.insurancePolicy.create({
-      data: {
-        policyNumber: d.policyNumber,
-        insurer: d.insurer || null,
-        policyType: d.policyType,
-        coveredAsset: d.coveredAsset || null,
-        sumInsured: d.sumInsured || 0,
-        premium: d.premium || 0,
-        premiumFrequency: d.premiumFrequency,
-        startDate: d.startDate ? new Date(d.startDate) : null,
-        endDate: d.endDate ? new Date(d.endDate) : null,
-        renewalDate: d.renewalDate ? new Date(d.renewalDate) : null,
-        notes: d.notes || null,
-        createdBy: actor,
-      },
-    });
+    const policy = await prisma.$transaction(async (tx) => {
+      const pol = await tx.insurancePolicy.create({
+        data: {
+          policyNumber: d.policyNumber,
+          insurer: d.insurer || null,
+          policyType: d.policyType,
+          coveredAsset: d.coveredAsset || null,
+          sumInsured: d.sumInsured || 0,
+          premium: d.premium || 0,
+          premiumFrequency: d.premiumFrequency,
+          startDate: d.startDate ? new Date(d.startDate) : null,
+          endDate: d.endDate ? new Date(d.endDate) : null,
+          renewalDate: d.renewalDate ? new Date(d.renewalDate) : null,
+          notes: d.notes || null,
+          createdBy: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "INSURANCE_POLICY_ADDED",
-      entityType: "InsurancePolicy",
-      entityId: policy.id,
-      details: `Policy ${policy.policyNumber} (${policy.policyType}) with ${policy.insurer || "unknown insurer"}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "INSURANCE_POLICY_ADDED",
+        entityType: "InsurancePolicy",
+        entityId: pol.id,
+        details: `Policy ${pol.policyNumber} (${pol.policyType}) with ${pol.insurer || "unknown insurer"}`,
+      });
+      return pol;
     });
 
     return NextResponse.json({ success: true, policy });

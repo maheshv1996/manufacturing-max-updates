@@ -11,6 +11,10 @@ export async function GET(req: Request) {
     const adminUserId = headersList.get("x-user-id");
     const adminUserName = headersList.get("x-user-name") || "Admin";
 
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!user.isOwner && !can(user, "system.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

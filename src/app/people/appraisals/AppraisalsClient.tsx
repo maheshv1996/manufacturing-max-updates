@@ -3,9 +3,7 @@
 import PageHeader from "@/app/components/shared/PageHeader";
 
 import {useCallback, useEffect, useState } from "react";
-import { Award, Loader2, Star, Printer,
-  Users
-} from "lucide-react";
+import { Award, Loader2, Star, Printer, Users, X } from "lucide-react";
 import { Button, Input } from "@/app/components/ui";
 
 interface Row {
@@ -56,6 +54,15 @@ export default function AppraisalsClient() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (!reviewFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setReviewFor(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewFor]);
 
   const review = async () => {
     if (!reviewFor) return;
@@ -241,11 +248,30 @@ export default function AppraisalsClient() {
 
       {/* Review modal */}
       {reviewFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
-              Manager review — {reviewFor.name}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setReviewFor(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appraisal-review-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 id="appraisal-review-title" className="font-bold text-white">
+                Manager review — {reviewFor.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReviewFor(null)}
+                aria-label="Close review dialog"
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <p className="text-xs text-slate-400">
               Auto score {reviewFor.score} (eff {reviewFor.efficiencyPct}% ·
               qual {reviewFor.qualityPct}% · att {reviewFor.attendancePct}%) ·{" "}
@@ -258,9 +284,11 @@ export default function AppraisalsClient() {
               <div className="mt-1.5 flex gap-1.5">
                 {[1, 2, 3, 4, 5].map((v) => (
                   <button
+                    type="button"
                     key={v}
                     onClick={() => setRating(String(v))}
-                    className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors ${Number(rating) === v ? "bg-amber-500/20 text-amber-300 border-amber-500/50" : "border-slate-700 text-slate-400 hover:border-slate-600"}`}
+                    aria-label={`Rate ${v} out of 5 stars`}
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${Number(rating) === v ? "bg-amber-500/20 text-amber-300 border-amber-500/50" : "border-slate-700 text-slate-400 hover:border-slate-600"}`}
                   >
                     <Star
                       className={`w-4 h-4 ${Number(rating) >= v ? "fill-amber-400 text-amber-400" : ""}`}

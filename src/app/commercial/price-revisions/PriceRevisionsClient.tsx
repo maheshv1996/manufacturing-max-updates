@@ -67,6 +67,18 @@ export default function PriceRevisionsClient() {
   const [anPct, setAnPct] = useState("7");
   const [anDate, setAnDate] = useState("");
 
+  useEffect(() => {
+    if (!createOpen && !annualOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setCreateOpen(false);
+        setAnnualOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [createOpen, annualOpen]);
+
   const fetchAll = useCallback(async () => {
     try {
       const res = await fetch("/api/price-revisions");
@@ -331,13 +343,24 @@ export default function PriceRevisionsClient() {
 
       {/* Create modal */}
       {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setCreateOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="price-revision-create-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white">New price revision</h3>
+              <h3 id="price-revision-create-title" className="font-bold text-white">New price revision</h3>
               <button
+                type="button"
                 onClick={() => setCreateOpen(false)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -395,6 +418,7 @@ export default function PriceRevisionsClient() {
               />
             </div>
             <Button
+              type="button"
               disabled={busy || !crProduct || !crPrice || !crDate}
               onClick={() =>
                 act("create", {
@@ -419,15 +443,26 @@ export default function PriceRevisionsClient() {
 
       {/* Annual modal */}
       {annualOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setAnnualOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="annual-increase-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white">
+              <h3 id="annual-increase-title" className="font-bold text-white">
                 Annual contractual increase
               </h3>
               <button
+                type="button"
                 onClick={() => setAnnualOpen(false)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -461,6 +496,7 @@ export default function PriceRevisionsClient() {
               </div>
             </div>
             <Button
+              type="button"
               disabled={busy || !anPct || !anDate}
               onClick={() =>
                 act("apply-annual", { pct: anPct, effectiveDate: anDate }).then(

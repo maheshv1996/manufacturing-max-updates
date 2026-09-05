@@ -37,6 +37,16 @@ export default function FqcClient() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) {
+        setOpen(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   const openFor = (w: any) => {
     setOpen(w.id);
     setForm({
@@ -223,10 +233,13 @@ export default function FqcClient() {
           onClick={() => setOpen(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fqc-checklist-title"
             className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-bold text-white">
+            <h3 id="fqc-checklist-title" className="font-bold text-white">
               FQC Dispatch Checklist —{" "}
               {wos.find((w) => w.id === open)?.woNumber}
             </h3>
@@ -277,10 +290,10 @@ export default function FqcClient() {
               </div>
             )}
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setOpen(null)}>
+              <Button type="button" variant="ghost" onClick={() => setOpen(null)}>
                 Cancel
               </Button>
-              <Button onClick={save} disabled={busy}>
+              <Button type="button" onClick={save} disabled={busy}>
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

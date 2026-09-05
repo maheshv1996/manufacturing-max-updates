@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -23,12 +23,14 @@ export async function PATCH(
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const actor = user.name || "Admin";
+  const actor = user.name || user.email || "Admin";
   try {
     const { id } = await params;
     const gate = await requireManagerLevel(user);
     if (!gate.ok)
       return NextResponse.json({ error: gate.error }, { status: 403 });
+    if (!user.isOwner && !canAny(user, ["people.edit", "hr.edit", "system.edit"]))
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const body = await req.json();
     const { action, data } = body;
     if (!action || !data)
@@ -53,16 +55,19 @@ export async function PATCH(
           { error: "hearingDate required" },
           { status: 400 },
         );
-      result = await prisma.disciplinaryCase.update({
-        where: { id },
-        data: { stage: "HEARING", hearingDate: new Date(data.hearingDate) },
-      });
-      await logAudit({
-        actor,
-        action: "DISCIPLINARY_HEARING_SCHEDULED",
-        entityType: "DISCIPLINARY",
-        entityId: id,
-        details: `${theCase.caseNumber} · ${data.hearingDate}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.disciplinaryCase.update({
+          where: { id },
+          data: { stage: "HEARING", hearingDate: new Date(data.hearingDate) },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "DISCIPLINARY_HEARING_SCHEDULED",
+          entityType: "DISCIPLINARY",
+          entityId: id,
+          details: `${theCase.caseNumber} · ${data.hearingDate}`,
+        });
+        return updated;
       });
     } else if (action === "record-decision") {
       if (theCase.stage !== "HEARING")
@@ -78,23 +83,26 @@ export async function PATCH(
           { error: `decision must be one of ${DECISIONS.join(", ")}` },
           { status: 400 },
         );
-      result = await prisma.disciplinaryCase.update({
-        where: { id },
-        data: {
-          stage: "DECISION",
-          decision: data.decision,
-          decisionNote: reason.reason,
-          hearingHeldAt: new Date(),
-          decidedBy: actor,
-          decidedAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor,
-        action: "DISCIPLINARY_DECISION",
-        entityType: "DISCIPLINARY",
-        entityId: id,
-        details: `${theCase.caseNumber} · ${data.decision} · ${(reason.reason || "").slice(0, 60)}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.disciplinaryCase.update({
+          where: { id },
+          data: {
+            stage: "DECISION",
+            decision: data.decision,
+            decisionNote: reason.reason,
+            hearingHeldAt: new Date(),
+            decidedBy: actor,
+            decidedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "DISCIPLINARY_DECISION",
+          entityType: "DISCIPLINARY",
+          entityId: id,
+          details: `${theCase.caseNumber} · ${data.decision} · ${(reason.reason || "").slice(0, 60)}`,
+        });
+        return updated;
       });
     } else if (action === "close") {
       if (theCase.stage !== "DECISION")
@@ -102,16 +110,19 @@ export async function PATCH(
           { error: `Cannot close from stage ${theCase.stage}` },
           { status: 400 },
         );
-      result = await prisma.disciplinaryCase.update({
-        where: { id },
-        data: { stage: "CLOSED", closedBy: actor, closedAt: new Date() },
-      });
-      await logAudit({
-        actor,
-        action: "DISCIPLINARY_CLOSED",
-        entityType: "DISCIPLINARY",
-        entityId: id,
-        details: theCase.caseNumber,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.disciplinaryCase.update({
+          where: { id },
+          data: { stage: "CLOSED", closedBy: actor, closedAt: new Date() },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "DISCIPLINARY_CLOSED",
+          entityType: "DISCIPLINARY",
+          entityId: id,
+          details: theCase.caseNumber,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  if (!user.isOwner && !canAny(user, ["system.view", "ops.view"])) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["system.view", "ops.view", "quality.view", "commercial.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -91,7 +94,10 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  if (!user.isOwner && !canAny(user, ["system.edit", "ops.edit"])) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["system.edit", "ops.edit", "quality.edit", "commercial.edit"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -108,8 +114,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
-    let result: any;
 
     if (action === "create") {
       if (!data.sourceType || !data.sourceId || !data.title) {
@@ -132,43 +136,54 @@ export async function POST(req: Request) {
           deduped: true,
         });
       }
-      result = await prisma.escalation.create({
-        data: {
-          sourceType: data.sourceType,
-          sourceId: data.sourceId,
-          title: data.title,
-          severity: data.severity || "MEDIUM",
-          dueDate: data.dueDate ? new Date(data.dueDate) : null,
-          notes: data.notes || null,
-          escalatedAt: new Date(),
-        },
-      });
-    } else if (action === "ack") {
-      result = await prisma.escalation.update({
-        where: { id: data.id },
-        data: { status: "ACKNOWLEDGED" },
-      });
-    } else if (action === "resolve") {
-      result = await prisma.escalation.update({
-        where: { id: data.id },
-        data: { status: "RESOLVED" },
-      });
-    } else if (action === "delete") {
-      result = await prisma.escalation.delete({ where: { id: data.id } });
-    } else {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_ESCALATION`,
-      entityType: "ESCALATION",
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} escalation`,
+    const result = await prisma.$transaction(async (tx) => {
+      let res: any;
+      if (action === "create") {
+        res = await tx.escalation.create({
+          data: {
+            sourceType: data.sourceType,
+            sourceId: data.sourceId,
+            title: data.title,
+            severity: data.severity || "MEDIUM",
+            dueDate: data.dueDate ? new Date(data.dueDate) : null,
+            notes: data.notes || null,
+            escalatedAt: new Date(),
+          },
+        });
+      } else if (action === "ack") {
+        res = await tx.escalation.update({
+          where: { id: data.id },
+          data: { status: "ACKNOWLEDGED" },
+        });
+      } else if (action === "resolve") {
+        res = await tx.escalation.update({
+          where: { id: data.id },
+          data: { status: "RESOLVED" },
+        });
+      } else if (action === "delete") {
+        res = await tx.escalation.delete({ where: { id: data.id } });
+      } else {
+        throw new Error("INVALID_ACTION");
+      }
+
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
+        action: `${action.toUpperCase()}_ESCALATION`,
+        entityType: "ESCALATION",
+        entityId: res?.id || data?.id || "unknown",
+        details: `${user.name || "Admin"} ${action} escalation`,
+      });
+
+      return res;
     });
 
     return NextResponse.json({ success: true, record: result });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === "INVALID_ACTION") {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    }
     console.error("POST /api/escalations error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

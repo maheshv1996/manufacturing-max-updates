@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getSettings } from "@/lib/settings";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -70,7 +72,14 @@ export async function POST(request: Request) {
     } = body;
 
     const headersList = await headers();
-    const actorName = headersList.get("x-user-name") || "Storekeeper";
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["supply.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+    const actorName = user.name || headersList.get("x-user-name") || "Storekeeper";
     const headerClientId = headersList.get("x-client-id");
     const clientId: string | null = (bodyClientId ? String(bodyClientId).trim() : null) || (headerClientId ? String(headerClientId).trim() : null);
 
@@ -176,26 +185,10 @@ export async function POST(request: Request) {
           });
         }
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor: actorName,
-            action: "INVENTORY_IN",
-            entityType: "RAW_MATERIAL",
-            entityId: rawMaterialId,
-            details: `IN transaction of ${addedQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku})`,
-          },
-        });
+        await logAuditTx(tx, { actor: actorName, action: "INVENTORY_IN", entityType: "RAW_MATERIAL", entityId: rawMaterialId, details: `IN transaction of ${addedQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku})` });
 
         if (heatNumber) {
-          await (tx as any).auditLog.create({
-            data: {
-              actor: actorName,
-              action: "CERT_UPLOADED",
-              entityType: "RAW_MATERIAL",
-              entityId: rawMaterialId,
-              details: `Mill cert uploaded: Heat# ${heatNumber}, Cert# ${certNumber || "N/A"} for ${freshMat.name}`,
-            },
-          });
+          await logAuditTx(tx, { actor: actorName, action: "CERT_UPLOADED", entityType: "RAW_MATERIAL", entityId: rawMaterialId, details: `Mill cert uploaded: Heat# ${heatNumber}, Cert# ${certNumber || "N/A"} for ${freshMat.name}` });
         }
 
         return { material: updatedMaterial, transaction };
@@ -218,15 +211,7 @@ export async function POST(request: Request) {
               where: { rawMaterialId, type: "IN", materialCert: null },
             });
             if (uncertifiedIn) {
-              await (tx as any).auditLog.create({
-                data: {
-                  actor: actorName,
-                  action: "ISSUE_BLOCKED_NO_CERT",
-                  entityType: "RAW_MATERIAL",
-                  entityId: rawMaterialId,
-                  details: `Issuance blocked: ${material.name} has uncertified IN batch (tx: ${uncertifiedIn.id}). requireMillCerts ON.`,
-                },
-              });
+              await logAuditTx(tx, { actor: actorName, action: "ISSUE_BLOCKED_NO_CERT", entityType: "RAW_MATERIAL", entityId: rawMaterialId, details: `Issuance blocked: ${material.name} has uncertified IN batch (tx: ${uncertifiedIn.id}). requireMillCerts ON.` });
               throw Object.assign(new Error(`ISSUE BLOCKED: ${material.name} has an uncertified batch on file. Attach a Mill Cert before issuing.`), { code: "BLOCKED_NO_CERT" });
             }
           }
@@ -258,15 +243,7 @@ export async function POST(request: Request) {
             },
           });
 
-          await (tx as any).auditLog.create({
-            data: {
-              actor: actorName,
-              action: "INVENTORY_OUT",
-              entityType: "RAW_MATERIAL",
-              entityId: rawMaterialId,
-              details: `OUT transaction of ${issuedQty} ${freshMat?.unit ?? material.unit} for ${freshMat?.name ?? material.name} (SKU: ${freshMat?.sku ?? material.sku})`,
-            },
-          });
+          await logAuditTx(tx, { actor: actorName, action: "INVENTORY_OUT", entityType: "RAW_MATERIAL", entityId: rawMaterialId, details: `OUT transaction of ${issuedQty} ${freshMat?.unit ?? material.unit} for ${freshMat?.name ?? material.name} (SKU: ${freshMat?.sku ?? material.sku})` });
 
           return { material: freshMat!, transaction };
         });
@@ -315,15 +292,7 @@ export async function POST(request: Request) {
           },
         });
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor: actorName,
-            action: "INVENTORY_ADJUST",
-            entityType: "RAW_MATERIAL",
-            entityId: rawMaterialId,
-            details: `ADJUST transaction delta ${deltaQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku}) -> ${newStock}`,
-          },
-        });
+        await logAuditTx(tx, { actor: actorName, action: "INVENTORY_ADJUST", entityType: "RAW_MATERIAL", entityId: rawMaterialId, details: `ADJUST transaction delta ${deltaQty} ${freshMat.unit} for ${freshMat.name} (SKU: ${freshMat.sku}) -> ${newStock}` });
 
         return { material: updatedMaterial, transaction };
       });

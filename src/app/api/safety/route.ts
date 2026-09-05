@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export async function GET() {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["ehs.view", "ehs.edit", "system.view"])) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const incidents = await (prisma as any).safetyIncident.findMany({
       orderBy: { createdAt: "desc" },
@@ -63,6 +74,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["ehs.edit", "system.edit"])) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
@@ -78,58 +98,63 @@ export async function POST(request: Request) {
       );
     }
 
-    const incident = await (prisma as any).safetyIncident.create({
-      data: {
-        type, // NEAR_MISS | HAZARD | PPE_VIOLATION | INCIDENT
-        severity, // LOW | MEDIUM | HIGH | CRITICAL
-        description,
-        location,
-        reportedBy: reportedBy || "Operator",
-        status: "OPEN",
-      },
-    });
+    const actor = user.name || user.id || reportedBy || "Operator";
 
-    await logAudit({
-      actor: reportedBy || "Operator",
-      action: "SAFETY_INCIDENT_LOGGED",
-      entityType: "SafetyIncident",
-      entityId: incident.id,
-      details: `${type} · ${severity} · ${location} · ${description.slice(0, 80)}`,
-    });
+    const incident = await prisma.$transaction(async (tx) => {
+      const inc = await (tx as any).safetyIncident.create({
+        data: {
+          type,
+          severity,
+          description,
+          location,
+          reportedBy: actor,
+          status: "OPEN",
+        },
+      });
 
-    // If HIGH or CRITICAL severity, trigger an Andon alert for any machine matching location!
-    if (severity === "HIGH" || severity === "CRITICAL") {
-      try {
-        const matchingMachine = await prisma.machine.findFirst({
-          where: {
-            OR: [
-              { name: { contains: location, mode: "insensitive" } },
-              { code: { contains: location, mode: "insensitive" } },
-            ],
-          },
-        });
+      await logAuditTx(tx, {
+        actor,
+        action: "SAFETY_INCIDENT_LOGGED",
+        entityType: "SafetyIncident",
+        entityId: inc.id,
+        details: `${type} · ${severity} · ${location} · ${description.slice(0, 80)}`,
+      });
 
-        if (matchingMachine) {
-          const safetyReason = await prisma.downtimeReason.findFirst({
-            where: { category: "OPERATOR" },
-          });
-
-          await prisma.downtimeLog.create({
-            data: {
-              machineId: matchingMachine.id,
-              reasonId:
-                safetyReason?.id ||
-                (await prisma.downtimeReason.findFirst())?.id ||
-                "",
-              startTime: new Date(),
-              notes: `[EHS ALERT - ${severity}] ${description} (Reported by: ${reportedBy || "Operator"})`,
+      if (severity === "HIGH" || severity === "CRITICAL") {
+        try {
+          const matchingMachine = await tx.machine.findFirst({
+            where: {
+              OR: [
+                { name: { contains: location, mode: "insensitive" } },
+                { code: { contains: location, mode: "insensitive" } },
+              ],
             },
           });
+
+          if (matchingMachine) {
+            const safetyReason = await tx.downtimeReason.findFirst({
+              where: { category: "OPERATOR" },
+            });
+
+            await tx.downtimeLog.create({
+              data: {
+                machineId: matchingMachine.id,
+                reasonId:
+                  safetyReason?.id ||
+                  (await tx.downtimeReason.findFirst())?.id ||
+                  "",
+                startTime: new Date(),
+                notes: `[EHS ALERT - ${severity}] ${description} (Reported by: ${actor})`,
+              },
+            });
+          }
+        } catch (andonErr) {
+          console.error("Auto Andon trigger error:", andonErr);
         }
-      } catch (andonErr) {
-        console.error("Auto Andon trigger error:", andonErr);
       }
-    }
+
+      return inc;
+    });
 
     return NextResponse.json({ success: true, incident });
   } catch (error: any) {
@@ -142,6 +167,15 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const headersList = await headers();
+  const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!user.isOwner && !canAny(user, ["ehs.edit", "system.edit"])) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { id, capaOwner, capaDueDate, fiveWhyReason, status } = body;
@@ -163,36 +197,42 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const updatedIncident = await (prisma as any).safetyIncident.update({
-      where: { id },
-      data: {
-        ...(capaOwner ? { capaOwner } : {}),
-        ...(capaDueDate ? { capaDueDate: new Date(capaDueDate) } : {}),
-        ...(fiveWhyReason ? { fiveWhyReason } : {}),
-        ...(status ? { status } : {}),
-        adjustmentHistory: [
-          ...((existingIncident.adjustmentHistory as any[]) || []),
-          {
-            action: "CAPA_UPDATED",
-            by: "system",
-            at: new Date().toISOString(),
-            changes: {
-              capaOwner,
-              capaDueDate,
-              status,
-              fiveWhyReason: fiveWhyReason ? true : undefined,
-            },
-          },
-        ],
-      },
-    });
+    const actor = user.name || user.id || "system";
 
-    await logAudit({
-      actor: "system",
-      action: "SAFETY_INCIDENT_UPDATED",
-      entityType: "SafetyIncident",
-      entityId: id,
-      details: `capaOwner=${capaOwner} · status=${status} · fiveWhy=${fiveWhyReason ? "set" : "no"}`,
+    const updatedIncident = await prisma.$transaction(async (tx) => {
+      const up = await (tx as any).safetyIncident.update({
+        where: { id },
+        data: {
+          ...(capaOwner ? { capaOwner } : {}),
+          ...(capaDueDate ? { capaDueDate: new Date(capaDueDate) } : {}),
+          ...(fiveWhyReason ? { fiveWhyReason } : {}),
+          ...(status ? { status } : {}),
+          adjustmentHistory: [
+            ...((existingIncident.adjustmentHistory as any[]) || []),
+            {
+              action: "CAPA_UPDATED",
+              by: actor,
+              at: new Date().toISOString(),
+              changes: {
+                capaOwner,
+                capaDueDate,
+                status,
+                fiveWhyReason: fiveWhyReason ? true : undefined,
+              },
+            },
+          ],
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "SAFETY_INCIDENT_UPDATED",
+        entityType: "SafetyIncident",
+        entityId: id,
+        details: `capaOwner=${capaOwner} · status=${status} · fiveWhy=${fiveWhyReason ? "set" : "no"}`,
+      });
+
+      return up;
     });
 
     return NextResponse.json({ success: true, incident: updatedIncident });

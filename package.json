@@ -4,6 +4,9 @@
   "private": true,
   "updateRepo": "maheshv1996/manufacturing-max-updates",
   "main": "desktop/electron/main.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

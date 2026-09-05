@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -67,6 +69,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["engineering.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -84,25 +92,30 @@ export async function POST(request: Request) {
     const projectCode = `RND-${Date.now().toString().slice(-6)}`;
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + 30);
+    const actor = user.name || user.id || "Operator";
 
-    const newProject = await prisma.project.create({
-      data: {
-        name,
-        code: projectCode,
-        clientName,
-        description,
-        targetCompletionDate: targetDate,
-        projectType: "RND",
-        status: "OPEN",
-      },
-    });
+    const newProject = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          name,
+          code: projectCode,
+          clientName,
+          description,
+          targetCompletionDate: targetDate,
+          projectType: "RND",
+          status: "OPEN",
+        },
+      });
 
-    await logAudit({
-      actor: "system",
-      action: "RND_CREATED",
-      entityType: "PROJECT",
-      entityId: newProject.id,
-      details: `${projectCode} · ${name} · ${clientName}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "RND_CREATED",
+        entityType: "PROJECT",
+        entityId: created.id,
+        details: `${projectCode} · ${name} · ${clientName}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json(

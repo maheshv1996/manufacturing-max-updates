@@ -56,6 +56,16 @@ export default function SupplierScorecardsClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modal) {
+        setModal(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modal]);
+
   const api = async (action: string, data: any) => {
     setSaving(true);
     try {
@@ -290,13 +300,23 @@ export default function SupplierScorecardsClient() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setModal(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scorecard-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="scorecard-modal-title" className="text-lg font-bold text-white">
                 {modal.row ? "Edit" : "New"} Scorecard
               </h3>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
               >

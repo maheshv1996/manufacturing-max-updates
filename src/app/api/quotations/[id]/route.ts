@@ -1,9 +1,9 @@
-import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { calculateQuotationEstimate } from "@/lib/estimatingEngine";
+import { logAuditTx } from "@/lib/audit";
 import {
   computeDiscountPct,
   discountApprovalFor,
@@ -17,6 +17,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "commercial.edit", "ops.view", "ops.edit", "system.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const quotation = await (prisma as any).quotation.findUnique({
       where: { id },
@@ -66,20 +75,21 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-    await logAudit({ actor: "system", action: "QUOTATION_UPDATED", entityType: "Quotation", details: "Quotation updated" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     const actor = user.name || "Admin";
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     if (
-      !user.id ||
-      (!user.isOwner &&
-        !canAny(user, [
-          "commercial.edit",
-          "ops.edit",
-          "system.edit",
-          "people.edit",
-        ]))
+      !user.isOwner &&
+      !canAny(user, [
+        "commercial.edit",
+        "ops.edit",
+        "system.edit",
+        "people.edit",
+      ])
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -122,31 +132,32 @@ export async function PATCH(
           { status: 403 },
         );
       }
-      const updated = await (prisma as any).quotation.update({
-        where: { id },
-        data: {
-          discountApprovalStatus: "APPROVED",
-          discountApprovedBy: actor,
-          discountApprovedAt: new Date(),
-          adjustmentHistory: [
-            ...((existing.adjustmentHistory as any[]) || []),
-            {
-              action: "DISCOUNT_APPROVED",
-              by: actor,
-              at: new Date().toISOString(),
-              reason: `${existing.discountPct}% discount approved`,
-            },
-          ],
-        },
-      });
-      await prisma.auditLog.create({
-        data: {
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await (tx as any).quotation.update({
+          where: { id },
+          data: {
+            discountApprovalStatus: "APPROVED",
+            discountApprovedBy: actor,
+            discountApprovedAt: new Date(),
+            adjustmentHistory: [
+              ...((existing.adjustmentHistory as any[]) || []),
+              {
+                action: "DISCOUNT_APPROVED",
+                by: actor,
+                at: new Date().toISOString(),
+                reason: `${existing.discountPct}% discount approved`,
+              },
+            ],
+          },
+        });
+        await logAuditTx(tx, {
           actor,
           action: "QUOTE_DISCOUNT_APPROVED",
           entityType: "Quotation",
           entityId: id,
           details: `${existing.quoteNumber} — ${existing.discountPct}% discount approved by ${actor}`,
-        },
+        });
+        return res;
       });
       return NextResponse.json({ quotation: updated });
     }
@@ -175,31 +186,32 @@ export async function PATCH(
           { status: 403 },
         );
       }
-      const updated = await (prisma as any).quotation.update({
-        where: { id },
-        data: {
-          discountApprovalStatus: "REJECTED",
-          discountRejectedBy: actor,
-          discountRejectReason: reason,
-          adjustmentHistory: [
-            ...((existing.adjustmentHistory as any[]) || []),
-            {
-              action: "DISCOUNT_REJECTED",
-              by: actor,
-              at: new Date().toISOString(),
-              reason,
-            },
-          ],
-        },
-      });
-      await prisma.auditLog.create({
-        data: {
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await (tx as any).quotation.update({
+          where: { id },
+          data: {
+            discountApprovalStatus: "REJECTED",
+            discountRejectedBy: actor,
+            discountRejectReason: reason,
+            adjustmentHistory: [
+              ...((existing.adjustmentHistory as any[]) || []),
+              {
+                action: "DISCOUNT_REJECTED",
+                by: actor,
+                at: new Date().toISOString(),
+                reason,
+              },
+            ],
+          },
+        });
+        await logAuditTx(tx, {
           actor,
           action: "QUOTE_DISCOUNT_REJECTED",
           entityType: "Quotation",
           entityId: id,
           details: `${existing.quoteNumber} — ${existing.discountPct}% discount rejected by ${actor}. Reason: ${reason}`,
-        },
+        });
+        return res;
       });
       return NextResponse.json({ quotation: updated });
     }
@@ -265,51 +277,50 @@ export async function PATCH(
       }
     }
 
-    const updated = await (prisma as any).quotation.update({
-      where: { id },
-      data: {
-        ...updateData,
-        adjustmentHistory: [
-          ...((existing.adjustmentHistory as any[]) || []),
-          {
-            action: "QUOTATION_UPDATED",
-            by: actor,
-            at: new Date().toISOString(),
-            changes: updateData,
-            reason: "Quote edit",
-          },
-        ],
-      },
-      include: {
-        lines: { include: { product: true } },
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const res = await (tx as any).quotation.update({
+        where: { id },
+        data: {
+          ...updateData,
+          adjustmentHistory: [
+            ...((existing.adjustmentHistory as any[]) || []),
+            {
+              action: "QUOTATION_UPDATED",
+              by: actor,
+              at: new Date().toISOString(),
+              changes: updateData,
+              reason: "Quote edit",
+            },
+          ],
+        },
+        include: {
+          lines: { include: { product: true } },
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         actor,
         action: "UPDATED_QUOTATION",
         entityType: "Quotation",
         entityId: id,
         details: JSON.stringify(updateData),
-      },
-    });
+      });
 
-    if (
-      updateData.discountPct !== undefined &&
-      updateData.discountPct > DISCOUNT_APPROVAL_THRESHOLD &&
-      updateData.discountApprovalStatus === "PENDING_MANAGER"
-    ) {
-      await prisma.auditLog.create({
-        data: {
+      if (
+        updateData.discountPct !== undefined &&
+        updateData.discountPct > DISCOUNT_APPROVAL_THRESHOLD &&
+        updateData.discountApprovalStatus === "PENDING_MANAGER"
+      ) {
+        await logAuditTx(tx, {
           actor,
           action: "QUOTE_DISCOUNT_PENDING",
           entityType: "Quotation",
           entityId: id,
           details: `${existing.quoteNumber} — ${updateData.discountPct}% discount now awaits manager approval`,
-        },
-      });
-    }
+        });
+      }
+      return res;
+    });
 
     return NextResponse.json({ quotation: updated });
   } catch (error: any) {

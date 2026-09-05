@@ -1,26 +1,39 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { getDerivedLicenseStatus, updateLicense } from "@/lib/licenseEngine";
 import { addDays } from "date-fns";
 import { toPaise } from "@/lib/money";
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "MANUAL_INVOICE_GENERATED", entityType: "BillingInvoice", details: "Manual billing invoice created" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;
-    if (!tokenStr)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let actorId = "";
 
-    const token = await verifySessionToken(tokenStr);
-    if (
-      !token ||
-      (!token.isOwner && !token.permissions?.includes("system.edit"))
-    )
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (tokenStr) {
+      const token = await verifySessionToken(tokenStr);
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (!token.isOwner && !token.permissions?.includes("system.edit")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      actorId = token.id;
+    } else {
+      const headersList = await headers();
+      const user = getUserFromHeaders(headersList);
+      if (!user.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (!user.isOwner && !canAny(user, ["system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      actorId = user.id;
+    }
 
     const { amount, reference } = await req.json();
     if (typeof amount !== "number" || amount <= 0) {
@@ -42,24 +55,24 @@ export async function POST(req: Request) {
     license.paymentStatus = "ACTIVE";
     await updateLicense(license);
 
-    // Create payment record
-    await prisma.paymentRecord.create({
-      data: {
-        amount: toPaise(Number(amount)), // stored integer paise
-        method: "OTHER", // Manual payment
-        reference: reference || "Manual record",
-        extendsUntil: newDueDate,
-      },
-    });
+    // Create payment record and audit log atomically
+    await prisma.$transaction(async (tx) => {
+      const payment = await tx.paymentRecord.create({
+        data: {
+          amount: toPaise(Number(amount)), // stored integer paise
+          method: "OTHER", // Manual payment
+          reference: reference || "Manual record",
+          extendsUntil: newDueDate,
+        },
+      });
 
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
-        actor: token.id,
+      await logAuditTx(tx, {
+        actor: actorId,
         action: "RECORD_MANUAL_PAYMENT",
         entityType: "BILLING",
-        details: `Recorded manual payment of ₹${amount} - Ref: ${reference}`,
-      },
+        entityId: payment.id,
+        details: `Recorded manual payment of ₹${amount} - Ref: ${reference || "Manual record"}`,
+      });
     });
 
     return NextResponse.json({

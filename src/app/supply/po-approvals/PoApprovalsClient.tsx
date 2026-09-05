@@ -69,6 +69,16 @@ export default function PoApprovalsClient() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && decision) {
+        setDecision(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [decision]);
+
   const submit = async () => {
     if (!decision) return;
     setBusy(true);
@@ -144,6 +154,7 @@ export default function PoApprovalsClient() {
         <div className="flex flex-wrap gap-2 border-b border-slate-800/60 p-4">
           {["PENDING", "APPROVED", "REJECTED"].map((t) => (
             <button
+              type="button"
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
@@ -264,6 +275,9 @@ export default function PoApprovalsClient() {
           onClick={() => setDecision(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="po-decision-title"
             className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -273,7 +287,7 @@ export default function PoApprovalsClient() {
               ) : (
                 <XCircle className="h-5 w-5 text-rose-400" />
               )}
-              <h3 className="text-lg font-semibold text-slate-100">
+              <h3 id="po-decision-title" className="text-lg font-semibold text-slate-100">
                 {decision.approve ? "Approve" : "Reject"} {decision.po.poNumber}
               </h3>
             </div>

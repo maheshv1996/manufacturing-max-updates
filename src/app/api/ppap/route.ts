@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const canEdit = user.isOwner || canAny(user, ["quality.edit", "system.edit"]);
+    if (!canEdit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const userName = user.name || user.email || "System";
 
     if (body.entity === "element") {
       const { ppapId, elementNo, status, notes } = body.data || {};
@@ -115,61 +124,74 @@ export async function POST(request: Request) {
           { error: "ppapId and elementNo required" },
           { status: 400 },
         );
-      const existing = await prisma.ppapElement.findUnique({
-        where: { ppapId_elementNo: { ppapId, elementNo: Number(elementNo) } },
+
+      const element = await prisma.$transaction(async (tx) => {
+        const existing = await tx.ppapElement.findUnique({
+          where: { ppapId_elementNo: { ppapId, elementNo: Number(elementNo) } },
+        });
+        const res = existing
+          ? await tx.ppapElement.update({
+              where: { id: existing.id },
+              data: { status, notes: notes ?? existing.notes },
+            })
+          : await tx.ppapElement.create({
+              data: {
+                ppapId,
+                elementNo: Number(elementNo),
+                elementName:
+                  PPAP_ELEMENTS[Number(elementNo) - 1] || `Element ${elementNo}`,
+                status,
+                notes,
+              },
+            });
+        return res;
       });
-      const element = existing
-        ? await prisma.ppapElement.update({
-            where: { id: existing.id },
-            data: { status, notes: notes ?? existing.notes },
-          })
-        : await prisma.ppapElement.create({
-            data: {
-              ppapId,
-              elementNo: Number(elementNo),
-              elementName:
-                PPAP_ELEMENTS[Number(elementNo) - 1] || `Element ${elementNo}`,
-              status,
-              notes,
-            },
-          });
+
       return NextResponse.json({ success: true, item: element });
     }
 
     if (body.entity === "submit") {
       const { id } = body.data || {};
-      const sub = await prisma.ppapSubmission.update({
-        where: { id },
-        data: { status: "SUBMITTED", submittedAt: new Date() },
+      const sub = await prisma.$transaction(async (tx) => {
+        const updated = await tx.ppapSubmission.update({
+          where: { id },
+          data: { status: "SUBMITTED", submittedAt: new Date() },
+        });
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "PPAP_SUBMITTED",
+          entityType: "PPAP",
+          entityId: updated.id,
+          details: `PPAP ${updated.ppapNumber} submitted to ${updated.customerName || "customer"}`,
+        });
+        return updated;
       });
-      await logAudit({
-        actor: userName,
-        action: "PPAP_SUBMITTED",
-        entityType: "PPAP",
-        entityId: sub.id,
-        details: `PPAP ${sub.ppapNumber} submitted to ${sub.customerName || "customer"}`,
-      });
+
       return NextResponse.json({ success: true, item: sub });
     }
 
     if (body.entity === "disposition") {
       const { id, disposition, notes } = body.data || {};
-      const sub = await prisma.ppapSubmission.update({
-        where: { id },
-        data: {
-          status: disposition === "APPROVED" ? "APPROVED" : "REJECTED",
-          dispositionAt: new Date(),
-          dispositionBy: userName,
-          notes: notes || undefined,
-        },
+      const sub = await prisma.$transaction(async (tx) => {
+        const updated = await tx.ppapSubmission.update({
+          where: { id },
+          data: {
+            status: disposition === "APPROVED" ? "APPROVED" : "REJECTED",
+            dispositionAt: new Date(),
+            dispositionBy: userName,
+            notes: notes || undefined,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "PPAP_DISPOSITION",
+          entityType: "PPAP",
+          entityId: updated.id,
+          details: `PPAP ${updated.ppapNumber} ${disposition} by ${userName}`,
+        });
+        return updated;
       });
-      await logAudit({
-        actor: userName,
-        action: "PPAP_DISPOSITION",
-        entityType: "PPAP",
-        entityId: sub.id,
-        details: `PPAP ${sub.ppapNumber} ${disposition} by ${userName}`,
-      });
+
       return NextResponse.json({ success: true, item: sub });
     }
 
@@ -184,9 +206,11 @@ export async function POST(request: Request) {
           if (rest[f] !== undefined && rest[f] !== "")
             patch[f] = Number(rest[f]);
         }
-        const cp = await prisma.controlPlan.update({
-          where: { id },
-          data: patch,
+        const cp = await prisma.$transaction(async (tx) => {
+          return await tx.controlPlan.update({
+            where: { id },
+            data: patch,
+          });
         });
         return NextResponse.json({ success: true, item: cp });
       }
@@ -196,23 +220,28 @@ export async function POST(request: Request) {
           { error: "productId and characteristic required" },
           { status: 400 },
         );
-      const count = await prisma.controlPlan.count();
-      const planNumber = `CP-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, "0")}`;
-      const data: any = { planNumber, productId, characteristic };
-      for (const f of CP_FIELDS) {
-        if (rest[f] !== undefined && rest[f] !== "") data[f] = rest[f];
-      }
-      for (const f of ["specMin", "specMax", "sampleSize"]) {
-        if (rest[f] !== undefined && rest[f] !== "") data[f] = Number(rest[f]);
-      }
-      const cp = await prisma.controlPlan.create({ data });
-      await logAudit({
-        actor: userName,
-        action: "CONTROL_PLAN_CREATED",
-        entityType: "CONTROL_PLAN",
-        entityId: cp.id,
-        details: `Control Plan ${planNumber} — ${characteristic}`,
+
+      const cp = await prisma.$transaction(async (tx) => {
+        const count = await tx.controlPlan.count();
+        const planNumber = `CP-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, "0")}`;
+        const data: any = { planNumber, productId, characteristic };
+        for (const f of CP_FIELDS) {
+          if (rest[f] !== undefined && rest[f] !== "") data[f] = rest[f];
+        }
+        for (const f of ["specMin", "specMax", "sampleSize"]) {
+          if (rest[f] !== undefined && rest[f] !== "") data[f] = Number(rest[f]);
+        }
+        const created = await tx.controlPlan.create({ data });
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "CONTROL_PLAN_CREATED",
+          entityType: "CONTROL_PLAN",
+          entityId: created.id,
+          details: `Control Plan ${planNumber} — ${characteristic}`,
+        });
+        return created;
       });
+
       return NextResponse.json({ success: true, item: cp });
     }
 
@@ -234,43 +263,50 @@ export async function POST(request: Request) {
       for (const f of ["submittedAt", "dispositionAt"]) {
         if (rest[f]) patch[f] = new Date(rest[f]);
       }
-      const sub = await prisma.ppapSubmission.update({
-        where: { id },
-        data: patch,
+      const sub = await prisma.$transaction(async (tx) => {
+        return await tx.ppapSubmission.update({
+          where: { id },
+          data: patch,
+        });
       });
       return NextResponse.json({ success: true, item: sub });
     }
-    const count = await prisma.ppapSubmission.count();
-    const ppapNumber = `PPAP-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, "0")}`;
-    const sub = await prisma.ppapSubmission.create({
-      data: {
-        ppapNumber,
-        productId,
-        customerName: customerName || null,
-        revision: rest.revision || "A",
-        submissionLevel: rest.submissionLevel
-          ? Number(rest.submissionLevel)
-          : 3,
-        status: rest.status || "DRAFT",
-        notes: rest.notes || null,
-        createdBy: userName,
-      },
+
+    const sub = await prisma.$transaction(async (tx) => {
+      const count = await tx.ppapSubmission.count();
+      const ppapNumber = `PPAP-${new Date().getFullYear()}-${(count + 1).toString().padStart(4, "0")}`;
+      const created = await tx.ppapSubmission.create({
+        data: {
+          ppapNumber,
+          productId,
+          customerName: customerName || null,
+          revision: rest.revision || "A",
+          submissionLevel: rest.submissionLevel
+            ? Number(rest.submissionLevel)
+            : 3,
+          status: rest.status || "DRAFT",
+          notes: rest.notes || null,
+          createdBy: userName,
+        },
+      });
+      // Seed the 18 AIAG elements
+      await tx.ppapElement.createMany({
+        data: PPAP_ELEMENTS.map((name, i) => ({
+          ppapId: created.id,
+          elementNo: i + 1,
+          elementName: name,
+        })),
+      });
+      await logAuditTx(tx, {
+        actor: userName,
+        action: "PPAP_CREATED",
+        entityType: "PPAP",
+        entityId: created.id,
+        details: `PPAP ${ppapNumber} created for ${productId}`,
+      });
+      return created;
     });
-    // Seed the 18 AIAG elements
-    await prisma.ppapElement.createMany({
-      data: PPAP_ELEMENTS.map((name, i) => ({
-        ppapId: sub.id,
-        elementNo: i + 1,
-        elementName: name,
-      })),
-    });
-    await logAudit({
-      actor: userName,
-      action: "PPAP_CREATED",
-      entityType: "PPAP",
-      entityId: sub.id,
-      details: `PPAP ${ppapNumber} created for ${productId}`,
-    });
+
     return NextResponse.json({ success: true, item: sub });
   } catch (error: any) {
     console.error("POST /api/ppap error:", error);

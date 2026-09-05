@@ -2,7 +2,7 @@ import { getUserFromHeaders, can } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { autoPostToGL } from "@/lib/glPosting";
 import { toPaise, fromPaiseRow } from "@/lib/money";
 
@@ -13,15 +13,20 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    const userName = headersList.get("x-user-name") || "System";
+    const userName = user.name || headersList.get("x-user-name") || "System";
+
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     if (
       !user.isOwner &&
       !can(user, "system.edit") &&
-      !user.isOwner &&
-      !can(user, "ops.edit")
+      !can(user, "ops.edit") &&
+      !can(user, "commercial.edit") &&
+      !can(user, "finance.edit")
     ) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id } = await params;
@@ -58,7 +63,7 @@ export async function POST(
       newStatus = "PARTIAL";
     }
 
-    const result = await (prisma as any).$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const payment = await tx.payment.create({
         data: {
           invoiceId: id,
@@ -79,7 +84,7 @@ export async function POST(
         },
       });
 
-      await logAudit({
+      await logAuditTx(tx, {
         action: "PAYMENT_RECORDED",
         entityType: "Invoice",
         entityId: id,

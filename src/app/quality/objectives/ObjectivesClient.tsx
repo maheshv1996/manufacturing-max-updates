@@ -1,9 +1,6 @@
 "use client";
 
-import PageHeader from "@/app/components/shared/PageHeader";
-
-
-import {logClientError } from "@/lib/clientLogger";
+import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus,
@@ -15,7 +12,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   MinusCircle,
-  ShieldCheck
 } from "lucide-react";
 
 const KPI_META: Record<
@@ -74,6 +70,16 @@ export default function ObjectivesClient() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setModal(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const api = async (body: any): Promise<boolean> => {
     setSaving(true);
@@ -178,6 +184,7 @@ export default function ObjectivesClient() {
           </select>
           {isManager && (
             <button
+              type="button"
               onClick={openCreate}
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 px-4 py-2 text-sm font-medium hover:bg-indigo-500/30 transition-colors"
             >
@@ -284,14 +291,8 @@ export default function ObjectivesClient() {
                     {isManager && (
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
-      <PageHeader
-        title="Objectives"
-        description="Inspections, NCRs, audits and compliance control."
-        icon={<ShieldCheck className="w-6 h-6" />}
-        iconTone="emerald"
-      />
-
                           <button
+                            type="button"
                             onClick={() => {
                               setForm({ ...o });
                               setModal({ mode: "edit", row: o });
@@ -301,6 +302,7 @@ export default function ObjectivesClient() {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => remove(o)}
                             className="text-slate-400 hover:text-rose-400"
                           >
@@ -342,16 +344,21 @@ export default function ObjectivesClient() {
           onClick={() => setModal(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="objectives-modal-title"
             className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/60 p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 id="objectives-modal-title" className="text-lg font-semibold text-white">
                 {modal.mode === "create" ? "New Quality Target" : "Edit Target"}
               </h2>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -430,6 +437,7 @@ export default function ObjectivesClient() {
               Active target
             </label>
             <button
+              type="button"
               onClick={save}
               disabled={
                 saving ||
@@ -455,6 +463,7 @@ export default function ObjectivesClient() {
         <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-800 border border-slate-600/60 px-4 py-3 text-sm text-white shadow-xl">
           {toast}
           <button
+            type="button"
             onClick={() => setToast(null)}
             className="ml-3 text-slate-400 hover:text-white"
           >

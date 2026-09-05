@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export async function GET(request: Request) {
   try {
@@ -34,6 +35,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const canEdit = user.isOwner || canAny(user, ["quality.edit", "system.edit"]);
+    if (!canEdit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const userName = user.name || user.email || "System";
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -41,8 +53,6 @@ export async function POST(request: Request) {
     }
     const { workOrderId, serialUnitId, type, customerName, drawingRevision } =
       body;
-    const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
 
     if (!workOrderId) {
       return NextResponse.json(
@@ -62,31 +72,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const faiNumber = `FAI-${new Date().getFullYear()}-${Math.floor(
-      Math.random() * 10000,
-    )
-      .toString()
-      .padStart(4, "0")}`;
+    const report = await prisma.$transaction(async (tx) => {
+      const faiNumber = `FAI-${new Date().getFullYear()}-${Math.floor(
+        Math.random() * 10000,
+      )
+        .toString()
+        .padStart(4, "0")}`;
 
-    const report = await prisma.faiReport.create({
-      data: {
-        faiNumber,
-        workOrderId,
-        productId: wo.productId,
-        serialUnitId: serialUnitId || null,
-        type: type || "FULL",
-        customerName: customerName || wo.customerName || "Customer",
-        drawingRevision: drawingRevision || "Rev A",
-        preparedBy: userName,
-      },
-    });
+      const created = await tx.faiReport.create({
+        data: {
+          faiNumber,
+          workOrderId,
+          productId: wo.productId,
+          serialUnitId: serialUnitId || null,
+          type: type || "FULL",
+          customerName: customerName || wo.customerName || "Customer",
+          drawingRevision: drawingRevision || "Rev A",
+          preparedBy: userName,
+        },
+      });
 
-    await logAudit({
-      actor: userName,
-      action: "FAI_CREATED",
-      entityType: "FAI_REPORT",
-      entityId: report.id,
-      details: `Created FAI Report ${report.faiNumber}`,
+      await logAuditTx(tx, {
+        actor: userName,
+        action: "FAI_CREATED",
+        entityType: "FAI_REPORT",
+        entityId: created.id,
+        details: `Created FAI Report ${created.faiNumber}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json(report);

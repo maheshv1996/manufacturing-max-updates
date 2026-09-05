@@ -1,5 +1,7 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { fetchLiveDossierData } from "@/lib/dataPackageLiveFetch";
 
@@ -7,15 +9,20 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-    await logAudit({ actor: "system", action: "DATA_PACKAGE_RELEASED", entityType: "WorkOrderDataPackage", details: "Data package released" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id || (!user.isOwner && !can(user, "ops.edit") && !can(user, "quality.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { releasedBy = "System" } = body;
+    const releasedBy = user.name || body.releasedBy || "System";
 
     const dataPackage = await prisma.dataPackage.findUnique({
       where: { id },
@@ -45,25 +52,27 @@ export async function POST(
       );
     }
 
-    // Update package
-    const updatedPackage = await prisma.dataPackage.update({
-      where: { id },
-      data: {
-        status: "RELEASED",
-        snapshot: liveData as any,
-        releasedBy,
-        releasedAt: new Date(),
-      },
-    });
+    // Update package atomically with audit log
+    const updatedPackage = await prisma.$transaction(async (tx) => {
+      const updated = await tx.dataPackage.update({
+        where: { id },
+        data: {
+          status: "RELEASED",
+          snapshot: liveData as any,
+          releasedBy,
+          releasedAt: new Date(),
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         action: "DATA_PACKAGE_RELEASED",
         actor: releasedBy,
-        details: `Released Data Package ${updatedPackage.packageNumber}`,
+        details: `Released Data Package ${updated.packageNumber}`,
         entityType: "WorkOrder",
-        entityId: updatedPackage.workOrderId,
-      },
+        entityId: updated.workOrderId,
+      });
+
+      return updated;
     });
 
     return NextResponse.json({ success: true, dataPackage: updatedPackage });

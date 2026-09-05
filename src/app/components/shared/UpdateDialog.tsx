@@ -61,6 +61,15 @@ export default function UpdateDialog({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   const startInstall = async () => {
     setApplying(true);
     setProgress({ phase: "starting" });
@@ -102,15 +111,26 @@ export default function UpdateDialog({
   const installed = info.current ?? currentVersion ?? "";
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-surface-1 rounded-card border border-border shadow-modal max-w-md w-full overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="update-dialog-title"
+      onClick={onClose}
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface-1 rounded-card border border-border shadow-modal max-w-md w-full overflow-hidden"
+      >
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold text-text-1 flex items-center gap-2">
+          <h3 id="update-dialog-title" className="font-semibold text-text-1 flex items-center gap-2">
             <Download className="h-5 w-5 text-sky-500" /> Update available
           </h3>
           <button
+            type="button"
             onClick={onClose}
-            className="text-text-3 hover:text-text-1 p-1 rounded-control hover:bg-surface-3"
+            aria-label="Close update dialog"
+            className="text-text-3 hover:text-text-1 p-1 rounded-control hover:bg-surface-3 cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -144,7 +164,14 @@ export default function UpdateDialog({
                 </span>
                 <span className="font-mono">{Math.round(pct)}%</span>
               </div>
-              <div className="h-2 bg-surface-2 border border-border rounded-full overflow-hidden">
+              <div
+                role="progressbar"
+                aria-valuenow={Math.round(pct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Update download progress"
+                className="h-2 bg-surface-2 border border-border rounded-full overflow-hidden"
+              >
                 <div
                   className="h-full bg-sky-500 transition-all duration-300"
                   style={{ width: `${pct}%` }}
@@ -174,16 +201,18 @@ export default function UpdateDialog({
             </p>
           )}
           <button
+            type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-sm font-medium text-text-2 hover:text-text-1 hover:bg-surface-3 rounded-lg"
+            className="px-3 py-1.5 text-sm font-medium text-text-2 hover:text-text-1 hover:bg-surface-3 rounded-lg cursor-pointer"
           >
             Later
           </button>
           {isDesktop && !applying && phase !== "applying" && (
             <button
+              type="button"
               onClick={startInstall}
               disabled={phase === "downloading" || phase === "verifying"}
-              className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-semibold bg-[var(--color-accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-semibold bg-[var(--color-accent)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 cursor-pointer"
             >
               <Download className="h-4 w-4" /> Download & Install
             </button>

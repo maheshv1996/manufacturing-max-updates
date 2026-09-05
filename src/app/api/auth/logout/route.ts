@@ -7,6 +7,8 @@ export async function POST(request: NextRequest) {
 
   const response = NextResponse.json({ success: true });
   response.cookies.delete("app_session");
+  // Hardening: purge cookies and client storage on logout
+  response.headers.set("Clear-Site-Data", '"cookies", "storage"');
 
   if (username) {
     await logAudit({

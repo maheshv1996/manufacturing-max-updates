@@ -88,8 +88,14 @@ export default function ShortcutsModal() {
   ];
 
   return (
-    <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsOpen(false)}
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcuts-dialog-title"
         className="bg-surface-1 rounded-3xl shadow-2xl w-full max-w-lg border border-border overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -99,7 +105,7 @@ export default function ShortcutsModal() {
               <Keyboard className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-sm text-text-1">
+              <h3 id="shortcuts-dialog-title" className="font-extrabold text-sm text-text-1">
                 Keyboard Shortcuts
               </h3>
               <p className="text-[11px] text-text-3 font-mono">
@@ -108,7 +114,9 @@ export default function ShortcutsModal() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setIsOpen(false)}
+            aria-label="Close keyboard shortcuts dialog"
             className="p-1.5 rounded-xl hover:bg-surface-3 text-text-3 hover:text-text-1 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />

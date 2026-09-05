@@ -167,6 +167,21 @@ export default function AdminClient() {
     error: null,
   });
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (resetPasswordState.isOpen) {
+          setResetPasswordState((prev) => ({ ...prev, isOpen: false }));
+        }
+        if (modalState.isOpen) {
+          setModalState((prev) => ({ ...prev, isOpen: false }));
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [resetPasswordState.isOpen, modalState.isOpen]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -1015,9 +1030,23 @@ export default function AdminClient() {
 
       {/* Reset Password Modal */}
       {resetPasswordState.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl p-6">
-            <h3 className="text-lg font-bold text-white mb-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-password-modal-title"
+          onClick={() =>
+            setResetPasswordState((prev) => ({
+              ...prev,
+              isOpen: false,
+            }))
+          }
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl p-6"
+          >
+            <h3 id="reset-password-modal-title" className="text-lg font-bold text-white mb-4">
               Reset Password
             </h3>
             <p className="text-sm text-slate-400 mb-4">

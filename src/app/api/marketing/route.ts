@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const DEFAULT_LANDING_CONTENT = {
   appName: "Manufacturing Max",
@@ -83,6 +83,15 @@ function coerce(fields: string[], data: any): any {
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "commercial.edit", "system.view", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const [campaigns, leads, landing] = await Promise.all([
       prisma.marketingCampaign.findMany({
         orderBy: { createdAt: "desc" },
@@ -107,9 +116,13 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["commercial.edit", "system.edit"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const actor = user.name || "Admin";
 
   try {
     const body = await req.json();
@@ -125,46 +138,53 @@ export async function POST(req: Request) {
       );
     }
 
-    let result: any;
-
-    if (action === "saveLanding") {
-      await prisma.setting.upsert({
-        where: { key: "landingContent" },
-        update: { value: JSON.stringify(data) },
-        create: { key: "landingContent", value: JSON.stringify(data) },
-      });
-      result = { key: "landingContent" };
-    } else {
+    if (action !== "saveLanding") {
       if (!entity || !ENTITY_FIELDS[entity] || !ENTITY_MODELS[entity]) {
         return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
       }
-      const model = (prisma as any)[ENTITY_MODELS[entity]];
-      if (action === "create") {
-        result = await model.create({
-          data: coerce(ENTITY_FIELDS[entity], data),
-        });
-      } else if (action === "update") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.update({
-          where: { id: data.id },
-          data: coerce(ENTITY_FIELDS[entity], data),
-        });
-      } else if (action === "delete") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.delete({ where: { id: data.id } });
-      } else {
+      if ((action === "update" || action === "delete") && !data.id) {
+        return NextResponse.json({ error: "Missing id" }, { status: 400 });
+      }
+      if (action !== "create" && action !== "update" && action !== "delete") {
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
       }
     }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_${(entity || "LANDING").toUpperCase()}`,
-      entityType: (entity || "LANDING").toUpperCase(),
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} on ${entity || "landing page"}`,
+    const result = await prisma.$transaction(async (tx) => {
+      let res: any;
+
+      if (action === "saveLanding") {
+        await tx.setting.upsert({
+          where: { key: "landingContent" },
+          update: { value: JSON.stringify(data) },
+          create: { key: "landingContent", value: JSON.stringify(data) },
+        });
+        res = { key: "landingContent" };
+      } else {
+        const model = (tx as any)[ENTITY_MODELS[entity]];
+        if (action === "create") {
+          res = await model.create({
+            data: coerce(ENTITY_FIELDS[entity], data),
+          });
+        } else if (action === "update") {
+          res = await model.update({
+            where: { id: data.id },
+            data: coerce(ENTITY_FIELDS[entity], data),
+          });
+        } else if (action === "delete") {
+          res = await model.delete({ where: { id: data.id } });
+        }
+      }
+
+      await logAuditTx(tx, {
+        actor,
+        action: `${action.toUpperCase()}_${(entity || "LANDING").toUpperCase()}`,
+        entityType: (entity || "LANDING").toUpperCase(),
+        entityId: res?.id || data?.id || "unknown",
+        details: `${actor} ${action} on ${entity || "landing page"}`,
+      });
+
+      return res;
     });
 
     return NextResponse.json({ success: true, record: result });

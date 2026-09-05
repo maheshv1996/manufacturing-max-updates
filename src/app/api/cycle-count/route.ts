@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -16,6 +16,8 @@ export async function GET() {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.isOwner && !canAny(user, ["inventory.view", "supply.view", "ops.view", "finance.view", "system.view"]))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const [sessions, materials, inventoryTxs] = await Promise.all([
       prisma.cycleCountSession.findMany({
@@ -64,6 +66,8 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const actor = user.name || user.email || user.id;
+
   try {
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -76,6 +80,12 @@ export async function POST(req: Request) {
         { error: "Missing action or data" },
         { status: 400 },
       );
+
+    if (["start", "record", "submit"].includes(action)) {
+      if (!user.isOwner && !canAny(user, ["inventory.edit", "supply.edit", "ops.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
 
     if (action === "start") {
       // Create a counting session for one ABC class: snapshot system qty per item.
@@ -97,29 +107,33 @@ export async function POST(req: Request) {
           { error: "No materials to count" },
           { status: 400 },
         );
-      const seq = await prisma.cycleCountSession.count();
-      const session = await prisma.cycleCountSession.create({
-        data: {
-          sessionNumber: `CC-${abcClass}-${new Date().getFullYear()}-${String(seq + 1).padStart(3, "0")}`,
-          name: name || `${abcClass}-class cycle count`,
-          abcClass,
-          startedBy: user.name || "Stores",
-          status: "COUNTING",
-          lines: {
-            create: materials.map((m) => ({
-              rawMaterialId: m.id,
-              systemQty: m.currentStock,
-            })),
+
+      const session = await prisma.$transaction(async (tx) => {
+        const seq = await tx.cycleCountSession.count();
+        const created = await tx.cycleCountSession.create({
+          data: {
+            sessionNumber: `CC-${abcClass}-${new Date().getFullYear()}-${String(seq + 1).padStart(3, "0")}`,
+            name: name || `${abcClass}-class cycle count`,
+            abcClass,
+            startedBy: actor,
+            status: "COUNTING",
+            lines: {
+              create: materials.map((m) => ({
+                rawMaterialId: m.id,
+                systemQty: m.currentStock,
+              })),
+            },
           },
-        },
-        include: { lines: { include: { rawMaterial: true } } },
-      });
-      await logAudit({
-        actor: user.name || "Stores",
-        action: "CYCLE_COUNT_STARTED",
-        entityType: "CYCLE_COUNT",
-        entityId: session.id,
-        details: `${session.sessionNumber} · ${abcClass}-class · ${materials.length} items`,
+          include: { lines: { include: { rawMaterial: true } } },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CYCLE_COUNT_STARTED",
+          entityType: "CYCLE_COUNT",
+          entityId: created.id,
+          details: `${created.sessionNumber} · ${abcClass}-class · ${materials.length} items`,
+        });
+        return created;
       });
       return NextResponse.json({ success: true, session }, { status: 201 });
     }
@@ -150,30 +164,39 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      for (const v of values) {
-        const line = session.lines.find((l) => l.id === v.lineId);
-        if (!line) continue;
-        const counted = Number(v.countedQty);
-        const variance = counted - line.systemQty;
-        const variancePct =
-          line.systemQty > 0
-            ? (Math.abs(variance) / line.systemQty) * 100
-            : variance !== 0
-              ? 100
-              : 0;
-        await prisma.cycleCountLine.update({
-          where: { id: line.id },
-          data: {
-            countedQty: counted,
-            variance,
-            variancePct,
-            countedBy: user.name || "Counter",
-            countedAt: new Date(),
-            status: "COUNTED",
-            note: v.note || null,
-          },
+      await prisma.$transaction(async (tx) => {
+        for (const v of values) {
+          const line = session.lines.find((l) => l.id === v.lineId);
+          if (!line) continue;
+          const counted = Number(v.countedQty);
+          const variance = counted - line.systemQty;
+          const variancePct =
+            line.systemQty > 0
+              ? (Math.abs(variance) / line.systemQty) * 100
+              : variance !== 0
+                ? 100
+                : 0;
+          await tx.cycleCountLine.update({
+            where: { id: line.id },
+            data: {
+              countedQty: counted,
+              variance,
+              variancePct,
+              countedBy: actor,
+              countedAt: new Date(),
+              status: "COUNTED",
+              note: v.note || null,
+            },
+          });
+        }
+        await logAuditTx(tx, {
+          actor,
+          action: "CYCLE_COUNT_RECORDED",
+          entityType: "CYCLE_COUNT",
+          entityId: session.id,
+          details: `${session.sessionNumber} · recorded ${values.length} lines`,
         });
-      }
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -203,22 +226,25 @@ export async function POST(req: Request) {
       const bigVariance = session.lines.filter(
         (l) => (l.variancePct || 0) > threshold,
       );
-      const updated = await prisma.cycleCountSession.update({
-        where: { id: sessionId },
-        data: {
-          status: bigVariance.length > 0 ? "PENDING_APPROVAL" : "CLOSED",
-        },
-        include: { lines: true },
-      });
-      await logAudit({
-        actor: user.name || "Stores",
-        action:
-          bigVariance.length > 0
-            ? "CYCLE_COUNT_SUBMITTED_VARIANCE"
-            : "CYCLE_COUNT_CLOSED",
-        entityType: "CYCLE_COUNT",
-        entityId: session.id,
-        details: `${session.sessionNumber} · ${session.lines.length} lines · ${bigVariance.length} over ${threshold}% threshold → ${updated.status}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.cycleCountSession.update({
+          where: { id: sessionId },
+          data: {
+            status: bigVariance.length > 0 ? "PENDING_APPROVAL" : "CLOSED",
+          },
+          include: { lines: true },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action:
+            bigVariance.length > 0
+              ? "CYCLE_COUNT_SUBMITTED_VARIANCE"
+              : "CYCLE_COUNT_CLOSED",
+          entityType: "CYCLE_COUNT",
+          entityId: session.id,
+          details: `${session.sessionNumber} · ${session.lines.length} lines · ${bigVariance.length} over ${threshold}% threshold → ${res.status}`,
+        });
+        return res;
       });
       return NextResponse.json({
         success: true,
@@ -236,6 +262,9 @@ export async function POST(req: Request) {
       const gate = await requireManagerLevel(user);
       if (!gate.ok)
         return NextResponse.json({ error: gate.error }, { status: 403 });
+      if (!user.isOwner && !canAny(user, ["finance.edit", "inventory.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const reason = validateReason(data);
       if (!reason.ok)
         return NextResponse.json({ error: reason.error }, { status: 400 });
@@ -255,67 +284,73 @@ export async function POST(req: Request) {
         );
 
       if (action === "reject") {
-        const updated = await prisma.cycleCountSession.update({
-          where: { id: data.id },
-          data: {
-            status: "CLOSED",
-            approvalNote: `REJECTED: ${reason.reason}`,
-            approvedBy: user.name || "Manager",
-            approvedAt: new Date(),
-          },
-        });
-        await logAudit({
-          actor: user.name || "Manager",
-          action: "CYCLE_COUNT_REJECTED",
-          entityType: "CYCLE_COUNT",
-          entityId: session.id,
-          details: `${session.sessionNumber} — ${reason.reason}`,
+        const updated = await prisma.$transaction(async (tx) => {
+          const res = await tx.cycleCountSession.update({
+            where: { id: data.id },
+            data: {
+              status: "CLOSED",
+              approvalNote: `REJECTED: ${reason.reason}`,
+              approvedBy: actor,
+              approvedAt: new Date(),
+            },
+          });
+          await logAuditTx(tx, {
+            actor,
+            action: "CYCLE_COUNT_REJECTED",
+            entityType: "CYCLE_COUNT",
+            entityId: session.id,
+            details: `${session.sessionNumber} — ${reason.reason}`,
+          });
+          return res;
         });
         return NextResponse.json({ success: true, session: updated });
       }
 
       // Approve → adjust stock per counted qty, post ADJUST transactions.
-      for (const line of session.lines) {
-        if (line.countedQty === null || line.countedQty === line.systemQty)
-          continue;
-        await prisma.rawMaterial.update({
-          where: { id: line.rawMaterialId },
-          data: { currentStock: line.countedQty },
-        });
-        await prisma.inventoryTransaction.create({
-          data: {
-            rawMaterialId: line.rawMaterialId,
-            type: "ADJUST",
-            qty: line.countedQty - line.systemQty,
-            unitCost: line.rawMaterial.unitCost,
-            batchNo: null,
-            reference: session.sessionNumber,
-            actorName: user.name || "Finance",
-            adjustmentHistory: {
-              reason: reason.reason,
-              session: session.sessionNumber,
-              from: line.systemQty,
-              to: line.countedQty,
+      const updated = await prisma.$transaction(async (tx) => {
+        for (const line of session.lines) {
+          if (line.countedQty === null || line.countedQty === line.systemQty)
+            continue;
+          await tx.rawMaterial.update({
+            where: { id: line.rawMaterialId },
+            data: { currentStock: line.countedQty },
+          });
+          await tx.inventoryTransaction.create({
+            data: {
+              rawMaterialId: line.rawMaterialId,
+              type: "ADJUST",
+              qty: line.countedQty - line.systemQty,
+              unitCost: line.rawMaterial.unitCost,
+              batchNo: null,
+              reference: session.sessionNumber,
+              actorName: actor,
+              adjustmentHistory: {
+                reason: reason.reason,
+                session: session.sessionNumber,
+                from: line.systemQty,
+                to: line.countedQty,
+              },
             },
+          });
+        }
+        const res = await tx.cycleCountSession.update({
+          where: { id: data.id },
+          data: {
+            status: "ADJUSTED",
+            approvedBy: actor,
+            approvedAt: new Date(),
+            approvalNote: reason.reason,
           },
+          include: { lines: true },
         });
-      }
-      const updated = await prisma.cycleCountSession.update({
-        where: { id: data.id },
-        data: {
-          status: "ADJUSTED",
-          approvedBy: user.name || "Finance Manager",
-          approvedAt: new Date(),
-          approvalNote: reason.reason,
-        },
-        include: { lines: true },
-      });
-      await logAudit({
-        actor: user.name || "Finance Manager",
-        action: "INVENTORY_ADJUSTED",
-        entityType: "CYCLE_COUNT",
-        entityId: session.id,
-        details: `${session.sessionNumber} — ${session.lines.length} lines adjusted (${reason.reason})`,
+        await logAuditTx(tx, {
+          actor,
+          action: "INVENTORY_ADJUSTED",
+          entityType: "CYCLE_COUNT",
+          entityId: session.id,
+          details: `${session.sessionNumber} — ${session.lines.length} lines adjusted (${reason.reason})`,
+        });
+        return res;
       });
       return NextResponse.json({ success: true, session: updated });
     }

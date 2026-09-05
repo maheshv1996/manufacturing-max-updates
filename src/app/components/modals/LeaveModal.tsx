@@ -43,6 +43,14 @@ export default function LeaveModal({ onClose }: LeaveModalProps) {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -108,24 +116,39 @@ export default function LeaveModal({ onClose }: LeaveModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <Card className="w-full max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-4 border-b border-border bg-surface-2">
-          <h2 className="text-lg font-bold text-text-1 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-accent" />
-            Leave Management
-          </h2>
-          <button
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leave-modal-title"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div
+        className="w-full max-w-lg"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <Card className="w-full p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="flex items-center justify-between p-4 border-b border-border bg-surface-2">
+            <h2 id="leave-modal-title" className="text-lg font-bold text-text-1 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-accent" aria-hidden="true" />
+              Leave Management
+            </h2>
+            <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-surface-3 transition-colors text-text-2"
+            aria-label="Close leave dialog"
+            className="p-2 rounded-full hover:bg-surface-3 transition-colors text-text-2 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex border-b border-border bg-surface-1">
+        <div role="tablist" aria-label="Leave navigation" className="flex border-b border-border bg-surface-1">
           <button
-            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-colors ${
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "APPLY"}
+            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-colors cursor-pointer ${
               activeTab === "APPLY"
                 ? "border-accent text-accent"
                 : "border-transparent text-text-2 hover:text-text-1"
@@ -135,7 +158,10 @@ export default function LeaveModal({ onClose }: LeaveModalProps) {
             Apply Leave
           </button>
           <button
-            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-colors ${
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "HISTORY"}
+            className={`flex-1 py-3 text-sm font-semibold text-center border-b-2 transition-colors cursor-pointer ${
               activeTab === "HISTORY"
                 ? "border-accent text-accent"
                 : "border-transparent text-text-2 hover:text-text-1"
@@ -254,6 +280,7 @@ export default function LeaveModal({ onClose }: LeaveModalProps) {
           )}
         </div>
       </Card>
+      </div>
     </div>
   );
 }

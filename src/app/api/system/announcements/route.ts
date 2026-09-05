@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -12,7 +12,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "system.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -51,7 +54,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "system.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -61,24 +67,28 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.response;
     const d = parsed.data;
 
-    const announcement = await prisma.announcement.create({
-      data: {
-        title: d.title,
-        body: d.body,
-        category: d.category,
-        priority: d.priority,
-        pinned: d.pinned,
-        expiresAt: d.expiresAt ? new Date(d.expiresAt) : null,
-        author: actor,
-      },
-    });
+    const announcement = await prisma.$transaction(async (tx) => {
+      const ann = await tx.announcement.create({
+        data: {
+          title: d.title,
+          body: d.body,
+          category: d.category,
+          priority: d.priority,
+          pinned: d.pinned,
+          expiresAt: d.expiresAt ? new Date(d.expiresAt) : null,
+          author: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "ANNOUNCEMENT_POSTED",
-      entityType: "Announcement",
-      entityId: announcement.id,
-      details: `${d.priority} ${d.category}: ${d.title}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "ANNOUNCEMENT_POSTED",
+        entityType: "Announcement",
+        entityId: ann.id,
+        details: `${d.priority} ${d.category}: ${d.title}`,
+      });
+
+      return ann;
     });
 
     return NextResponse.json({ success: true, announcement });

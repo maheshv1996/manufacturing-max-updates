@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -112,51 +114,64 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["engineering.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { productId, rawMaterialId, qtyPerUnit } = body;
+    const productId = typeof body.productId === "string" ? body.productId : "";
+    const rawMaterialId = typeof body.rawMaterialId === "string" ? body.rawMaterialId : "";
+    const qtyPerUnitNum = typeof body.qtyPerUnit === "number" ? body.qtyPerUnit : parseFloat(String(body.qtyPerUnit));
 
-    if (!productId || !rawMaterialId || !qtyPerUnit) {
+    if (!productId || !rawMaterialId || isNaN(qtyPerUnitNum) || qtyPerUnitNum <= 0) {
       return NextResponse.json(
-        { error: "Product ID, Raw Material ID, and Qty Per Unit are required" },
+        { error: "Valid Product ID, Raw Material ID, and positive Qty Per Unit are required" },
         { status: 400 },
       );
     }
 
-    const bomLine = await prisma.bomLine.upsert({
-      where: {
-        productId_rawMaterialId: {
+    const actor = user.name || user.id || "Engineer";
+
+    const bomLine = await prisma.$transaction(async (tx) => {
+      const line = await tx.bomLine.upsert({
+        where: {
+          productId_rawMaterialId: {
+            productId,
+            rawMaterialId,
+          },
+        },
+        update: {
+          qtyPerUnit: qtyPerUnitNum,
+        },
+        create: {
           productId,
           rawMaterialId,
+          qtyPerUnit: qtyPerUnitNum,
         },
-      },
-      update: {
-        qtyPerUnit: parseFloat(qtyPerUnit),
-      },
-      create: {
-        productId,
-        rawMaterialId,
-        qtyPerUnit: parseFloat(qtyPerUnit),
-      },
-      include: {
-        product: true,
-        rawMaterial: true,
-      },
-    });
+        include: {
+          product: true,
+          rawMaterial: true,
+        },
+      });
 
-    await logAudit({
-      actor: "system",
-      action: "BOM_LINE_SAVED",
-      entityType: "Product",
-      entityId: productId,
-      details: `Added/Updated BOM item: ${bomLine.rawMaterial.name} (${qtyPerUnit} ${bomLine.rawMaterial.unit}) to ${bomLine.product.name}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "BOM_LINE_SAVED",
+        entityType: "Product",
+        entityId: productId,
+        details: `Added/Updated BOM item: ${line.rawMaterial.name} (${qtyPerUnitNum} ${line.rawMaterial.unit}) to ${line.product.name}`,
+      });
+
+      return line;
     });
 
     return NextResponse.json({ success: true, bomLine });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to save BOM line:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

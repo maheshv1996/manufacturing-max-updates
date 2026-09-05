@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -125,10 +125,10 @@ export async function POST(req: Request) {
     const canEdit =
       user.isOwner ||
       (await requireManagerLevel(user)).ok ||
-      canAny(user, ["ehs.edit"]);
+      canAny(user, ["ehs.edit", "ops.edit", "system.edit"]);
     if (!canEdit)
       return NextResponse.json(
-        { error: "Requires manager or ehs.edit" },
+        { error: "Requires manager, ehs.edit, or ops.edit" },
         { status: 403 },
       );
 
@@ -146,24 +146,27 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       const code = await nextSeqNumber("extinguisher", "code", "EXT");
-      result = await prisma.extinguisher.create({
-        data: {
-          code,
-          location,
-          type,
-          capacityKg:
-            capacityKg !== undefined && capacityKg !== null
-              ? Number(capacityKg)
-              : 0,
-          notes: notes || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "EXTINGUISHER_CREATED",
-        entityType: "EXTINGUISHER",
-        entityId: result.id,
-        details: `${code} · ${type} ${result.capacityKg}kg @ ${location}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.extinguisher.create({
+          data: {
+            code,
+            location,
+            type,
+            capacityKg:
+              capacityKg !== undefined && capacityKg !== null
+                ? Number(capacityKg)
+                : 0,
+            notes: notes || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "EXTINGUISHER_CREATED",
+          entityType: "EXTINGUISHER",
+          entityId: created.id,
+          details: `${code} · ${type} ${created.capacityKg}kg @ ${location}`,
+        });
+        return created;
       });
     } else if (action === "update-extinguisher") {
       const e = await prisma.extinguisher.findUnique({
@@ -180,16 +183,19 @@ export async function POST(req: Request) {
       if (data.capacityKg !== undefined && data.capacityKg !== null)
         patch.capacityKg = Number(data.capacityKg);
       if (data.notes !== undefined) patch.notes = data.notes || null;
-      result = await prisma.extinguisher.update({
-        where: { id: e.id },
-        data: patch,
-      });
-      await logAudit({
-        actor,
-        action: "EXTINGUISHER_UPDATED",
-        entityType: "EXTINGUISHER",
-        entityId: e.id,
-        details: `${e.code} · ${result.location}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.extinguisher.update({
+          where: { id: e.id },
+          data: patch,
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "EXTINGUISHER_UPDATED",
+          entityType: "EXTINGUISHER",
+          entityId: e.id,
+          details: `${e.code} · ${updated.location}`,
+        });
+        return updated;
       });
     } else if (action === "record-inspection") {
       const { extinguisherId, month, conditionOk, notes } = data;
@@ -215,25 +221,28 @@ export async function POST(req: Request) {
           { error: "Already inspected this month" },
           { status: 400 },
         );
-      result = await prisma.extinguisherInspection.create({
-        data: {
-          extinguisherId,
-          month: m,
-          conditionOk: conditionOk !== false,
-          notes: notes || null,
-          inspectedBy: actor,
-        },
-      });
-      await prisma.extinguisher.update({
-        where: { id: e.id },
-        data: { lastInspected: new Date() },
-      });
-      await logAudit({
-        actor,
-        action: "EXTINGUISHER_INSPECTED",
-        entityType: "EXTINGUISHER_INSPECTION",
-        entityId: result.id,
-        details: `${e.code} · ${m} · ${conditionOk === false ? "NEEDS SERVICE" : "OK"}`,
+      result = await prisma.$transaction(async (tx) => {
+        const inspection = await tx.extinguisherInspection.create({
+          data: {
+            extinguisherId,
+            month: m,
+            conditionOk: conditionOk !== false,
+            notes: notes || null,
+            inspectedBy: actor,
+          },
+        });
+        await tx.extinguisher.update({
+          where: { id: e.id },
+          data: { lastInspected: new Date() },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "EXTINGUISHER_INSPECTED",
+          entityType: "EXTINGUISHER_INSPECTION",
+          entityId: inspection.id,
+          details: `${e.code} · ${m} · ${conditionOk === false ? "NEEDS SERVICE" : "OK"}`,
+        });
+        return inspection;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -451,20 +451,29 @@ export async function offlineFetchWrapper(
 // GLOBAL LISTENERS (ONLINE EVENT & 30s TICKER)
 // ----------------------------------------------------------------------
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
-    notifyStatus();
-    drainQueue();
-  });
+  const win = window as any;
+  if (!win.__MES_OFFLINE_SYNC_INITIALIZED__) {
+    win.__MES_OFFLINE_SYNC_INITIALIZED__ = true;
 
-  window.addEventListener("offline", () => {
-    notifyStatus();
-  });
-
-  setInterval(() => {
-    if (navigator.onLine) {
-      drainQueue();
-    } else {
+    window.addEventListener("online", () => {
       notifyStatus();
+      drainQueue();
+    });
+
+    window.addEventListener("offline", () => {
+      notifyStatus();
+    });
+
+    const intervalId = setInterval(() => {
+      if (navigator.onLine) {
+        drainQueue();
+      } else {
+        notifyStatus();
+      }
+    }, 30000);
+
+    if (typeof intervalId === "object" && typeof (intervalId as any)?.unref === "function") {
+      (intervalId as any).unref();
     }
-  }, 30000);
+  }
 }

@@ -91,6 +91,15 @@ export default function GrnClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!modal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModal(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modal]);
+
   const api = async (entity: string, data: any) => {
     setSaving(true);
     try {
@@ -589,15 +598,26 @@ export default function GrnClient() {
 
       {/* RECEIVE MODAL */}
       {modal?.entity === "grn" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg bg-slate-800/60 rounded-2xl shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="grn-receive-title"
+        >
+          <div
+            className="w-full max-w-lg bg-slate-800/60 rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="grn-receive-title" className="text-lg font-bold text-white">
                 Receive Stock (GRN)
               </h3>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="p-2 rounded-lg hover:bg-slate-800/90"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -723,15 +743,26 @@ export default function GrnClient() {
 
       {/* INVOICE MODAL */}
       {modal?.entity === "invoice" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg bg-slate-800/60 rounded-2xl shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="grn-invoice-title"
+        >
+          <div
+            className="w-full max-w-lg bg-slate-800/60 rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="grn-invoice-title" className="text-lg font-bold text-white">
                 New Supplier Invoice
               </h3>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="p-2 rounded-lg hover:bg-slate-800/90"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

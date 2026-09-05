@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -19,7 +19,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "system.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -36,32 +39,38 @@ export async function POST(
     }
 
     if (a === "delete") {
-      await prisma.announcement.delete({ where: { id } });
-      await logAudit({
-        actor,
-        action: "ANNOUNCEMENT_DELETED",
-        entityType: "Announcement",
-        entityId: id,
-        details: `Deleted: ${existing.title}`,
-        severity: "WARN",
+      await prisma.$transaction(async (tx) => {
+        await tx.announcement.delete({ where: { id } });
+        await logAuditTx(tx, {
+          actor,
+          action: "ANNOUNCEMENT_DELETED",
+          entityType: "Announcement",
+          entityId: id,
+          details: `Deleted: ${existing.title}`,
+          severity: "WARN",
+        });
       });
       return NextResponse.json({ success: true });
     }
 
-    const announcement = await prisma.announcement.update({
-      where: { id },
-      data: {
-        active: a === "archive" ? false : a === "activate" ? true : existing.active,
-        pinned: a === "pin" ? true : a === "unpin" ? false : existing.pinned,
-      },
-    });
+    const announcement = await prisma.$transaction(async (tx) => {
+      const ann = await tx.announcement.update({
+        where: { id },
+        data: {
+          active: a === "archive" ? false : a === "activate" ? true : existing.active,
+          pinned: a === "pin" ? true : a === "unpin" ? false : existing.pinned,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: `ANNOUNCEMENT_${a.toUpperCase()}`,
-      entityType: "Announcement",
-      entityId: id,
-      details: `${a} — ${existing.title}`,
+      await logAuditTx(tx, {
+        actor,
+        action: `ANNOUNCEMENT_${a.toUpperCase()}`,
+        entityType: "Announcement",
+        entityId: id,
+        details: `${a} — ${existing.title}`,
+      });
+
+      return ann;
     });
 
     return NextResponse.json({ success: true, announcement });

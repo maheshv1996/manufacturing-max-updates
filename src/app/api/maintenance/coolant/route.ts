@@ -1,5 +1,7 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -65,15 +67,30 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "COOLANT_LOGGED", entityType: "CoolantLog", details: "Coolant reading logged" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["maintenance.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+
+    const actor = user.name || user.id || "Maintenance Tech";
+    const machineId = typeof body.machineId === "string" ? body.machineId : "Machine";
+
+    await logAudit({
+      actor,
+      action: "COOLANT_LOGGED",
+      entityType: "CoolantLog",
+      details: `Coolant refractometer reading logged for ${machineId}`,
+    });
+
     return NextResponse.json({ success: true, message: "Coolant refractometer reading logged", record: body });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

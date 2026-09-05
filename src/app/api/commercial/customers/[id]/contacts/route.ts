@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -36,7 +36,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, WRITE_GATE))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, WRITE_GATE)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -55,73 +58,76 @@ export async function POST(
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     }
 
-    let result;
-    if (d.action === "add") {
-      const isFirst = customer.contacts.length === 0;
-      result = await prisma.customerContact.create({
-        data: {
-          customerId: id,
-          name: d.name,
-          role: d.role || null,
-          phone: d.phone || null,
-          email: d.email || null,
-          isPrimary: d.isPrimary ?? isFirst,
-        },
-      });
-      if (d.isPrimary) {
-        await prisma.customerContact.updateMany({
-          where: { customerId: id, id: { not: result.id } },
-          data: { isPrimary: false },
+    const result = await prisma.$transaction(async (tx) => {
+      let res;
+      if (d.action === "add") {
+        const isFirst = customer.contacts.length === 0;
+        res = await tx.customerContact.create({
+          data: {
+            customerId: id,
+            name: d.name,
+            role: d.role || null,
+            phone: d.phone || null,
+            email: d.email || null,
+            isPrimary: d.isPrimary ?? isFirst,
+          },
         });
-      }
-      await logAudit({
-        actor,
-        action: "CUSTOMER_CONTACT_ADDED",
-        entityType: "Customer",
-        entityId: id,
-        details: `Added contact ${d.name} to ${customer.code} ${customer.name}`,
-      });
-    } else if (d.action === "remove") {
-      const wasPrimary = customer.contacts.find((c) => c.id === d.contactId)?.isPrimary;
-      await prisma.customerContact.delete({ where: { id: d.contactId } });
-      if (wasPrimary) {
-        const next = await prisma.customerContact.findFirst({
-          where: { customerId: id },
-          orderBy: { createdAt: "asc" },
-        });
-        if (next) {
-          await prisma.customerContact.update({
-            where: { id: next.id },
-            data: { isPrimary: true },
+        if (d.isPrimary) {
+          await tx.customerContact.updateMany({
+            where: { customerId: id, id: { not: res.id } },
+            data: { isPrimary: false },
           });
         }
+        await logAuditTx(tx, {
+          actor,
+          action: "CUSTOMER_CONTACT_ADDED",
+          entityType: "Customer",
+          entityId: id,
+          details: `Added contact ${d.name} to ${customer.code} ${customer.name}`,
+        });
+      } else if (d.action === "remove") {
+        const wasPrimary = customer.contacts.find((c) => c.id === d.contactId)?.isPrimary;
+        await tx.customerContact.delete({ where: { id: d.contactId } });
+        if (wasPrimary) {
+          const next = await tx.customerContact.findFirst({
+            where: { customerId: id },
+            orderBy: { createdAt: "asc" },
+          });
+          if (next) {
+            await tx.customerContact.update({
+              where: { id: next.id },
+              data: { isPrimary: true },
+            });
+          }
+        }
+        res = { removed: d.contactId };
+        await logAuditTx(tx, {
+          actor,
+          action: "CUSTOMER_CONTACT_REMOVED",
+          entityType: "Customer",
+          entityId: id,
+          details: `Removed contact from ${customer.code} ${customer.name}`,
+          severity: "WARN",
+        });
+      } else {
+        await tx.customerContact.updateMany({
+          where: { customerId: id },
+          data: { isPrimary: false },
+        });
+        res = await tx.customerContact.update({
+          where: { id: d.contactId },
+          data: { isPrimary: true },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CUSTOMER_CONTACT_PRIMARY",
+          entityType: "Customer",
+          entityId: id,
+          details: `Primary contact set for ${customer.code} ${customer.name}`,
+        });
       }
-      result = { removed: d.contactId };
-      await logAudit({
-        actor,
-        action: "CUSTOMER_CONTACT_REMOVED",
-        entityType: "Customer",
-        entityId: id,
-        details: `Removed contact from ${customer.code} ${customer.name}`,
-        severity: "WARN",
-      });
-    } else {
-      await prisma.customerContact.updateMany({
-        where: { customerId: id },
-        data: { isPrimary: false },
-      });
-      result = await prisma.customerContact.update({
-        where: { id: d.contactId },
-        data: { isPrimary: true },
-      });
-      await logAudit({
-        actor,
-        action: "CUSTOMER_CONTACT_PRIMARY",
-        entityType: "Customer",
-        entityId: id,
-        details: `Primary contact set for ${customer.code} ${customer.name}`,
-      });
-    }
+      return res;
+    });
 
     const contacts = await prisma.customerContact.findMany({
       where: { customerId: id },

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -76,24 +78,39 @@ export async function PATCH(
   { params }: { params: Promise<{ machineId: string }> },
 ) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["ops.edit", "maintenance.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { machineId } = await params;
     const body = await request.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
 
-    const machine = await prisma.machine.update({
-      where: { id: machineId },
-      data: {
-        oeeTarget: body.oeeTarget,
-        oeeGoodThreshold: body.oeeGoodThreshold,
-        oeeWarningThreshold: body.oeeWarningThreshold,
-      },
-    });
+    const actor = user.name || user.id || "Operator";
 
-    await logAudit({
-      actor: "system",
-      action: "MACHINE_OEE_SETTINGS_UPDATED",
-      entityType: "Machine",
-      entityId: machineId,
-      details: `oeeTarget=${body.oeeTarget} · goodThreshold=${body.oeeGoodThreshold} · warningThreshold=${body.oeeWarningThreshold}`,
+    const machine = await prisma.$transaction(async (tx) => {
+      const updated = await tx.machine.update({
+        where: { id: machineId },
+        data: {
+          oeeTarget: body.oeeTarget,
+          oeeGoodThreshold: body.oeeGoodThreshold,
+          oeeWarningThreshold: body.oeeWarningThreshold,
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "MACHINE_OEE_SETTINGS_UPDATED",
+        entityType: "Machine",
+        entityId: machineId,
+        details: `oeeTarget=${body.oeeTarget} · goodThreshold=${body.oeeGoodThreshold} · warningThreshold=${body.oeeWarningThreshold}`,
+      });
+
+      return updated;
     });
 
     return NextResponse.json(machine);

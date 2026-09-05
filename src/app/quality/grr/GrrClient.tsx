@@ -68,6 +68,16 @@ export default function GrrClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
+  useEffect(() => {
+    if (!creating) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCreating(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [creating]);
+
   const initGrid = (na: number, np: number, nt: number) => {
     const names = Array.from({ length: na }, (_, i) =>
       String.fromCharCode(65 + i),
@@ -298,15 +308,26 @@ export default function GrrClient() {
 
       {/* CREATE MODAL */}
       {creating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-4xl bg-slate-800/60 rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setCreating(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="grr-modal-title"
+        >
+          <div
+            className="w-full max-w-4xl bg-slate-800/60 rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between sticky top-0 bg-slate-800/60 z-10">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 id="grr-modal-title" className="text-lg font-bold text-white flex items-center gap-2">
                 <Ruler className="w-5 h-5 text-blue-500" /> New Gage R&R Study
               </h3>
               <button
+                type="button"
                 onClick={() => setCreating(false)}
                 className="p-2 rounded-lg hover:bg-slate-800/90"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

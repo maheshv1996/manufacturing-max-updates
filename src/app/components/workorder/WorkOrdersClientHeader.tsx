@@ -2,7 +2,7 @@
 
 
 import { logClientError } from "@/lib/clientLogger";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Filter } from "lucide-react";
 import { Product, Machine } from "@/lib/data";
@@ -102,6 +102,17 @@ export default function WorkOrdersClientHeader({
     }
   };
 
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen, submitting]);
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
@@ -185,10 +196,15 @@ export default function WorkOrdersClientHeader({
 
       {/* NEW WORK ORDER MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-work-order-title"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-surface-1 border border-border rounded-card max-w-lg w-full shadow-modal max-h-[90vh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between border-b border-border p-5 sticky top-0 bg-surface-1 z-10">
-              <h3 className="text-lg font-semibold text-text-1">
+              <h3 id="create-work-order-title" className="text-lg font-semibold text-text-1">
                 Create New Work Order
               </h3>
               <Button
@@ -196,6 +212,7 @@ export default function WorkOrdersClientHeader({
                 size="icon"
                 onClick={closeModal}
                 disabled={submitting}
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </Button>

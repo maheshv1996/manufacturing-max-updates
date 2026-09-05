@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Truck,
@@ -57,6 +57,18 @@ export default function WorkOrderDispatchesCard({
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  useEffect(() => {
+    if (!showDispatchModal && !showInvoiceModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        if (showDispatchModal) setShowDispatchModal(false);
+        if (showInvoiceModal) setShowInvoiceModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showDispatchModal, showInvoiceModal, loading]);
 
   // Helper unit price calculation
   const unitPrice =
@@ -299,15 +311,22 @@ export default function WorkOrderDispatchesCard({
 
       {/* ── CREATE DISPATCH MODAL ── */}
       {showDispatchModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dispatch-challan-modal-title"
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
-              <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+              <h3 id="dispatch-challan-modal-title" className="text-lg font-extrabold text-white flex items-center gap-2">
                 <Truck className="w-5 h-5 text-blue-600" />
                 New Dispatch Delivery Challan
               </h3>
               <button
+                type="button"
                 onClick={() => setShowDispatchModal(false)}
+                aria-label="Close dispatch delivery challan modal"
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
@@ -411,7 +430,12 @@ export default function WorkOrderDispatchesCard({
 
       {/* ── GENERATE INVOICE MODAL ── */}
       {showInvoiceModal && selectedDispatch && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="generate-invoice-modal-title"
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-slate-800/60 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-6 my-8">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
               <div className="flex items-center gap-2.5">
@@ -419,7 +443,7 @@ export default function WorkOrderDispatchesCard({
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-white">
+                  <h3 id="generate-invoice-modal-title" className="text-lg font-extrabold text-white">
                     Generate GST Tax Invoice
                   </h3>
                   <span className="text-xs text-slate-500 font-mono">
@@ -429,7 +453,9 @@ export default function WorkOrderDispatchesCard({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowInvoiceModal(false)}
+                aria-label="Close generate invoice modal"
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, Plus, Save } from "lucide-react";
 import { format } from "date-fns";
 
@@ -16,6 +16,15 @@ export default function EnergyTab({
   const [kwh, setKwh] = useState("");
   const [cost, setCost] = useState(defaultCost.toString());
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowModal(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showModal]);
 
   const totalCost = (parseFloat(kwh) || 0) * (parseFloat(cost) || 0);
 
@@ -117,10 +126,16 @@ export default function EnergyTab({
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
+          <div
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="energy-modal-title"
+          >
             <div className="px-6 py-4 border-b border-slate-700 bg-slate-800/60">
-              <h3 className="font-bold text-white flex items-center gap-2">
+              <h3 id="energy-modal-title" className="font-bold text-white flex items-center gap-2">
                 <Zap className="w-5 h-5 text-cyan-500" />
                 Log Energy Reading
               </h3>
@@ -177,6 +192,7 @@ export default function EnergyTab({
 
             <div className="px-6 py-4 bg-slate-800/60 border-t border-slate-700 flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-900 text-slate-400 hover:text-white transition-colors"
                 disabled={isSaving}

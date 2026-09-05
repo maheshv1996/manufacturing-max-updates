@@ -7,7 +7,7 @@ import { offlineFetchWrapper } from "@/lib/offlineSync";
 
 import { can } from "@/lib/permissions";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -64,6 +64,23 @@ export default function Navbar({
   const [loading, setLoading] = useState(false);
   const [landingPage, setLandingPage] = useState<string>("/");
   const [fetchingPrefs, setFetchingPrefs] = useState(false);
+
+  useEffect(() => {
+    if (!showPasswordModal && !showAccountMenu) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showPasswordModal) {
+          setShowPasswordModal(false);
+          setError(null);
+        }
+        if (showAccountMenu) {
+          setShowAccountMenu(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showPasswordModal, showAccountMenu]);
 
   if (pathname === "/login") {
     return null;
@@ -284,6 +301,10 @@ export default function Navbar({
 
             <div className="relative">
               <button
+                type="button"
+                aria-label="User account menu"
+                aria-haspopup="true"
+                aria-expanded={showAccountMenu}
                 onClick={handleAccountMenuToggle}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
               >
@@ -344,9 +365,16 @@ export default function Navbar({
 
       {/* Change Password Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="change-password-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        >
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
             <button
+              type="button"
+              aria-label="Close change password modal"
               onClick={() => {
                 setShowPasswordModal(false);
                 setError(null);
@@ -355,7 +383,7 @@ export default function Navbar({
             >
               <X className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-bold text-white mb-6">
+            <h2 id="change-password-title" className="text-xl font-bold text-white mb-6">
               Change Password
             </h2>
 

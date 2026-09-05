@@ -26,8 +26,15 @@ export default function TallyExportButtons({
       if (ref.current && !ref.current.contains(e.target as Node))
         setOpen(false);
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", onDocClick);
+    };
   }, []);
 
   const visible = ALL_TYPES.filter((t) => types.includes(t.key));
@@ -51,16 +58,23 @@ export default function TallyExportButtons({
           <Button
             variant="secondary"
             size="sm"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-controls="tally-export-menu"
             onClick={() => setOpen((o) => !o)}
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
             Tally Export
             <ChevronDown
               className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
+              aria-hidden="true"
             />
           </Button>
           {open && (
             <div
+              id="tally-export-menu"
+              role="menu"
+              aria-label="Tally Export Options"
               className={`absolute top-full mt-2 z-40 w-52 rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur-xl shadow-2xl p-1 ${
                 align === "right" ? "right-0" : "left-0"
               }`}
@@ -68,10 +82,11 @@ export default function TallyExportButtons({
               {visible.map((t) => (
                 <button
                   key={t.key}
+                  role="menuitem"
                   onClick={() => download(t.key, "csv")}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors text-left cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
                   {t.label}
                 </button>
               ))}

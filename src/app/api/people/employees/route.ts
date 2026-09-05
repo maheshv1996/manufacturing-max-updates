@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -12,7 +12,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -97,7 +100,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -123,38 +129,42 @@ export async function POST(req: Request) {
       select: { id: true },
     });
 
-    const employee = await prisma.employee.create({
-      data: {
-        employeeNumber: d.employeeNumber,
-        name: d.name,
-        userId: linkedUser?.id || null,
-        designation: d.designation || null,
-        department: d.department || null,
-        doj: d.doj ? new Date(d.doj) : null,
-        dob: d.dob ? new Date(d.dob) : null,
-        gender: d.gender || null,
-        phone: d.phone || null,
-        email: d.email || null,
-        panNumber: d.panNumber || null,
-        aadhaarNumber: d.aadhaarNumber || null,
-        pfUan: d.pfUan || null,
-        esiNumber: d.esiNumber || null,
-        bankName: d.bankName || null,
-        bankAccountNumber: d.bankAccountNumber || null,
-        bankIfsc: d.bankIfsc || null,
-        address: d.address || null,
-        bloodGroup: d.bloodGroup || null,
-        emergencyContact: d.emergencyContact || null,
-        createdBy: actor,
-      },
-    });
+    const employee = await prisma.$transaction(async (tx) => {
+      const created = await tx.employee.create({
+        data: {
+          employeeNumber: d.employeeNumber,
+          name: d.name,
+          userId: linkedUser?.id || null,
+          designation: d.designation || null,
+          department: d.department || null,
+          doj: d.doj ? new Date(d.doj) : null,
+          dob: d.dob ? new Date(d.dob) : null,
+          gender: d.gender || null,
+          phone: d.phone || null,
+          email: d.email || null,
+          panNumber: d.panNumber || null,
+          aadhaarNumber: d.aadhaarNumber || null,
+          pfUan: d.pfUan || null,
+          esiNumber: d.esiNumber || null,
+          bankName: d.bankName || null,
+          bankAccountNumber: d.bankAccountNumber || null,
+          bankIfsc: d.bankIfsc || null,
+          address: d.address || null,
+          bloodGroup: d.bloodGroup || null,
+          emergencyContact: d.emergencyContact || null,
+          createdBy: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "EMPLOYEE_CREATED",
-      entityType: "Employee",
-      entityId: employee.id,
-      details: `Created employee ${employee.employeeNumber} ${employee.name}${linkedUser ? " (linked to user)" : ""}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "EMPLOYEE_CREATED",
+        entityType: "Employee",
+        entityId: created.id,
+        details: `Created employee ${created.employeeNumber} ${created.name}${linkedUser ? " (linked to user)" : ""}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, employee });

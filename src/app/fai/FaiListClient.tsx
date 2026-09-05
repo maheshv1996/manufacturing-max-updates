@@ -4,6 +4,7 @@
 import { logClientError } from "@/lib/clientLogger";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 
 export default function FaiListClient() {
   const [reports, setReports] = useState<any[]>([]);
@@ -34,6 +35,15 @@ export default function FaiListClient() {
   useEffect(() => {
     fetchReports();
   }, []);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowModal(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showModal]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,11 +179,30 @@ export default function FaiListClient() {
         )}
 
         {showModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-slate-900 rounded-xl border border-white/10 shadow-2xl p-6 w-full max-w-md">
-              <h2 className="text-xl font-bold text-white mb-4">
-                Create FAI Report
-              </h2>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="fai-modal-title"
+              className="bg-slate-900 rounded-xl border border-white/10 shadow-2xl p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 id="fai-modal-title" className="text-xl font-bold text-white">
+                  Create FAI Report
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  aria-label="Close FAI dialog"
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
               {error && (
                 <div className="mb-4 text-rose-400 text-sm">{error}</div>
               )}

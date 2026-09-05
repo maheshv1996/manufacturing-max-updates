@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { getComplianceFlags } from "@/lib/complianceDigest";
 import {
   computeCalibrationStatus,
@@ -25,12 +25,13 @@ export async function POST(req: Request) {
     process.env.CRON_SECRET &&
     req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
 
-  if (
-    !cronAuthed &&
-    !user.isOwner &&
-    !canAny(user, ["system.edit", "ops.edit"])
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!cronAuthed) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["system.edit", "ops.edit", "quality.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   try {
@@ -87,22 +88,26 @@ export async function POST(req: Request) {
 
     const status = email.sent ? "EMAILED" : "LOGGED";
 
-    const log = await prisma.complianceDigestLog.create({
-      data: {
-        recipientEmails: JSON.stringify(recipientEmails),
-        criticalCount,
-        warningCount,
-        payload: JSON.stringify({ flags, generatedAt: now.toISOString() }),
-        status,
-      },
-    });
+    const log = await prisma.$transaction(async (tx) => {
+      const created = await tx.complianceDigestLog.create({
+        data: {
+          recipientEmails: JSON.stringify(recipientEmails),
+          criticalCount,
+          warningCount,
+          payload: JSON.stringify({ flags, generatedAt: now.toISOString() }),
+          status,
+        },
+      });
 
-    await logAudit({
-      actor: cronAuthed ? "System (cron)" : user.name || "System",
-      action: "DISPATCH_COMPLIANCE_DIGEST",
-      entityType: "COMPLIANCE_DIGEST",
-      entityId: log.id,
-      details: `Compliance digest dispatched to ${recipientEmails.length} owner recipient(s) — ${criticalCount} critical, ${warningCount} warning (${status})`,
+      await logAuditTx(tx, {
+        actor: cronAuthed ? "System (cron)" : user.name || user.id || "System",
+        action: "DISPATCH_COMPLIANCE_DIGEST",
+        entityType: "COMPLIANCE_DIGEST",
+        entityId: created.id,
+        details: `Compliance digest dispatched to ${recipientEmails.length} owner recipient(s) — ${criticalCount} critical, ${warningCount} warning (${status})`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({

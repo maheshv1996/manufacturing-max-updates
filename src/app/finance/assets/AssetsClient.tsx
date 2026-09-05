@@ -66,11 +66,25 @@ export default function AssetsClient() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [showDispose, setShowDispose] = useState<Asset | null>(null);
   const [disposeNote, setDisposeNote] = useState("");
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [scheduleFor, setScheduleFor] = useState<Asset | null>(null);
+
+  useEffect(() => {
+    if (!showModal && !showDispose && !scheduleFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowModal(false);
+        setShowDispose(null);
+        setScheduleFor(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showModal, showDispose, scheduleFor]);
 
   const empty = {
     assetCode: "",
@@ -600,12 +614,14 @@ export default function AssetsClient() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={save}
                 disabled={busy}
                 className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2"
@@ -620,9 +636,15 @@ export default function AssetsClient() {
 
       {/* Dispose modal */}
       {showDispose && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowDispose(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dispose-modal-title"
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="dispose-modal-title" className="font-bold text-white flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-rose-400" /> Dispose{" "}
               {showDispose.assetCode} — {showDispose.name}
             </h3>
@@ -639,12 +661,14 @@ export default function AssetsClient() {
             />
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setShowDispose(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={dispose}
                 disabled={busy || !disposeNote.trim()}
                 className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl shadow-sm transition-all"
@@ -661,9 +685,15 @@ export default function AssetsClient() {
 
       {/* Schedule modal */}
       {scheduleFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <h3 className="font-bold text-white mb-1">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setScheduleFor(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="schedule-modal-title"
+            className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="schedule-modal-title" className="font-bold text-white mb-1">
               {scheduleFor.assetCode} — {scheduleFor.name}
             </h3>
             <p className="text-xs text-slate-500 mb-4">
@@ -706,6 +736,7 @@ export default function AssetsClient() {
             )}
             <div className="flex justify-end mt-4">
               <button
+                type="button"
                 onClick={() => setScheduleFor(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >

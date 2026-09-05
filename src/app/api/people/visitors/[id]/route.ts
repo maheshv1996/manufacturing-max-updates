@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -19,7 +19,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Gate";
@@ -40,17 +43,21 @@ export async function POST(
       );
     }
 
-    const updated = await prisma.visitorLog.update({
-      where: { id },
-      data: { status: "CHECKED_OUT", checkOutAt: new Date() },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await (tx as any).visitorLog.update({
+        where: { id },
+        data: { status: "CHECKED_OUT", checkOutAt: new Date() },
+      });
 
-    await logAudit({
-      actor,
-      action: "VISITOR_CHECKED_OUT",
-      entityType: "VisitorLog",
-      entityId: id,
-      details: `${visit.visitorName} checked out`,
+      await logAuditTx(tx, {
+        actor,
+        action: "VISITOR_CHECKED_OUT",
+        entityType: "VisitorLog",
+        entityId: id,
+        details: `${visit.visitorName} checked out`,
+      });
+
+      return u;
     });
 
     return NextResponse.json({ success: true, visitor: updated });

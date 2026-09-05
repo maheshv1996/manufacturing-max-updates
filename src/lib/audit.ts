@@ -91,6 +91,40 @@ export async function logAudit({
 }
 
 /**
+ * Logs an audit event inside an existing Prisma transaction client.
+ */
+export async function logAuditTx(
+  tx: { auditLog: { create: (args: any) => Promise<any> } },
+  {
+    actor,
+    action,
+    entityType,
+    entityId,
+    details,
+    severity = "INFO",
+    ipAddress,
+    userAgent,
+    at,
+  }: AuditLogInput,
+) {
+  const safeActor = String(actor || "SYSTEM").trim().slice(0, 100) || "SYSTEM";
+  const safeAction = String(action || "UNKNOWN_ACTION").trim().toUpperCase().slice(0, 100);
+  const safeEntityType = String(entityType || "GENERIC").trim().toUpperCase().slice(0, 100);
+  const formattedDetails = formatDetails(details, severity, ipAddress, userAgent);
+
+  return tx.auditLog.create({
+    data: {
+      actor: safeActor,
+      action: safeAction,
+      entityType: safeEntityType,
+      entityId: entityId ? String(entityId).slice(0, 100) : null,
+      details: formattedDetails,
+      at: at || new Date(),
+    },
+  });
+}
+
+/**
  * Batch logs multiple audit events in a single database transaction.
  */
 export async function logAuditBatch(

@@ -38,6 +38,16 @@ export default function QmsDocsClient() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setEditing(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const save = async () => {
     setBusy(true);
     setMsg("");
@@ -120,7 +130,7 @@ export default function QmsDocsClient() {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={newDoc}>
+        <Button type="button" onClick={newDoc}>
           <Plus className="h-4 w-4 mr-1" /> New document
         </Button>
       </div>
@@ -175,7 +185,7 @@ export default function QmsDocsClient() {
                     {new Date(d.nextReviewAt).toLocaleDateString()}
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => editDoc(d)}>
+                <Button type="button" size="sm" variant="outline" onClick={() => editDoc(d)}>
                   Review
                 </Button>
               </div>
@@ -190,10 +200,13 @@ export default function QmsDocsClient() {
           onClick={() => setEditing(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="qms-doc-modal-title"
             className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-bold text-white">
+            <h3 id="qms-doc-modal-title" className="font-bold text-white">
               {editing.id ? `Review ${editing.docNumber}` : "New QMS document"}
             </h3>
             <div>
@@ -280,10 +293,10 @@ export default function QmsDocsClient() {
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setEditing(null)}>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button onClick={save} disabled={busy}>
+              <Button type="button" onClick={save} disabled={busy}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
               </Button>
             </div>

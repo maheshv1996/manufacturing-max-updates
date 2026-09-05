@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSequence } from "@/lib/sequence";
 import { toPaise, fromPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
@@ -92,34 +92,37 @@ export async function POST(req: Request) {
 
     const total = round2(rows.reduce((s, r) => s + r.amount, 0));
     const claimNumber = await nextSequence("EXP", 4);
-    const claim = await prisma.expenseClaim.create({
-      data: {
-        claimNumber,
-        claimantName,
-        claimantCode: claimantCode || null,
-        claimantUserId: user.id,
-        totalAmount: toPaise(total),
-        category: rows[0].category,
-        expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
-        submittedBy: user.name || user.id,
-        notes: notes ? String(notes).slice(0, 2000) : null,
-        items: {
-          create: rows.map((r) => ({
-            category: r.category,
-            description: r.description,
-            amount: toPaise(r.amount),
-            expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
-          })),
+    const claim = await prisma.$transaction(async (tx) => {
+      const created = await tx.expenseClaim.create({
+        data: {
+          claimNumber,
+          claimantName,
+          claimantCode: claimantCode || null,
+          claimantUserId: user.id,
+          totalAmount: toPaise(total),
+          category: rows[0].category,
+          expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+          submittedBy: user.name || user.id,
+          notes: notes ? String(notes).slice(0, 2000) : null,
+          items: {
+            create: rows.map((r) => ({
+              category: r.category,
+              description: r.description,
+              amount: toPaise(r.amount),
+              expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
+            })),
+          },
         },
-      },
-      include: { items: true },
-    });
-    await logAudit({
-      actor: user.name || user.id,
-      action: "EXPENSE_CLAIM_SUBMITTED",
-      entityType: "EXPENSE_CLAIM",
-      entityId: claim.id,
-      details: `Self-service claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
+        include: { items: true },
+      });
+      await logAuditTx(tx, {
+        actor: user.name || user.id,
+        action: "EXPENSE_CLAIM_SUBMITTED",
+        entityType: "EXPENSE_CLAIM",
+        entityId: created.id,
+        details: `Self-service claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
+      });
+      return created;
     });
     return NextResponse.json(
       {

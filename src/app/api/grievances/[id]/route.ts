@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -15,12 +15,15 @@ export async function PATCH(
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const actor = user.name || "Admin";
+  const actor = user.name || user.email || "Admin";
   try {
     const { id } = await params;
     const gate = await requireManagerLevel(user);
     if (!gate.ok)
       return NextResponse.json({ error: gate.error }, { status: 403 });
+    if (!user.isOwner && !canAny(user, ["people.edit", "hr.edit", "system.edit"]))
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const body = await req.json();
     const { action, data } = body;
     if (!action || !data)
@@ -43,20 +46,23 @@ export async function PATCH(
           { error: `Cannot acknowledge from stage ${grievance.stage}` },
           { status: 400 },
         );
-      result = await prisma.grievance.update({
-        where: { id },
-        data: {
-          stage: "ACKNOWLEDGED",
-          acknowledgedAt: new Date(),
-          acknowledgedBy: actor,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "GRIEVANCE_ACKNOWLEDGED",
-        entityType: "GRIEVANCE",
-        entityId: id,
-        details: grievance.grievanceNumber,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.grievance.update({
+          where: { id },
+          data: {
+            stage: "ACKNOWLEDGED",
+            acknowledgedAt: new Date(),
+            acknowledgedBy: actor,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GRIEVANCE_ACKNOWLEDGED",
+          entityType: "GRIEVANCE",
+          entityId: id,
+          details: grievance.grievanceNumber,
+        });
+        return updated;
       });
     } else if (action === "start-investigation") {
       if (grievance.stage !== "ACKNOWLEDGED")
@@ -64,20 +70,23 @@ export async function PATCH(
           { error: `Cannot investigate from stage ${grievance.stage}` },
           { status: 400 },
         );
-      result = await prisma.grievance.update({
-        where: { id },
-        data: {
-          stage: "INVESTIGATING",
-          investigatedAt: new Date(),
-          investigatedBy: actor,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "GRIEVANCE_INVESTIGATION",
-        entityType: "GRIEVANCE",
-        entityId: id,
-        details: grievance.grievanceNumber,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.grievance.update({
+          where: { id },
+          data: {
+            stage: "INVESTIGATING",
+            investigatedAt: new Date(),
+            investigatedBy: actor,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GRIEVANCE_INVESTIGATION",
+          entityType: "GRIEVANCE",
+          entityId: id,
+          details: grievance.grievanceNumber,
+        });
+        return updated;
       });
     } else if (action === "resolve") {
       const reason = validateReason(data);
@@ -88,21 +97,24 @@ export async function PATCH(
           { error: `Cannot resolve from stage ${grievance.stage}` },
           { status: 400 },
         );
-      result = await prisma.grievance.update({
-        where: { id },
-        data: {
-          stage: "RESOLVED",
-          resolution: reason.reason,
-          resolvedBy: actor,
-          resolvedAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor,
-        action: "GRIEVANCE_RESOLVED",
-        entityType: "GRIEVANCE",
-        entityId: id,
-        details: `${grievance.grievanceNumber} · ${(reason.reason || "").slice(0, 80)}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.grievance.update({
+          where: { id },
+          data: {
+            stage: "RESOLVED",
+            resolution: reason.reason,
+            resolvedBy: actor,
+            resolvedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GRIEVANCE_RESOLVED",
+          entityType: "GRIEVANCE",
+          entityId: id,
+          details: `${grievance.grievanceNumber} · ${(reason.reason || "").slice(0, 80)}`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

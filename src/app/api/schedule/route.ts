@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -58,6 +59,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -88,30 +98,31 @@ export async function POST(request: Request) {
     if (plannedEndDate !== undefined) updateData.plannedEndDate = end;
     if (status !== undefined) updateData.status = status;
 
-    // If machineId supplied, reassign production logs to new machine
-    const updatedWO = await prisma.workOrder.update({
-      where: { id: workOrderId },
-      data: updateData,
-      include: { product: true },
-    });
+    const actor = user.name || headersList.get("x-user-name") || "Planner";
 
-    // Optionally reassign all production logs for this WO to the new machine
-    if (machineId) {
-      await prisma.productionLog.updateMany({
-        where: { workOrderId },
-        data: { machineId },
+    const updatedWO = await prisma.$transaction(async (tx) => {
+      const wo = await tx.workOrder.update({
+        where: { id: workOrderId },
+        data: updateData,
+        include: { product: true },
       });
-    }
 
-    const headersList = await headers();
-    const actor = headersList.get("x-user-name") || "Admin";
+      if (machineId) {
+        await tx.productionLog.updateMany({
+          where: { workOrderId },
+          data: { machineId },
+        });
+      }
 
-    await logAudit({
-      actor,
-      action: "UPDATE_WORK_ORDER",
-      entityType: "WORK_ORDER",
-      entityId: updatedWO.id,
-      details: `Updated work order ${updatedWO.woNumber}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "UPDATE_WORK_ORDER",
+        entityType: "WORK_ORDER",
+        entityId: wo.id,
+        details: `Updated work order ${wo.woNumber}`,
+      });
+
+      return wo;
     });
 
     return NextResponse.json({ success: true, workOrder: updatedWO });

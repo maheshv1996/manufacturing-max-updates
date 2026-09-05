@@ -80,6 +80,15 @@ export default function InsuranceClient() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
   const [editing, setEditing] = useState<Policy | null>(null);
   const [form, setForm] = useState<PolicyForm>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -328,15 +337,18 @@ export default function InsuranceClient() {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="insurance-modal-title"
             className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">{editing ? "Edit Policy" : "Add Policy"}</h3>
+                <h3 id="insurance-modal-title" className="font-semibold text-white">{editing ? "Edit Policy" : "Add Policy"}</h3>
                 <p className="text-xs text-slate-400">{editing ? `Updating ${editing.policyNumber}` : "Register an insurance policy"}</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+              <button type="button" onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white transition-colors" aria-label="Close modal">
                 <X className="size-5" />
               </button>
             </div>
@@ -366,8 +378,8 @@ export default function InsuranceClient() {
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/10">
-              <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-              <Button variant="success" onClick={handleSave} isLoading={saving}>
+              <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button type="button" variant="success" onClick={handleSave} isLoading={saving}>
                 {editing ? "Save Changes" : "Add Policy"}
               </Button>
             </div>

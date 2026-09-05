@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,11 @@ export async function GET() {
   try {
     const headerList = await headers();
     const user = getUserFromHeaders(headerList);
-    if (!user || (!user.isOwner && !can(user, "quality.view"))) {
+    if (!user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["quality.view", "system.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const docs = await prisma.qmsDocument.findMany({
@@ -54,11 +57,11 @@ export async function POST(request: Request) {
     const headerList = await headers();
     const actor = headerList.get("x-user-name") || "Quality Manager";
     const user = getUserFromHeaders(headerList);
-    if (!user.isOwner && !can(user, "quality.edit")) {
-      return NextResponse.json(
-        { error: "Insufficient role: quality.edit required" },
-        { status: 403 },
-      );
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["quality.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -111,16 +114,19 @@ export async function POST(request: Request) {
       if (approvedAt !== undefined)
         patch.approvedAt = approvedAt ? new Date(approvedAt) : null;
       if (notes !== undefined) patch.notes = notes;
-      const doc = await prisma.qmsDocument.update({
-        where: { id },
-        data: patch,
-      });
-      await logAudit({
-        actor,
-        action: "QMS_DOC_UPDATED",
-        entityType: "QMS_DOCUMENT",
-        entityId: doc.id,
-        details: `Updated ${doc.docNumber} — ${doc.title} (rev ${doc.revision}, ${doc.status})`,
+      const doc = await prisma.$transaction(async (tx) => {
+        const updated = await tx.qmsDocument.update({
+          where: { id },
+          data: patch,
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "QMS_DOC_UPDATED",
+          entityType: "QMS_DOCUMENT",
+          entityId: updated.id,
+          details: `Updated ${updated.docNumber} — ${updated.title} (rev ${updated.revision}, ${updated.status})`,
+        });
+        return updated;
       });
       return NextResponse.json({ success: true, item: doc });
     }
@@ -156,25 +162,28 @@ export async function POST(request: Request) {
       where: { docNumber: { startsWith: `QMS-${year}-` } },
     });
     const docNumber = `QMS-${year}-${String(count + 1).padStart(3, "0")}`;
-    const doc = await prisma.qmsDocument.create({
-      data: {
-        docNumber,
-        title: t,
-        docType: dt || "PROCEDURE",
-        owner: o || "Quality Manager",
-        revision: r || "A",
-        status: s || "CURRENT",
-        approvedAt: approvedAt ? new Date(approvedAt) : new Date(),
-        nextReviewAt: new Date(nr),
-        notes: n || null,
-      },
-    });
-    await logAudit({
-      actor,
-      action: "QMS_DOC_CREATED",
-      entityType: "QMS_DOCUMENT",
-      entityId: doc.id,
-      details: `Created ${docNumber} — ${t} (next review ${new Date(nr).toISOString().slice(0, 10)})`,
+    const doc = await prisma.$transaction(async (tx) => {
+      const created = await tx.qmsDocument.create({
+        data: {
+          docNumber,
+          title: t,
+          docType: dt || "PROCEDURE",
+          owner: o || "Quality Manager",
+          revision: r || "A",
+          status: s || "CURRENT",
+          approvedAt: approvedAt ? new Date(approvedAt) : new Date(),
+          nextReviewAt: new Date(nr),
+          notes: n || null,
+        },
+      });
+      await logAuditTx(tx, {
+        actor,
+        action: "QMS_DOC_CREATED",
+        entityType: "QMS_DOCUMENT",
+        entityId: created.id,
+        details: `Created ${docNumber} — ${t} (next review ${new Date(nr).toISOString().slice(0, 10)})`,
+      });
+      return created;
     });
     return NextResponse.json({ success: true, item: doc }, { status: 201 });
   } catch (error: any) {

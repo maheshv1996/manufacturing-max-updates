@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export async function GET() {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const ideas = await (prisma as any).idea.findMany({
       orderBy: [{ upvotes: "desc" }, { createdAt: "desc" }],
     });
@@ -50,6 +58,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -64,23 +78,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const idea = await (prisma as any).idea.create({
-      data: {
-        title,
-        description,
-        category, // SAFETY | FIVES | CYCLE_TIME | ERGONOMICS
-        submittedBy: submittedBy || "Operator",
-        status: "SUBMITTED",
-        upvotes: 1, // Auto upvote by submitter
-      },
-    });
+    const actor = user.name || submittedBy || "Operator";
 
-    await logAudit({
-      actor: submittedBy || "Operator",
-      action: "IDEA_CREATED",
-      entityType: "Idea",
-      entityId: idea.id,
-      details: `${title} · ${category} · ${submittedBy || "Operator"}`,
+    const idea = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).idea.create({
+        data: {
+          title,
+          description,
+          category, // SAFETY | FIVES | CYCLE_TIME | ERGONOMICS
+          submittedBy: actor,
+          status: "SUBMITTED",
+          upvotes: 1, // Auto upvote by submitter
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "IDEA_CREATED",
+        entityType: "Idea",
+        entityId: created.id,
+        details: `${title} · ${category} · ${actor}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, idea });
@@ -95,6 +115,12 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { id, action, status } = body;
 
@@ -105,49 +131,71 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (action === "UPVOTE") {
-      const updatedIdea = await (prisma as any).idea.update({
-        where: { id },
-        data: {
-          upvotes: { increment: 1 },
-        },
-      });
+    const actor = user.name || headerList.get("x-user-name") || "Operator";
 
-      await logAudit({
-        actor: "system",
-        action: "IDEA_UPVOTED",
-        entityType: "Idea",
-        entityId: id,
-        details: `upvoted to ${updatedIdea.upvotes}`,
+    if (action === "UPVOTE") {
+      const updatedIdea = await prisma.$transaction(async (tx) => {
+        const updated = await (tx as any).idea.update({
+          where: { id },
+          data: {
+            upvotes: { increment: 1 },
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "IDEA_UPVOTED",
+          entityType: "Idea",
+          entityId: id,
+          details: `upvoted to ${updated.upvotes} by ${actor}`,
+        });
+
+        return updated;
       });
 
       return NextResponse.json({ success: true, idea: updatedIdea });
     }
 
     if (status) {
-      const existing = await (prisma as any).idea.findUnique({ where: { id } });
-      const updatedIdea = await (prisma as any).idea.update({
-        where: { id },
-        data: {
-          status,
-          adjustmentHistory: [
-            ...((existing?.adjustmentHistory as any[]) || []),
-            {
-              action: `STATUS → ${status}`,
-              by: "system",
-              at: new Date().toISOString(),
-              previousStatus: existing?.status || null,
-            },
-          ],
-        },
-      });
+      if (
+        !user.isOwner &&
+        !can(user, "system.edit") &&
+        !can(user, "ops.edit")
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
 
-      await logAudit({
-        actor: "system",
-        action: "IDEA_STATUS_CHANGED",
-        entityType: "Idea",
-        entityId: id,
-        details: `status → ${status}`,
+      const updatedIdea = await prisma.$transaction(async (tx) => {
+        const existing = await (tx as any).idea.findUnique({ where: { id } });
+        if (!existing) {
+          throw new Error("NOT_FOUND:Idea not found");
+        }
+
+        const updated = await (tx as any).idea.update({
+          where: { id },
+          data: {
+            status,
+            adjustmentHistory: [
+              ...((existing?.adjustmentHistory as any[]) || []),
+              {
+                action: `STATUS → ${status}`,
+                by: actor,
+                at: new Date().toISOString(),
+                previousStatus: existing?.status || null,
+              },
+            ],
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "IDEA_STATUS_CHANGED",
+          entityType: "Idea",
+          entityId: id,
+          details: `status → ${status} (from ${existing.status}) by ${actor}`,
+        });
+
+        return updated;
       });
 
       return NextResponse.json({ success: true, idea: updatedIdea });
@@ -158,6 +206,12 @@ export async function PATCH(request: Request) {
       { status: 400 },
     );
   } catch (error: any) {
+    if (error?.message?.startsWith("NOT_FOUND:")) {
+      return NextResponse.json(
+        { error: error.message.replace("NOT_FOUND:", "") },
+        { status: 404 },
+      );
+    }
     console.error("PATCH /api/ideas error:", error);
     return NextResponse.json(
       { error: "Failed to update idea" },

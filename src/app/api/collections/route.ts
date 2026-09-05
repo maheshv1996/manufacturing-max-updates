@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { differenceInCalendarDays } from "date-fns";
 import { fromPaiseRow } from "@/lib/money";
 
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await canAny(user, ["finance.edit", "commercial.edit"])))
+  if (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit", "system.edit"]))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
@@ -193,16 +193,19 @@ export async function POST(req: Request) {
           { error: "Collector not found" },
           { status: 404 },
         );
-      const updated = await prisma.collectionAccount.update({
-        where: { id: account.id },
-        data: { collectorId, notes: reason },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "COLLECTOR_ASSIGNED",
-        entityType: "COLLECTION",
-        entityId: account.id,
-        details: `${invoice.invoiceNumber} → ${collector.name} (${reason.slice(0, 60)})`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.collectionAccount.update({
+          where: { id: account.id },
+          data: { collectorId, notes: reason },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "COLLECTOR_ASSIGNED",
+          entityType: "COLLECTION",
+          entityId: account.id,
+          details: `${invoice.invoiceNumber} → ${collector.name} (${reason.slice(0, 60)})`,
+        });
+        return rec;
       });
       return NextResponse.json({ account: updated });
     }
@@ -211,21 +214,24 @@ export async function POST(req: Request) {
       if (!note)
         return NextResponse.json({ error: "note required" }, { status: 400 });
       const fups: any[] = (account.followUps as any) || [];
-      const updated = await prisma.collectionAccount.update({
-        where: { id: account.id },
-        data: {
-          followUps: [
-            ...fups,
-            { at: new Date().toISOString(), by: user.name || "System", note },
-          ],
-        },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "COLLECTION_FOLLOWUP",
-        entityType: "COLLECTION",
-        entityId: account.id,
-        details: `${invoice.invoiceNumber} — ${note.slice(0, 70)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.collectionAccount.update({
+          where: { id: account.id },
+          data: {
+            followUps: [
+              ...fups,
+              { at: new Date().toISOString(), by: user.name || "System", note },
+            ],
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "COLLECTION_FOLLOWUP",
+          entityType: "COLLECTION",
+          entityId: account.id,
+          details: `${invoice.invoiceNumber} — ${note.slice(0, 70)}`,
+        });
+        return rec;
       });
       return NextResponse.json({ account: updated });
     }
@@ -244,16 +250,19 @@ export async function POST(req: Request) {
           },
           { status: 400 },
         );
-      const updated = await prisma.collectionAccount.update({
-        where: { id: account.id },
-        data: { dunningLevel: lvl, lastDunningAt: new Date() },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "DUNNING_ISSUED",
-        entityType: "COLLECTION",
-        entityId: account.id,
-        details: `${invoice.invoiceNumber} — L${lvl} letter issued`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.collectionAccount.update({
+          where: { id: account.id },
+          data: { dunningLevel: lvl, lastDunningAt: new Date() },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "DUNNING_ISSUED",
+          entityType: "COLLECTION",
+          entityId: account.id,
+          details: `${invoice.invoiceNumber} — L${lvl} letter issued`,
+        });
+        return rec;
       });
       return NextResponse.json({ account: updated });
     }

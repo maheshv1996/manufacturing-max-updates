@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 // Route entity keys -> Prisma model names (client exposes camelCase model names only).
 const ENTITY_MODELS: Record<string, string> = {
@@ -80,6 +80,9 @@ async function requireEdit(user: any) {
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["people.view", "system.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -125,6 +128,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!(await requireEdit(user))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -145,48 +151,60 @@ export async function POST(req: Request) {
 
     let result: any;
 
-    if (action === "moveStage") {
-      result = await prisma.candidate.update({
-        where: { id: data.id },
-        data: { stage: data.stage },
-      });
-    } else if (action === "toggleTask") {
-      result = await prisma.onboardingTask.update({
-        where: { id: data.id },
-        data: { done: Boolean(data.done) },
-      });
-    } else {
-      if (!ENTITY_FIELDS[entity] || !ENTITY_MODELS[entity]) {
-        return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
-      }
-      const model = (prisma as any)[ENTITY_MODELS[entity]];
-      if (action === "create") {
-        result = await model.create({
-          data: coerce(ENTITY_FIELDS[entity], data),
-        });
-      } else if (action === "update") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.update({
+    result = await prisma.$transaction(async (tx) => {
+      let r: any;
+      if (action === "moveStage") {
+        r = await tx.candidate.update({
           where: { id: data.id },
-          data: coerce(ENTITY_FIELDS[entity], data),
+          data: { stage: data.stage },
         });
-      } else if (action === "delete") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.delete({ where: { id: data.id } });
+      } else if (action === "toggleTask") {
+        r = await tx.onboardingTask.update({
+          where: { id: data.id },
+          data: { done: Boolean(data.done) },
+        });
       } else {
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+        if (!ENTITY_FIELDS[entity] || !ENTITY_MODELS[entity]) {
+          throw new Error("UNKNOWN_ENTITY");
+        }
+        const model = (tx as any)[ENTITY_MODELS[entity]];
+        if (action === "create") {
+          r = await model.create({
+            data: coerce(ENTITY_FIELDS[entity], data),
+          });
+        } else if (action === "update") {
+          if (!data.id) throw new Error("MISSING_ID");
+          r = await model.update({
+            where: { id: data.id },
+            data: coerce(ENTITY_FIELDS[entity], data),
+          });
+        } else if (action === "delete") {
+          if (!data.id) throw new Error("MISSING_ID");
+          r = await model.delete({ where: { id: data.id } });
+        } else {
+          throw new Error("INVALID_ACTION");
+        }
       }
-    }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_${(entity || "RECRUITMENT").toUpperCase()}`,
-      entityType: (entity || "RECRUITMENT").toUpperCase(),
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} on ${entity || "recruitment"}`,
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
+        action: `${action.toUpperCase()}_${(entity || "RECRUITMENT").toUpperCase()}`,
+        entityType: (entity || "RECRUITMENT").toUpperCase(),
+        entityId: r?.id || data?.id || "unknown",
+        details: `${user.name || "Admin"} ${action} on ${entity || "recruitment"}`,
+      });
+
+      return r;
+    }).catch((err) => {
+      if (err.message === "UNKNOWN_ENTITY") return { __error: "Unknown entity", status: 400 };
+      if (err.message === "MISSING_ID") return { __error: "Missing id", status: 400 };
+      if (err.message === "INVALID_ACTION") return { __error: "Invalid action", status: 400 };
+      throw err;
     });
+
+    if (result && result.__error) {
+      return NextResponse.json({ error: result.__error }, { status: result.status });
+    }
 
     return NextResponse.json({ success: true, record: result });
   } catch (error) {

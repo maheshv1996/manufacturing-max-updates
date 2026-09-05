@@ -40,6 +40,15 @@ export default function FiveSChecklistTab() {
     text: "",
   });
 
+  useEffect(() => {
+    if (!modalState.isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalState((prev) => ({ ...prev, isOpen: false }));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalState.isOpen]);
+
   const fetchItems = async () => {
     try {
       setLoading(true);
@@ -280,15 +289,26 @@ export default function FiveSChecklistTab() {
 
       {/* Add / Edit Item Modal */}
       {modalState.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setModalState((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fives-item-modal-title"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-xl font-bold text-white">
+              <h3 id="fives-item-modal-title" className="text-xl font-bold text-white">
                 {modalState.initialData
                   ? "Edit 5S Item"
                   : "Add 5S Checklist Item"}
               </h3>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() =>
                   setModalState((prev) => ({ ...prev, isOpen: false }))
                 }

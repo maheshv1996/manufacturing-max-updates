@@ -72,6 +72,18 @@ export default function TimeStudyClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setModal(null);
+      }
+    };
+    if (modal) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [modal]);
+
   const api = async (action: string, data: any) => {
     setSaving(true);
     try {
@@ -133,6 +145,7 @@ export default function TimeStudyClient() {
 
       <div className="flex justify-end">
         <button
+          type="button"
           onClick={() => openModal(null)}
           disabled={saving}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
@@ -252,13 +265,23 @@ export default function TimeStudyClient() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="time-study-modal-title"
+        >
+          <div
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="time-study-modal-title" className="text-lg font-bold text-white">
                 {modal.row ? "Edit" : "New"} Time Study
               </h3>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
               >

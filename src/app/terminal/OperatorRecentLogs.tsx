@@ -60,6 +60,16 @@ export default function OperatorRecentLogs({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operatorId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditingLog(null);
+    };
+    if (editingLog) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [editingLog]);
+
   const canEdit = (log: RecentLog) => {
     if (log.status !== "DRAFT") return false;
     const ageMs = Date.now() - new Date(log.createdAt).getTime();
@@ -176,15 +186,25 @@ export default function OperatorRecentLogs({
       </div>
 
       {editingLog && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4"
+          onClick={() => setEditingLog(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-log-modal-title"
+        >
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">
+              <h3 id="edit-log-modal-title" className="text-xl font-bold text-white">
                 Edit{" "}
                 {editingLog.type === "PRODUCTION" ? "Production" : "Downtime"}{" "}
                 Log
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingLog(null)}
                 className="text-slate-400 hover:text-white"
               >
@@ -252,12 +272,14 @@ export default function OperatorRecentLogs({
 
             <div className="mt-8 flex gap-4">
               <button
+                type="button"
                 onClick={() => setEditingLog(null)}
                 className="flex-1 bg-slate-800 p-4 rounded-xl font-bold text-white hover:bg-slate-700"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSave}
                 className="flex-1 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold"
               >

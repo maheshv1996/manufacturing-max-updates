@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -56,23 +66,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const rule = await (prisma as any).pMRule.create({
-      data: {
-        machineId,
-        title,
-        intervalDays: intervalDays ? Number(intervalDays) : null,
-        intervalRunHours: intervalRunHours ? Number(intervalRunHours) : null,
-      },
-      include: { machine: { select: { id: true, name: true, code: true } } },
-    });
+    const actor = user.name || headerList.get("x-user-name") || "Admin";
 
-    const headerList = await headers();
-    await logAudit({
-      actor: headerList.get("x-user-name") || "Admin",
-      action: "PM_RULE_CREATE",
-      entityType: "PM_RULE",
-      entityId: rule.id,
-      details: `Created PM rule "${title}" for machine ${rule.machine.name}`,
+    const rule = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).pMRule.create({
+        data: {
+          machineId,
+          title,
+          intervalDays: intervalDays ? Number(intervalDays) : null,
+          intervalRunHours: intervalRunHours ? Number(intervalRunHours) : null,
+        },
+        include: { machine: { select: { id: true, name: true, code: true } } },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "PM_RULE_CREATE",
+        entityType: "PM_RULE",
+        entityId: created.id,
+        details: `Created PM rule "${title}" for machine ${created.machine.name}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ rule }, { status: 201 });

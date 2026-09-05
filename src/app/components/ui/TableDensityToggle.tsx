@@ -17,11 +17,16 @@ export function TableDensityToggle({
 }: TableDensityToggleProps) {
   return (
     <div
+      role="group"
+      aria-label="Table row density"
       className={`inline-flex items-center p-0.5 rounded-xl border border-slate-700 bg-slate-800/80 ${className}`}
       title="Toggle Table Row Density"
     >
       <button
+        type="button"
         onClick={() => onChange("compact")}
+        aria-pressed={density === "compact"}
+        aria-label="Compact table density (Dense Engineering Rows)"
         className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
           density === "compact"
             ? "bg-blue-600 text-white shadow-xs font-bold"
@@ -33,7 +38,10 @@ export function TableDensityToggle({
       </button>
 
       <button
+        type="button"
         onClick={() => onChange("normal")}
+        aria-pressed={density === "normal"}
+        aria-label="Normal table density (Desktop View)"
         className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
           density === "normal"
             ? "bg-blue-600 text-white shadow-xs font-bold"
@@ -45,7 +53,10 @@ export function TableDensityToggle({
       </button>
 
       <button
+        type="button"
         onClick={() => onChange("touch")}
+        aria-pressed={density === "touch"}
+        aria-label="Touch table density (Rugged Tablet Hit Areas)"
         className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
           density === "touch"
             ? "bg-blue-600 text-white shadow-xs font-bold"

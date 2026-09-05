@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAudit, logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -118,22 +118,32 @@ export async function POST(request: Request) {
           deduped: true,
         });
       }
-      const updated = await prisma.shiftHandover.update({
-        where: { id: data.id },
-        data: {
-          acknowledgedBy: user.name || "Supervisor",
-          acknowledgedAt: new Date(),
-        },
-        include: { shift: true, machine: true },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "HANDOVER_ACK",
-        entityType: "SHIFT_HANDOVER",
-        entityId: updated.id,
-        details: `${reason.reason}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.shiftHandover.update({
+          where: { id: data.id },
+          data: {
+            acknowledgedBy: user.name || "Supervisor",
+            acknowledgedAt: new Date(),
+          },
+          include: { shift: true, machine: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Supervisor",
+          action: "HANDOVER_ACK",
+          entityType: "SHIFT_HANDOVER",
+          entityId: res.id,
+          details: `${reason.reason}`,
+        });
+        return res;
       });
       return NextResponse.json(updated);
+    }
+
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
     }
 
     const {
@@ -169,29 +179,34 @@ export async function POST(request: Request) {
     // P6 — auto-attach open breakdowns + NCRs so the incoming supervisor sees them instantly.
     const context = await buildContextSnapshot();
 
-    const newHandover = await prisma.shiftHandover.create({
-      data: {
-        date: new Date(date),
-        shiftId,
-        authorName,
-        machineId: machineId === "PLANT" ? null : machineId,
-        productionNotes: productionNotes || "",
-        downtimeNotes: downtimeNotes || "",
-        safetyNotes: safetyNotes || "",
-        nextShiftActions: nextShiftActions || "",
-        missReason: missReason ? missReason.trim() : null,
-        openBreakdowns: context.openBreakdowns,
-        openNcrs: context.openNcrs,
-      },
-      include: { shift: true, machine: true },
-    });
+    const actor = user.name || authorName || "Supervisor";
+    const newHandover = await prisma.$transaction(async (tx) => {
+      const created = await tx.shiftHandover.create({
+        data: {
+          date: new Date(date),
+          shiftId,
+          authorName: actor,
+          machineId: machineId === "PLANT" ? null : machineId,
+          productionNotes: productionNotes || "",
+          downtimeNotes: downtimeNotes || "",
+          safetyNotes: safetyNotes || "",
+          nextShiftActions: nextShiftActions || "",
+          missReason: missReason ? missReason.trim() : null,
+          openBreakdowns: context.openBreakdowns,
+          openNcrs: context.openNcrs,
+        },
+        include: { shift: true, machine: true },
+      });
 
-    await logAudit({
-      actor: authorName,
-      action: "HANDOVER_CREATED",
-      entityType: "SHIFT_HANDOVER",
-      entityId: newHandover.id,
-      details: `${date} · shift=${shiftId} · machine=${machineId ?? "PLANT"} · missed=${targetMissed ? "yes" : "no"}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "HANDOVER_CREATED",
+        entityType: "SHIFT_HANDOVER",
+        entityId: created.id,
+        details: `${date} · shift=${shiftId} · machine=${machineId ?? "PLANT"} · missed=${targetMissed ? "yes" : "no"}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json(newHandover);

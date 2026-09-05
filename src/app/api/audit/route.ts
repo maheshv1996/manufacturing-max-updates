@@ -6,8 +6,12 @@ export async function GET(request: NextRequest) {
   try {
     const user = getUserFromHeaders(request.headers);
 
-    if (!user.isOwner && !can(user, "system.edit")) {
+    if (!user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!user.isOwner && !can(user, "system.edit") && !can(user, "system.view")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;

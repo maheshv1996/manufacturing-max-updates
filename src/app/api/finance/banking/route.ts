@@ -1,5 +1,7 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,15 +58,30 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "BANK_TRANSACTION_RECORDED", entityType: "BankTransaction", details: "Bank transaction logged" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["finance.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+
+    const ref = typeof body.reference === "string" ? body.reference : typeof body.type === "string" ? body.type : "Instrument";
+    const actor = user.name || user.id || "Finance Officer";
+
+    await logAudit({
+      actor,
+      action: "BANK_TRANSACTION_RECORDED",
+      entityType: "BankTransaction",
+      details: `Bank transaction logged: ${ref}`,
+    });
+
     return NextResponse.json({ success: true, message: "Bank Guarantee logged", record: body });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

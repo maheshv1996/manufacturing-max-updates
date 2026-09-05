@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { matchDepartmentKey } from "@/lib/departments";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export const maxDuration = 60;
@@ -107,17 +107,21 @@ export async function POST(req: Request) {
           { error: "id and spent (>= 0) required" },
           { status: 400 },
         );
-      const line = await prisma.budgetLine.update({
-        where: { id },
-        data: { spent: toPaise(amt), notes: notes || undefined },
-      });
+      const line = await prisma.$transaction(async (tx) => {
+        const updated = await tx.budgetLine.update({
+          where: { id },
+          data: { spent: toPaise(amt), notes: notes || undefined },
+        });
 
-      await logAudit({
-        actor: user.name || "system",
-        action: "BUDGET_SPEND_UPDATED",
-        entityType: "BudgetLine",
-        entityId: id,
-        details: `spent=${amt}`,
+        await logAuditTx(tx, {
+          actor: user.name || "system",
+          action: "BUDGET_SPEND_UPDATED",
+          entityType: "BudgetLine",
+          entityId: id,
+          details: `spent=${amt}`,
+        });
+
+        return updated;
       });
 
       return NextResponse.json({ line: fromPaiseRow("BudgetLine", line) });
@@ -131,23 +135,27 @@ export async function POST(req: Request) {
           { error: "fiscalYear, department, category, allocated required" },
           { status: 400 },
         );
-      const line = await prisma.budgetLine.create({
-        data: {
-          fiscalYear,
-          department,
-          category,
-          allocated: toPaise(amt),
-          spent: 0,
-          notes: notes || null,
-        },
-      });
+      const line = await prisma.$transaction(async (tx) => {
+        const created = await tx.budgetLine.create({
+          data: {
+            fiscalYear,
+            department,
+            category,
+            allocated: toPaise(amt),
+            spent: 0,
+            notes: notes || null,
+          },
+        });
 
-      await logAudit({
-        actor: user.name || "system",
-        action: "BUDGET_LINE_CREATED",
-        entityType: "BudgetLine",
-        entityId: line.id,
-        details: `${fiscalYear} · ${department} · ${category} · ${amt}`,
+        await logAuditTx(tx, {
+          actor: user.name || "system",
+          action: "BUDGET_LINE_CREATED",
+          entityType: "BudgetLine",
+          entityId: created.id,
+          details: `${fiscalYear} · ${department} · ${category} · ${amt}`,
+        });
+
+        return created;
       });
 
       return NextResponse.json({ line: fromPaiseRow("BudgetLine", line) }, { status: 201 });

@@ -1,13 +1,35 @@
 // IP-level sliding window rate-limiting: max 30 requests per minute per IP
 const IP_RATE_WINDOW_MS = 60 * 1000;
 const IP_RATE_MAX_REQUESTS = 30;
+const IP_RATE_MAX_TRACKED_IPS = 10_000;
 const ipRequestMap = new Map<string, number[]>();
+
+function pruneIpThrottleMap(now: number) {
+  for (const [key, times] of ipRequestMap.entries()) {
+    const valid = times.filter((t) => now - t < IP_RATE_WINDOW_MS);
+    if (valid.length === 0) {
+      ipRequestMap.delete(key);
+    } else {
+      ipRequestMap.set(key, valid);
+    }
+  }
+}
 
 function checkIpThrottle(ip: string): { throttled: boolean; retryAfterSeconds: number } {
   if (!ip || ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
     return { throttled: false, retryAfterSeconds: 0 };
   }
   const now = Date.now();
+
+  // Guard against unbounded memory leaks during distributed credential-stuffing
+  if (ipRequestMap.size > IP_RATE_MAX_TRACKED_IPS) {
+    pruneIpThrottleMap(now);
+    if (ipRequestMap.size > IP_RATE_MAX_TRACKED_IPS) {
+      const keysToDelete = Array.from(ipRequestMap.keys()).slice(0, 1000);
+      for (const k of keysToDelete) ipRequestMap.delete(k);
+    }
+  }
+
   const timestamps = (ipRequestMap.get(ip) || []).filter((t) => now - t < IP_RATE_WINDOW_MS);
   if (timestamps.length >= IP_RATE_MAX_REQUESTS) {
     const oldest = timestamps[0];

@@ -92,7 +92,7 @@ export default function Sidebar({
       </Link>
 
       {/* Department tiles */}
-      <nav className="flex-1 py-3 px-2 flex flex-col gap-1.5 overflow-y-auto">
+      <nav aria-label="Department Navigation" className="flex-1 py-3 px-2 flex flex-col gap-1.5 overflow-y-auto">
         {allowed.map((d) => {
           const Icon = d.icon;
           const active = d.id === activeId;
@@ -104,7 +104,7 @@ export default function Sidebar({
               onClick={() => router.push(d.hub)}
               title={d.title}
               aria-label={d.title}
-              className="relative mx-auto block h-11 w-11 cursor-pointer rounded-xl outline-none"
+              className="relative mx-auto block h-11 w-11 cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2"
               style={
                 active
                   ? { boxShadow: `0 0 16px ${d.glow}, 0 0 32px ${d.glow}` }

@@ -1,23 +1,36 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { getDerivedLicenseStatus } from "@/lib/licenseEngine";
 
 export async function POST() {
-    await logAudit({ actor: "system", action: "SUBSCRIPTION_PAYMENT_PROCESSED", entityType: "Subscription", details: "Subscription payment recorded" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;
-    if (!tokenStr)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let actorId = "";
 
-    const token = await verifySessionToken(tokenStr);
-    if (
-      !token ||
-      (!token.isOwner && !token.permissions?.includes("system.edit"))
-    )
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (tokenStr) {
+      const token = await verifySessionToken(tokenStr);
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (!token.isOwner && !token.permissions?.includes("system.edit")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      actorId = token.id;
+    } else {
+      const headersList = await headers();
+      const user = getUserFromHeaders(headersList);
+      if (!user.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (!user.isOwner && !canAny(user, ["system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      actorId = user.id;
+    }
 
     const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
     const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
@@ -62,6 +75,12 @@ export async function POST() {
 
     const data = await res.json();
     if (res.ok && data.short_url) {
+      await logAudit({
+        actor: actorId,
+        action: "SUBSCRIPTION_PAYMENT_LINK_CREATED",
+        entityType: "Subscription",
+        details: `Created Razorpay link for ${license.plan} (₹${amount})`,
+      });
       return NextResponse.json({ url: data.short_url });
     } else {
       console.error("Razorpay error:", data);

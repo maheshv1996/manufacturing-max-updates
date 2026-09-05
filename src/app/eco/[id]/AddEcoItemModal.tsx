@@ -2,7 +2,7 @@
 
 
 import { logClientError } from "@/lib/clientLogger";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 
@@ -25,6 +25,15 @@ export default function AddEcoItemModal({
     oldData: "",
     newData: "",
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,21 +69,33 @@ export default function AddEcoItemModal({
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 hover:bg-indigo-500/20 text-indigo-400 text-sm font-semibold rounded-xl transition-colors"
+        className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 hover:bg-indigo-500/20 text-indigo-400 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
       >
         <Plus className="w-4 h-4" />
         Add Item
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg border border-slate-700 flex flex-col">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-eco-item-title"
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg border border-slate-700 flex flex-col"
+          >
             <div className="flex items-center justify-between p-5 border-b border-slate-700">
-              <h2 className="text-lg font-bold">Add Change Item</h2>
+              <h2 id="add-eco-item-title" className="text-lg font-bold">Add Change Item</h2>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-full hover:bg-slate-800"
+                aria-label="Close add change item dialog"
+                className="p-1 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-full hover:bg-slate-800 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

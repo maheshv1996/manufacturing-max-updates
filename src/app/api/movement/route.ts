@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { computeVendorStatus } from "@/lib/calibration";
-import { logAudit } from "@/lib/audit";
+import { logAudit, logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "quality.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -14,12 +25,13 @@ export async function POST(req: Request) {
     }
     const { workOrderId, fromStation, toStation, quantity, movedByName } = body;
 
-    if (!workOrderId || !toStation || !quantity || !movedByName) {
+    if (!workOrderId || !toStation || !quantity) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 },
       );
     }
+    const actor = user.name || user.email || movedByName || "Operator";
 
     // Fetch the work order with its product's routing steps
     const wo = await prisma.workOrder.findUnique({
@@ -53,8 +65,6 @@ export async function POST(req: Request) {
         let blocked = false;
         if (wo.trackingMode === "SERIAL") {
           // For serial mode, we need at least 'quantity' number of unique serial signoffs
-          // Assuming we are just moving a bulk quantity of serials, we just count how many are signed off
-          // and compare with total moved quantity so far + this quantity.
           const totalSignedSerials = new Set(
             signoffs.map((s) => s.serialUnitId).filter(Boolean),
           ).size;
@@ -78,14 +88,12 @@ export async function POST(req: Request) {
 
         if (blocked) {
           // Audit log for blocked attempt
-          await prisma.auditLog.create({
-            data: {
-              action: "HOLDPOINT_BLOCKED",
-              actor: "system", // We don't have user ID in this payload directly
-              details: `Blocked movement of ${quantity} at ${currentStep.stationName} (Hold Authority: ${currentStep.holdAuthority})`,
-              entityType: "WorkOrder",
-              entityId: workOrderId,
-            },
+          await logAudit({
+            action: "HOLDPOINT_BLOCKED",
+            actor,
+            details: `Blocked movement of ${quantity} at ${currentStep.stationName} (Hold Authority: ${currentStep.holdAuthority})`,
+            entityType: "WorkOrder",
+            entityId: workOrderId,
           });
           return NextResponse.json(
             {
@@ -109,7 +117,7 @@ export async function POST(req: Request) {
           destStep.specialProcessVendor.expiresAt,
         );
         if (vendorStatus === "EXPIRED") {
-          await logAudit({ action: "VENDOR_EXPIRED_BLOCKED", actor: movedByName || "system", details: `Blocked dispatch to ${destStep.stationName}: vendor ${destStep.specialProcessVendor.name} (${destStep.specialProcessVendor.processType}) Nadcap cert EXPIRED`, entityType: "WorkOrder", entityId: workOrderId });
+          await logAudit({ action: "VENDOR_EXPIRED_BLOCKED", actor, details: `Blocked dispatch to ${destStep.stationName}: vendor ${destStep.specialProcessVendor.name} (${destStep.specialProcessVendor.processType}) Nadcap cert EXPIRED`, entityType: "WorkOrder", entityId: workOrderId });
           return NextResponse.json(
             {
               error: `Special process vendor ${destStep.specialProcessVendor.name} has an EXPIRED Nadcap certificate. Dispatch to ${destStep.stationName} blocked.`,
@@ -121,50 +129,52 @@ export async function POST(req: Request) {
         }
       }
 
-      // Create movement log
-      const movement = await prisma.movementLog.create({
-        data: {
-          workOrderId,
-          fromStation: fromStation || "Unknown",
-          toStation,
-          quantity: Number(quantity),
-          movedByName,
-        },
-      });
-
-      const nextStep = wo.product.routingSteps.find(
-        (s) => s.seq === wo.currentSeq + 1,
-      );
-
-      if (currentStep && nextStep) {
-        // Calculate total good quantity produced so far
-
-        // Get total quantity already moved from this station
-        const movedLogs = await prisma.movementLog.findMany({
-          where: { workOrderId, fromStation: currentStep.stationName },
-          select: { quantity: true },
+      // Create movement log and update sequence atomically
+      const movement = await prisma.$transaction(async (tx) => {
+        const created = await (tx as any).movementLog.create({
+          data: {
+            workOrderId,
+            fromStation: fromStation || "Unknown",
+            toStation,
+            quantity: Number(quantity),
+            movedByName: actor,
+          },
         });
-        const totalMoved = movedLogs.reduce((sum, m) => sum + m.quantity, 0);
 
-        // Advance seq if moved quantity covers the planned quantity threshold (>= 80% of planned)
-        const threshold = wo.plannedQuantity * 0.8;
-        if (
-          totalMoved >= threshold &&
-          wo.currentSeq < wo.product.routingSteps.length
-        ) {
-          await prisma.workOrder.update({
-            where: { id: workOrderId },
-            data: { currentSeq: wo.currentSeq + 1 },
+        const nextStep = wo.product.routingSteps.find(
+          (s) => s.seq === wo.currentSeq + 1,
+        );
+
+        if (currentStep && nextStep) {
+          // Get total quantity already moved from this station
+          const movedLogs = await (tx as any).movementLog.findMany({
+            where: { workOrderId, fromStation: currentStep.stationName },
+            select: { quantity: true },
           });
-        }
-      }
+          const totalMoved = movedLogs.reduce((sum: number, m: any) => sum + m.quantity, 0);
 
-      await logAudit({
-        actor: "system",
-        action: "MOVEMENT_POSTED",
-        entityType: "MovementLog",
-        entityId: movement.id,
-        details: `Moved ${quantity} units from ${fromStation || "Unknown"} to ${toStation} on WO ${workOrderId}`,
+          // Advance seq if moved quantity covers the planned quantity threshold (>= 80% of planned)
+          const threshold = wo.plannedQuantity * 0.8;
+          if (
+            totalMoved >= threshold &&
+            wo.currentSeq < wo.product.routingSteps.length
+          ) {
+            await (tx as any).workOrder.update({
+              where: { id: workOrderId },
+              data: { currentSeq: wo.currentSeq + 1 },
+            });
+          }
+        }
+
+        await logAuditTx(tx, {
+          actor,
+          action: "MOVEMENT_POSTED",
+          entityType: "MovementLog",
+          entityId: created.id,
+          details: `Moved ${quantity} units from ${fromStation || "Unknown"} to ${toStation} on WO ${workOrderId}`,
+        });
+
+        return created;
       });
 
       return NextResponse.json({ success: true, movement });
@@ -185,6 +195,11 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { searchParams } = new URL(req.url);
     const workOrderId = searchParams.get("workOrderId");
 

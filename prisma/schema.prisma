@@ -469,6 +469,7 @@ model User {
   createdById        String?
   creator            User?               @relation("UserCreator", fields: [createdById], references: [id])
   createdUsers       User[]              @relation("UserCreator")
+  roleAssignments    RoleAssignment[]
   isOwner            Boolean             @default(false)
   level              UserLevel           @default(WORKER) // WORKER sees "My" queues; MANAGER sees Approvals + Team KPIs + Budget
   homePlantId        String?
@@ -550,6 +551,7 @@ model Role {
   createdById  String?
   isSystem     Boolean  @default(false)
   users        User[]
+  roleAssignments    RoleAssignment[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -2479,6 +2481,7 @@ enum SubcontractStatus {
   PROCESSING
   RECEIVED
   QC_PASSED
+  QC_FAILED // C5 — QC signoff FAIL routes the lot to an NCR
   CLOSED
 }
 
@@ -4986,6 +4989,104 @@ model InsurancePolicy {
 
   @@index([status])
   @@index([renewalDate])
+}
+
+// ---------------------------------------------------------------------------
+// V2 ORG MODEL (Cycle 1 — DEPTH_02 §7). Additive; prototype models above
+// remain until their owning cycle replaces them.
+// ---------------------------------------------------------------------------
+model OrgUnit {
+  id         String    @id @default(cuid())
+  code       String
+  name       String
+  type       String // DIVISION | DEPARTMENT | CELL | TEAM | FUNCTION
+  parentId   String?
+  parent     OrgUnit?  @relation("OrgTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   OrgUnit[] @relation("OrgTree")
+  assignments RoleAssignment[]
+  headUserId String?
+  costCenter String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([code])
+  @@index([parentId])
+  @@index([isActive])
+}
+
+model Level {
+  id     String  @id @default(cuid())
+  name   String
+  rank   Int
+  family String? // null = global ladder (TRAINEE..LEAD..org-defined)
+
+  @@unique([name, family])
+}
+
+model RoleAssignment {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgUnitId     String
+  orgUnit       OrgUnit   @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  roleId        String
+  role          Role      @relation(fields: [roleId], references: [id])
+  levelName     String
+  scope         String    @default("SELF") // SELF | TEAM | UNIT | PLANT | ALL
+  validFrom     DateTime  @default(now())
+  validTo       DateTime?
+  status        String    @default("ACTIVE") // ACTIVE | ACTING | SUSPENDED | EXITED
+  actsForUserId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([orgUnitId, status])
+  @@index([roleId])
+}
+
+model ReportingLine {
+  id            String    @id @default(cuid())
+  managerUserId String
+  reportUserId  String
+  orgUnitId     String?
+  validFrom     DateTime  @default(now())
+  validTo       DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([reportUserId])
+  @@index([managerUserId, validTo])
+}
+
+model ApprovalChain {
+  id         String   @id @default(cuid())
+  entityType String
+  name       String
+  steps      Json
+  isActive   Boolean  @default(true)
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([entityType, isActive])
+}
+
+model ApprovalTask {
+  id               String    @id @default(cuid())
+  entityType       String
+  entityId         String
+  stepIndex        Int
+  status           String    @default("PENDING") // PENDING | APPROVED | REJECTED | ESCALATED | SUPERSEDED
+  assignedToUserId String?
+  criteriaSnapshot Json
+  decidedAt        DateTime?
+  decidedByUserId  String?
+  note             String?
+  createdAt        DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@index([assignedToUserId, status])
 }
 
 model CustomRecord {

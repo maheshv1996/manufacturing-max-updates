@@ -2,7 +2,7 @@
 
 
 import { logClientError } from "@/lib/clientLogger";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Plus, RefreshCw, X } from "lucide-react";
 import { Machine } from "@/lib/data";
@@ -78,6 +78,18 @@ export default function DashboardHeaderClient({ machines }: Props) {
       setIsModalOpen(false);
     }
   };
+
+  useEffect(() => {
+    if (!isExportModalOpen && !isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isExportModalOpen) setIsExportModalOpen(false);
+        if (isModalOpen && !submitting) closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isExportModalOpen, isModalOpen, submitting]);
 
   const handleDownloadCsv = () => {
     const url = `/api/reports?type=${reportType}&range=${dateRange}`;
@@ -166,17 +178,24 @@ export default function DashboardHeaderClient({ machines }: Props) {
 
       {/* EXPORT REPORT MODAL */}
       {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="export-report-modal-title"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-slate-700 pb-4">
               <div className="flex items-center gap-2">
                 <Download className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="export-report-modal-title" className="text-lg font-bold text-white">
                   Export Analytical Report
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsExportModalOpen(false)}
+                aria-label="Close export report modal"
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200 p-1"
               >
                 <X className="w-5 h-5" />
@@ -264,18 +283,25 @@ export default function DashboardHeaderClient({ machines }: Props) {
 
       {/* LOG DOWNTIME MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dashboard-downtime-modal-title"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-700 pb-4">
               <div className="flex items-center gap-2">
                 <Plus className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="dashboard-downtime-modal-title" className="text-lg font-bold text-white">
                   Log Downtime Event
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={closeModal}
                 disabled={submitting}
+                aria-label="Close log downtime modal"
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200 p-1 disabled:opacity-50"
               >
                 <X className="w-5 h-5" />

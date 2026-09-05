@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +13,10 @@ export async function PATCH(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (
-      !user.id ||
-      (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit"]))
-    ) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || "Admin";
@@ -37,16 +37,19 @@ export async function PATCH(
         ...(run.followUps as any[]),
         { at: new Date().toISOString(), by: actor, note },
       ];
-      const updated = await prisma.gstReconRun.update({
-        where: { id },
-        data: { followUps },
-      });
-      await logAudit({
-        actor,
-        action: "GST_RECON_FOLLOWUP",
-        entityType: "GST_RECON",
-        entityId: id,
-        details: `${run.period} — ${note.slice(0, 120)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.gstReconRun.update({
+          where: { id },
+          data: { followUps },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GST_RECON_FOLLOWUP",
+          entityType: "GST_RECON",
+          entityId: id,
+          details: `${run.period} — ${note.slice(0, 120)}`,
+        });
+        return u;
       });
       return NextResponse.json({ run: updated });
     }
@@ -65,31 +68,37 @@ export async function PATCH(
       row.status = "RESOLVED";
       row.note = `${row.note ? row.note + " | " : ""}Resolved: ${(note || "").slice(0, 140)}`;
       const updatedRows = rows.map((r) => (r.idx === index ? row : r));
-      const updated = await prisma.gstReconRun.update({
-        where: { id },
-        data: { rows: updatedRows },
-      });
-      await logAudit({
-        actor,
-        action: "GST_RECON_ROW_RESOLVED",
-        entityType: "GST_RECON",
-        entityId: id,
-        details: `${run.period} ${row.invoiceNumber} → RESOLVED — ${(note || "").slice(0, 140)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.gstReconRun.update({
+          where: { id },
+          data: { rows: updatedRows },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GST_RECON_ROW_RESOLVED",
+          entityType: "GST_RECON",
+          entityId: id,
+          details: `${run.period} ${row.invoiceNumber} → RESOLVED — ${(note || "").slice(0, 140)}`,
+        });
+        return u;
       });
       return NextResponse.json({ run: updated });
     }
 
     if (action === "close") {
-      const updated = await prisma.gstReconRun.update({
-        where: { id },
-        data: { status: "CLOSED" },
-      });
-      await logAudit({
-        actor,
-        action: "GST_RECON_CLOSED",
-        entityType: "GST_RECON",
-        entityId: id,
-        details: `${run.period} reconciled run closed`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.gstReconRun.update({
+          where: { id },
+          data: { status: "CLOSED" },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "GST_RECON_CLOSED",
+          entityType: "GST_RECON",
+          entityId: id,
+          details: `${run.period} reconciled run closed`,
+        });
+        return u;
       });
       return NextResponse.json({ run: updated });
     }

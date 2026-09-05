@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -126,6 +126,9 @@ export async function POST(req: Request) {
     const gate = await requireManagerLevel(user);
     if (!gate.ok)
       return NextResponse.json({ error: gate.error }, { status: 403 });
+    if (!user.isOwner && !canAny(user, ["people.edit", "hr.edit", "system.edit"]))
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const { userId, category, description, hearingDate } = data;
     if (!userId || !category || !description)
       return NextResponse.json(
@@ -145,21 +148,24 @@ export async function POST(req: Request) {
       "caseNumber",
       "DISC",
     );
-    const record = await prisma.disciplinaryCase.create({
-      data: {
-        caseNumber: number,
-        userId,
-        category,
-        description: description.trim(),
-        hearingDate: hearingDate ? new Date(hearingDate) : null,
-      },
-    });
-    await logAudit({
-      actor,
-      action: "DISCIPLINARY_OPENED",
-      entityType: "DISCIPLINARY",
-      entityId: record.id,
-      details: `${number} · ${category} · ${target.name}`,
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.disciplinaryCase.create({
+        data: {
+          caseNumber: number,
+          userId,
+          category,
+          description: description.trim(),
+          hearingDate: hearingDate ? new Date(hearingDate) : null,
+        },
+      });
+      await logAuditTx(tx, {
+        actor,
+        action: "DISCIPLINARY_OPENED",
+        entityType: "DISCIPLINARY",
+        entityId: created.id,
+        details: `${number} · ${category} · ${target.name}`,
+      });
+      return created;
     });
     return NextResponse.json({ success: true, record });
   } catch (error) {

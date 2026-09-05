@@ -1,7 +1,7 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUserFromHeaders, can } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { headers } from "next/headers";
 import { ComplaintType, ComplaintSeverity } from "@prisma/client";
 import { computeComplaintSla } from "@/lib/complaintSla";
@@ -11,7 +11,7 @@ export async function GET() {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
 
-    if (!can(user, "ops.view") && !can(user, "commercial.view")) {
+    if (!user.isOwner && !canAny(user, ["ops.view", "commercial.view", "quality.view", "system.view"])) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -50,9 +50,12 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!can(user, "ops.edit") && !can(user, "commercial.edit")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!user.isOwner && !canAny(user, ["ops.edit", "commercial.edit", "quality.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -78,37 +81,41 @@ export async function POST(req: Request) {
       );
     }
 
-    // Auto-generate complaint number CMP-YYYY-SEQ
-    const year = new Date().getFullYear();
-    const count = await prisma.customerComplaint.count({
-      where: { complaintNumber: { startsWith: `CMP-${year}-` } },
-    });
-    const complaintNumber = `CMP-${year}-${String(count + 1).padStart(3, "0")}`;
+    const complaint = await prisma.$transaction(async (tx) => {
+      // Auto-generate complaint number CMP-YYYY-SEQ
+      const year = new Date().getFullYear();
+      const count = await tx.customerComplaint.count({
+        where: { complaintNumber: { startsWith: `CMP-${year}-` } },
+      });
+      const complaintNumber = `CMP-${year}-${String(count + 1).padStart(3, "0")}`;
 
-    const now = new Date();
-    const complaint = await prisma.customerComplaint.create({
-      data: {
-        complaintNumber,
-        customerName,
-        workOrderId: workOrderId || null,
-        invoiceId: invoiceId || null,
-        batchNo: batchNo || null,
-        type: type as ComplaintType,
-        severity: severity as ComplaintSeverity,
-        description,
-        returnedQty: returnedQty ? parseFloat(returnedQty) : null,
-        // M8 — SLA timers: 24h to acknowledge, 10 days to close the 8D
-        ackDeadline: new Date(now.getTime() + 24 * 3600000),
-        eightDDeadline: new Date(now.getTime() + 10 * 86400000),
-      },
-    });
+      const now = new Date();
+      const created = await tx.customerComplaint.create({
+        data: {
+          complaintNumber,
+          customerName,
+          workOrderId: workOrderId || null,
+          invoiceId: invoiceId || null,
+          batchNo: batchNo || null,
+          type: type as ComplaintType,
+          severity: severity as ComplaintSeverity,
+          description,
+          returnedQty: returnedQty ? parseFloat(returnedQty) : null,
+          // M8 — SLA timers: 24h to acknowledge, 10 days to close the 8D
+          ackDeadline: new Date(now.getTime() + 24 * 3600000),
+          eightDDeadline: new Date(now.getTime() + 10 * 86400000),
+        },
+      });
 
-    await logAudit({
-      actor: user.name || "User",
-      action: "COMPLAINT_RAISED",
-      entityType: "CustomerComplaint",
-      entityId: complaint.id,
-      details: JSON.stringify({ complaintNumber, customerName }),
+      await logAuditTx(tx, {
+        actor: user.name || user.email || "User",
+        action: "COMPLAINT_RAISED",
+        entityType: "CustomerComplaint",
+        entityId: created.id,
+        details: JSON.stringify({ complaintNumber, customerName }),
+      });
+
+      return created;
     });
 
     return NextResponse.json(complaint, { status: 201 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -93,8 +93,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const headerList = await headers();
-    const actor = headerList.get("x-user-name") || "Admin";
     const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const actor = user.name || headerList.get("x-user-name") || "Admin";
     if (
       !user.isOwner &&
       !can(user, "ops.edit") &&
@@ -145,34 +148,39 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       const cost = Number(costRupees || 0);
-      const updated = await prisma.maintenanceTool.update({
-        where: { id: toolId },
-        data: { lifeStatus: "IN_USE", lastChangedAt: new Date() },
-      });
-      await prisma.toolLifeLog.create({
-        data: {
-          toolId,
-          action: "ISSUE",
-          woNumber,
-          woId: woId || null,
-          costRupees: cost,
-          actor,
-          note: note || null,
-        },
-      });
-      if (cost > 0) {
-        await prisma.workOrder.updateMany({
-          where: { woNumber },
-          data: { toolingCostRupees: { increment: cost } },
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.maintenanceTool.update({
+          where: { id: toolId },
+          data: { lifeStatus: "IN_USE", lastChangedAt: new Date() },
         });
-      }
-      await logAudit({
-        actor,
-        action: "TOOL_ISSUED",
-        entityType: "TOOL",
-        entityId: toolId,
-        details: `Issued ${tool.code} to ${woNumber}${cost > 0 ? ` — ₹${cost} posted to job costing` : ""}`,
+        await tx.toolLifeLog.create({
+          data: {
+            toolId,
+            action: "ISSUE",
+            woNumber,
+            woId: woId || null,
+            costRupees: cost,
+            actor,
+            note: note || null,
+          },
+        });
+        if (cost > 0) {
+          await tx.workOrder.updateMany({
+            where: { woNumber },
+            data: { toolingCostRupees: { increment: cost } },
+          });
+        }
+        await logAuditTx(tx, {
+          actor,
+          action: "TOOL_ISSUED",
+          entityType: "TOOL",
+          entityId: toolId,
+          details: `Issued ${tool.code} to ${woNumber}${cost > 0 ? ` — ₹${cost} posted to job costing` : ""}`,
+        });
+        return u;
       });
+
       return NextResponse.json({ tool: updated });
     }
 
@@ -191,18 +199,30 @@ export async function POST(request: Request) {
           ? "SCRAPPED"
           : "NEEDS_REGRIND"
         : tool.lifeStatus;
-      const updated = await prisma.maintenanceTool.update({
-        where: { id: toolId },
-        data: { usedUnits: newUsed, lifeStatus, lastChangedAt: new Date() },
-      });
-      await prisma.toolLifeLog.create({
-        data: {
-          toolId,
-          action: exhausted ? (maxed ? "SCRAP" : "NEEDS_REGRIND") : "USE",
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const up = await tx.maintenanceTool.update({
+          where: { id: toolId },
+          data: { usedUnits: newUsed, lifeStatus, lastChangedAt: new Date() },
+        });
+        await tx.toolLifeLog.create({
+          data: {
+            toolId,
+            action: exhausted ? (maxed ? "SCRAP" : "NEEDS_REGRIND") : "USE",
+            actor,
+            note: `${u} units used`,
+          },
+        });
+        await logAuditTx(tx, {
           actor,
-          note: `${u} units used`,
-        },
+          action: "TOOL_RECORD_USE",
+          entityType: "TOOL",
+          entityId: toolId,
+          details: `Recorded ${u} units on ${tool.code} (status: ${lifeStatus})`,
+        });
+        return up;
       });
+
       return NextResponse.json({
         tool: { ...updated, life: deriveLife(updated) },
         status: lifeStatus,
@@ -222,45 +242,54 @@ export async function POST(request: Request) {
           },
           { status: 400 },
         );
-      const updated = await prisma.maintenanceTool.update({
-        where: { id: toolId },
-        data: {
-          regrinds: { increment: 1 },
-          usedUnits: 0,
-          lifeStatus: "AVAILABLE",
-          lastChangedAt: new Date(),
-        },
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.maintenanceTool.update({
+          where: { id: toolId },
+          data: {
+            regrinds: { increment: 1 },
+            usedUnits: 0,
+            lifeStatus: "AVAILABLE",
+            lastChangedAt: new Date(),
+          },
+        });
+        await tx.toolLifeLog.create({
+          data: { toolId, action: "REGRIND", actor, note: note || null },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "TOOL_REGROUND",
+          entityType: "TOOL",
+          entityId: toolId,
+          details: `Reground ${tool.code} (${u.regrinds}/${u.maxRegrinds})`,
+        });
+        return u;
       });
-      await prisma.toolLifeLog.create({
-        data: { toolId, action: "REGRIND", actor, note: note || null },
-      });
-      await logAudit({
-        actor,
-        action: "TOOL_REGROUND",
-        entityType: "TOOL",
-        entityId: toolId,
-        details: `Reground ${tool.code} (${updated.regrinds}/${updated.maxRegrinds})`,
-      });
+
       return NextResponse.json({
         tool: { ...updated, life: deriveLife(updated) },
       });
     }
 
     if (action === "scrap") {
-      const updated = await prisma.maintenanceTool.update({
-        where: { id: toolId },
-        data: { lifeStatus: "SCRAPPED", lastChangedAt: new Date() },
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.maintenanceTool.update({
+          where: { id: toolId },
+          data: { lifeStatus: "SCRAPPED", lastChangedAt: new Date() },
+        });
+        await tx.toolLifeLog.create({
+          data: { toolId, action: "SCRAP", actor, note: note || null },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "TOOL_SCRAPPED",
+          entityType: "TOOL",
+          entityId: toolId,
+          details: `Scrapped ${tool.code} — ${note || "end of life"}`,
+        });
+        return u;
       });
-      await prisma.toolLifeLog.create({
-        data: { toolId, action: "SCRAP", actor, note: note || null },
-      });
-      await logAudit({
-        actor,
-        action: "TOOL_SCRAPPED",
-        entityType: "TOOL",
-        entityId: toolId,
-        details: `Scrapped ${tool.code} — ${note || "end of life"}`,
-      });
+
       return NextResponse.json({
         tool: { ...updated, life: deriveLife(updated) },
       });

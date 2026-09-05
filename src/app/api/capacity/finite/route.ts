@@ -12,8 +12,11 @@ export async function GET() {
   try {
     const headerList = await headers();
     const user = getUserFromHeaders(headerList);
-    if (!user || (!user.isOwner && !can(user, "ops.view"))) {
+    if (!user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "ops.view")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const [settings, wos, machines] = await Promise.all([

@@ -94,6 +94,16 @@ export default function SalesOrdersClient() {
   ]);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modalOpen) {
+        setModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
+
   const load = () => {
     Promise.all([
       fetch("/api/commercial/sales-orders").then((r) => r.json()),
@@ -411,15 +421,23 @@ export default function SalesOrdersClient() {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sales-order-modal-title"
             className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">New Sales Order</h3>
+                <h3 id="sales-order-modal-title" className="font-semibold text-white">New Sales Order</h3>
                 <p className="text-xs text-slate-400">Book the order — draft until confirmed</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={() => setModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
                 <X className="size-5" />
               </button>
             </div>

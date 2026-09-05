@@ -106,6 +106,16 @@ export default function DocumentsTab() {
     fetchDocumentsData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showUploadModal) {
+        setShowUploadModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showUploadModal]);
+
   // Check if a CURRENT doc exists for chosen Product + Operation
   const existingCurrentDoc = documents.find((doc) => {
     if (doc.status !== "CURRENT") return false;
@@ -461,15 +471,24 @@ export default function DocumentsTab() {
 
       {/* UPLOAD DOCUMENT MODAL */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 space-y-6 shadow-2xl my-8">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="doc-upload-modal-title"
+          onClick={() => setShowUploadModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 space-y-6 shadow-2xl my-8"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
                   <UploadCloud className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white">
+                  <h3 id="doc-upload-modal-title" className="text-xl font-bold text-white">
                     Upload Drawing / SOP
                   </h3>
                   <p className="text-xs text-slate-400">
@@ -478,7 +497,9 @@ export default function DocumentsTab() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowUploadModal(false)}
+                aria-label="Close upload dialog"
                 className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />

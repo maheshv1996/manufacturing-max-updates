@@ -165,6 +165,11 @@ class SoundEngine {
     }
   }
 
+  /** Notice / Alert tone */
+  playAlert() {
+    this.playWarning();
+  }
+
   /** Subtle low warning tone */
   playWarning() {
     if (this.muted) return;

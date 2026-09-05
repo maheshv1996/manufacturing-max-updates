@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { startOfMonth, endOfMonth } from "date-fns";
 
 export const maxDuration = 60;
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await canAny(user, ["people.edit"])))
+  if (!user.isOwner && !canAny(user, ["people.edit", "hr.edit", "system.edit"]))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
@@ -156,40 +156,46 @@ export async function POST(req: Request) {
         );
 
       const live = await computeLiveMetrics(userId, period);
-      const appraisal = await prisma.performanceAppraisal.upsert({
-        where: { userId_period: { userId, period } },
-        update: {
-          efficiencyPct: live.efficiencyPct,
-          qualityPct: live.qualityPct,
-          attendancePct: live.attendancePct,
-          score: live.score,
-          managerRating: r,
-          managerComments: comments || null,
-          status: "REVIEWED",
-          reviewedByName: user.name || "System",
-          reviewedAt: new Date(),
-        },
-        create: {
-          userId,
-          period,
-          efficiencyPct: live.efficiencyPct,
-          qualityPct: live.qualityPct,
-          attendancePct: live.attendancePct,
-          score: live.score,
-          managerRating: r,
-          managerComments: comments || null,
-          status: "REVIEWED",
-          reviewedByName: user.name || "System",
-          reviewedAt: new Date(),
-        },
+      const actor = user.name || user.email || "System";
+
+      const appraisal = await prisma.$transaction(async (tx) => {
+        const result = await tx.performanceAppraisal.upsert({
+          where: { userId_period: { userId, period } },
+          update: {
+            efficiencyPct: live.efficiencyPct,
+            qualityPct: live.qualityPct,
+            attendancePct: live.attendancePct,
+            score: live.score,
+            managerRating: r,
+            managerComments: comments || null,
+            status: "REVIEWED",
+            reviewedByName: actor,
+            reviewedAt: new Date(),
+          },
+          create: {
+            userId,
+            period,
+            efficiencyPct: live.efficiencyPct,
+            qualityPct: live.qualityPct,
+            attendancePct: live.attendancePct,
+            score: live.score,
+            managerRating: r,
+            managerComments: comments || null,
+            status: "REVIEWED",
+            reviewedByName: actor,
+            reviewedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "APPRAISAL_REVIEWED",
+          entityType: "APPRAISAL",
+          entityId: result.id,
+          details: `${period} — score ${live.score}, rating ${r}${comments ? ` (${comments.slice(0, 60)})` : ""}`,
+        });
+        return result;
       });
-      await logAudit({
-        actor: user.name || "System",
-        action: "APPRAISAL_REVIEWED",
-        entityType: "APPRAISAL",
-        entityId: appraisal.id,
-        details: `${period} — score ${live.score}, rating ${r}${comments ? ` (${comments.slice(0, 60)})` : ""}`,
-      });
+
       return NextResponse.json({ appraisal }, { status: 201 });
     }
 

@@ -188,6 +188,15 @@ export default function PackagingStation() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!showEanModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowEanModal(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showEanModal]);
+
   // Keep focus on barcode input for barcode reader gun
   useEffect(() => {
     const focusScanner = () => {
@@ -789,16 +798,27 @@ export default function PackagingStation() {
 
       {/* EAN Code Assignment Modal */}
       {showEanModal && editingEanWo && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowEanModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ean-modal-title"
+        >
+          <div
+            className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-extrabold text-text-1 text-base flex items-center gap-2">
+              <h3 id="ean-modal-title" className="font-extrabold text-text-1 text-base flex items-center gap-2">
                 <Tag className="w-5 h-5 text-accent" />
                 Assign EAN Barcode
               </h3>
               <button
+                type="button"
                 onClick={() => setShowEanModal(false)}
                 className="p-1 rounded-lg hover:bg-surface-3 text-text-3 hover:text-text-1"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

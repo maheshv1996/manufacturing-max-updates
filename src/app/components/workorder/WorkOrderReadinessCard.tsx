@@ -2,7 +2,7 @@
 
 
 import { logClientError } from "@/lib/clientLogger";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -53,6 +53,17 @@ export default function WorkOrderReadinessCard({
 
     setShowPOModal(true);
   };
+
+  useEffect(() => {
+    if (!showPOModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submittingPO) {
+        setShowPOModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showPOModal, submittingPO]);
 
   const handleCreatePO = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,7 +242,12 @@ export default function WorkOrderReadinessCard({
 
       {/* PREFILLED NEW PO MODAL */}
       {showPOModal && selectedMaterial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-po-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+        >
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 space-y-6 shadow-2xl text-left">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -239,7 +255,7 @@ export default function WorkOrderReadinessCard({
                   <ShoppingBag className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">
+                  <h3 id="create-po-modal-title" className="text-lg font-bold text-white">
                     Create PO for Shortage
                   </h3>
                   <p className="text-xs text-slate-400">
@@ -248,7 +264,9 @@ export default function WorkOrderReadinessCard({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowPOModal(false)}
+                aria-label="Close create purchase order modal"
                 className="p-1 text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-6 h-6" />

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { getSettings } from "@/lib/settings";
 import { startOfWeek, addWeeks, format, addDays } from "date-fns";
 
@@ -28,6 +28,9 @@ export async function GET(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.isOwner && !canAny(user, ["ops.view", "commercial.view", "system.view"])) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const weeksCount = Math.min(
@@ -136,7 +139,7 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await canAny(user, ["ops.edit", "commercial.edit"])))
+  if (!user.isOwner && !canAny(user, ["ops.edit", "commercial.edit", "system.edit"]))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
@@ -179,88 +182,92 @@ export async function POST(req: Request) {
       const ws = new Date(weekStart);
       const outcome: any[] = [];
 
-      // Auto-create HR OT request(s) — interlink sales -> HR
-      if (decisionType === "OVERTIME" || decisionType === "EXTRA_SHIFT") {
-        const targetUsers =
-          decisionType === "EXTRA_SHIFT"
-            ? await prisma.user.findMany({
-                where: {
-                  isActive: true,
-                  role: { name: { in: ["Operator", "OPERATOR"] } },
-                },
-                take: 12,
-              })
-            : await prisma.user.findMany({
-                where: {
-                  isActive: true,
-                  role: { name: { in: ["Operator", "OPERATOR"] } },
-                },
-                take: 1,
-              });
-        const perUserHours =
-          decisionType === "EXTRA_SHIFT"
-            ? Math.min(4, Math.max(1, hrs / Math.max(1, targetUsers.length)))
-            : hrs;
-        for (const u of targetUsers) {
-          const ot = await prisma.overtimeRequest.create({
+      const decision = await prisma.$transaction(async (tx) => {
+        // Auto-create HR OT request(s) — interlink sales -> HR
+        if (decisionType === "OVERTIME" || decisionType === "EXTRA_SHIFT") {
+          const targetUsers =
+            decisionType === "EXTRA_SHIFT"
+              ? await tx.user.findMany({
+                  where: {
+                    isActive: true,
+                    role: { name: { in: ["Operator", "OPERATOR"] } },
+                  },
+                  take: 12,
+                })
+              : await tx.user.findMany({
+                  where: {
+                    isActive: true,
+                    role: { name: { in: ["Operator", "OPERATOR"] } },
+                  },
+                  take: 1,
+                });
+          const perUserHours =
+            decisionType === "EXTRA_SHIFT"
+              ? Math.min(4, Math.max(1, hrs / Math.max(1, targetUsers.length)))
+              : hrs;
+          for (const u of targetUsers) {
+            const ot = await tx.overtimeRequest.create({
+              data: {
+                userId: u.id,
+                date: ws,
+                hours: Math.round(perUserHours * 10) / 10,
+                reason: `S&OP ${decisionType === "EXTRA_SHIFT" ? "extra shift" : "overtime"} — week of ${format(ws, "dd MMM yyyy")}${notes ? ` — ${notes.slice(0, 60)}` : ""}`,
+                status: "PENDING",
+              },
+            });
+            outcome.push({
+              type: "OT_REQUEST",
+              refId: ot.id,
+              label: `OT ${u.name || u.employeeNumber || u.id}`,
+            });
+          }
+        }
+
+        // Outsource decision -> reserve machine capacity (window) — the work returns for finishing ops
+        if (decisionType === "OUTSOURCE") {
+          const from = ws;
+          const win = await tx.capacityWindow.create({
             data: {
-              userId: u.id,
-              date: ws,
-              hours: Math.round(perUserHours * 10) / 10,
-              reason: `S&OP ${decisionType === "EXTRA_SHIFT" ? "extra shift" : "overtime"} — week of ${format(ws, "dd MMM yyyy")}${notes ? ` — ${notes.slice(0, 60)}` : ""}`,
-              status: "PENDING",
+              machineId,
+              windowType: "OUTSOURCE",
+              title: `Outsource window — S&OP wk ${format(ws, "dd MMM")}`,
+              from,
+              to: new Date(from.getTime() + hrs * 3600 * 1000),
+              hours: hrs,
+              reason: notes || "Capacity shortfall — work outsourced",
+              createdByName: user.name || "System",
             },
           });
           outcome.push({
-            type: "OT_REQUEST",
-            refId: ot.id,
-            label: `OT ${u.name || u.employeeNumber || u.id}`,
+            type: "WINDOW",
+            refId: win.id,
+            label: `Window ${win.title}`,
           });
         }
-      }
 
-      // Outsource decision -> reserve machine capacity (window) — the work returns for finishing ops
-      if (decisionType === "OUTSOURCE") {
-        const from = ws;
-        const win = await prisma.capacityWindow.create({
+        const dec = await tx.sopDecision.create({
           data: {
-            machineId,
-            windowType: "OUTSOURCE",
-            title: `Outsource window — S&OP wk ${format(ws, "dd MMM")}`,
-            from,
-            to: new Date(from.getTime() + hrs * 3600 * 1000),
-            hours: hrs,
-            reason: notes || "Capacity shortfall — work outsourced",
+            decisionNumber: `SOP-${format(ws, "yyyyMMdd")}-${Math.floor(100 + Math.random() * 900)}`,
+            weekStart: ws,
+            decisionType,
+            gapHours: hrs,
+            requiredHours: hrs,
+            notes: notes || null,
+            status: "EXECUTED",
+            outcome,
             createdByName: user.name || "System",
           },
         });
-        outcome.push({
-          type: "WINDOW",
-          refId: win.id,
-          label: `Window ${win.title}`,
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "SOP_DECISION",
+          entityType: "SOP",
+          entityId: dec.id,
+          details: `${decisionType} ${hrs}h wk ${format(ws, "dd MMM yyyy")} — ${outcome.length} auto-action(s)`,
         });
-      }
+        return dec;
+      });
 
-      const decision = await prisma.sopDecision.create({
-        data: {
-          decisionNumber: `SOP-${format(ws, "yyyyMMdd")}-${Math.floor(100 + Math.random() * 900)}`,
-          weekStart: ws,
-          decisionType,
-          gapHours: hrs,
-          requiredHours: hrs,
-          notes: notes || null,
-          status: "EXECUTED",
-          outcome,
-          createdByName: user.name || "System",
-        },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "SOP_DECISION",
-        entityType: "SOP",
-        entityId: decision.id,
-        details: `${decisionType} ${hrs}h wk ${format(ws, "dd MMM yyyy")} — ${outcome.length} auto-action(s)`,
-      });
       return NextResponse.json(
         { decision: { ...decision, outcome } },
         { status: 201 },
@@ -274,16 +281,19 @@ export async function POST(req: Request) {
           { error: "id and reason required" },
           { status: 400 },
         );
-      const decision = await prisma.sopDecision.update({
-        where: { id },
-        data: { status: "CANCELLED", notes: reason },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "SOP_DECISION_CANCELLED",
-        entityType: "SOP",
-        entityId: id,
-        details: reason,
+      const decision = await prisma.$transaction(async (tx) => {
+        const dec = await tx.sopDecision.update({
+          where: { id },
+          data: { status: "CANCELLED", notes: reason },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "SOP_DECISION_CANCELLED",
+          entityType: "SOP",
+          entityId: id,
+          details: reason,
+        });
+        return dec;
       });
       return NextResponse.json({ decision });
     }
@@ -295,24 +305,27 @@ export async function POST(req: Request) {
           { error: "machineId, title, from, to required" },
           { status: 400 },
         );
-      const win = await prisma.capacityWindow.create({
-        data: {
-          machineId,
-          windowType: "MAINTENANCE",
-          title,
-          from: new Date(from),
-          to: new Date(to),
-          hours: hours ? Number(hours) : null,
-          reason: reason || null,
-          createdByName: user.name || "System",
-        },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "CAPACITY_WINDOW",
-        entityType: "MACHINE",
-        entityId: machineId,
-        details: `${title} (${new Date(from).toISOString().slice(0, 10)} → ${new Date(to).toISOString().slice(0, 10)})`,
+      const win = await prisma.$transaction(async (tx) => {
+        const w = await tx.capacityWindow.create({
+          data: {
+            machineId,
+            windowType: "MAINTENANCE",
+            title,
+            from: new Date(from),
+            to: new Date(to),
+            hours: hours ? Number(hours) : null,
+            reason: reason || null,
+            createdByName: user.name || "System",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "CAPACITY_WINDOW",
+          entityType: "MACHINE",
+          entityId: machineId,
+          details: `${title} (${new Date(from).toISOString().slice(0, 10)} → ${new Date(to).toISOString().slice(0, 10)})`,
+        });
+        return w;
       });
       return NextResponse.json({ window: win }, { status: 201 });
     }

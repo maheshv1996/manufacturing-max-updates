@@ -11,7 +11,8 @@ import {
   TrendingDown,
   Trophy,
   Filter,
-  FileText
+  FileText,
+  X,
 } from "lucide-react";
 import { Button, Input, Select } from "@/app/components/ui";
 import { WIN_LOSS_REASONS } from "@/lib/winLoss";
@@ -48,6 +49,19 @@ export default function FollowUpsClient() {
   const [wonFor, setWonFor] = useState<IdleQuote | null>(null);
   const [wonReason, setWonReason] = useState("PRICE");
   const [wonNote, setWonNote] = useState("");
+
+  useEffect(() => {
+    if (!noteFor && !wonFor && !lostFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNoteFor(null);
+        setWonFor(null);
+        setLostFor(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [noteFor, wonFor, lostFor]);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -352,11 +366,30 @@ export default function FollowUpsClient() {
 
       {/* Log follow-up modal */}
       {noteFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
-              Log follow-up — {noteFor.customerName}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setNoteFor(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="follow-up-modal-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 id="follow-up-modal-title" className="font-bold text-white">
+                Log follow-up — {noteFor.customerName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setNoteFor(null)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <p className="text-xs text-slate-400">
               {noteFor.quoteNumber} · idle {noteFor.daysIdle}d
             </p>
@@ -366,6 +399,7 @@ export default function FollowUpsClient() {
               placeholder="What happened on this call / email?"
             />
             <Button
+              type="button"
               disabled={busy || !note}
               onClick={() =>
                 act("log", { id: noteFor.id, note }).then(() =>
@@ -387,11 +421,30 @@ export default function FollowUpsClient() {
 
       {/* Mark won modal */}
       {wonFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
-              Mark won — {wonFor.customerName}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setWonFor(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mark-won-modal-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 id="mark-won-modal-title" className="font-bold text-white">
+                Mark won — {wonFor.customerName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setWonFor(null)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <div>
               <label className="text-xs text-slate-400 font-semibold">
                 Won because of
@@ -414,6 +467,7 @@ export default function FollowUpsClient() {
               placeholder="Optional note"
             />
             <Button
+              type="button"
               disabled={busy}
               onClick={() =>
                 act("mark-won", {
@@ -437,11 +491,30 @@ export default function FollowUpsClient() {
 
       {/* Mark lost modal */}
       {lostFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
-              Mark lost — {lostFor.customerName}
-            </h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setLostFor(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mark-lost-modal-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 id="mark-lost-modal-title" className="font-bold text-white">
+                Mark lost — {lostFor.customerName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLostFor(null)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <div>
               <label className="text-xs text-slate-400 font-semibold">
                 Lost reason

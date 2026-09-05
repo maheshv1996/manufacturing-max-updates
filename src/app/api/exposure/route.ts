@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { termsDays } from "@/lib/winLoss";
 import { fromPaiseRow } from "@/lib/money";
 
@@ -12,6 +12,15 @@ const OPEN_STATUSES = ["PLANNED", "IN_PROGRESS", "ON_HOLD"];
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "finance.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const [workOrders, invoices, customers] = await Promise.all([
       prisma.workOrder.findMany({
         select: {
@@ -161,10 +170,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (
-      !user.id ||
-      (!user.isOwner && !canAny(user, ["commercial.edit", "finance.view"]))
-    ) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.edit", "finance.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || "Admin";
@@ -185,24 +194,27 @@ export async function POST(req: Request) {
       );
     }
 
-    const existing = await prisma.customer.findFirst({
-      where: { name: customerName },
-    });
-    const customer = existing
-      ? await prisma.customer.update({
-          where: { id: existing.id },
-          data: { paymentTerms },
-        })
-      : await prisma.customer.create({
-          data: { name: customerName, paymentTerms },
-        });
+    const customer = await prisma.$transaction(async (tx) => {
+      const existing = await tx.customer.findFirst({
+        where: { name: customerName },
+      });
+      const cust = existing
+        ? await tx.customer.update({
+            where: { id: existing.id },
+            data: { paymentTerms },
+          })
+        : await tx.customer.create({
+            data: { name: customerName, paymentTerms },
+          });
 
-    await logAudit({
-      actor,
-      action: "CUSTOMER_TERMS_UPDATED",
-      entityType: "CUSTOMER",
-      entityId: customer.id,
-      details: `${customerName} payment terms → ${paymentTerms}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "CUSTOMER_TERMS_UPDATED",
+        entityType: "CUSTOMER",
+        entityId: cust.id,
+        details: `${customerName} payment terms → ${paymentTerms}`,
+      });
+      return cust;
     });
     return NextResponse.json({ success: true, customer });
   } catch (error) {

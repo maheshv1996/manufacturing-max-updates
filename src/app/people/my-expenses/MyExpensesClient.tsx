@@ -59,6 +59,15 @@ export default function MyExpensesClient() {
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState([{ key: Date.now(), category: "TRAVEL", description: "", amount: "" }]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   const load = async () => {
     try {
       const res = await fetch("/api/people/expenses");
@@ -205,11 +214,17 @@ export default function MyExpensesClient() {
       </Card>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl bg-slate-900 rounded-2xl border border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setOpen(false)}>
+          <div
+            className="w-full max-w-xl bg-slate-900 rounded-2xl border border-white/10 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expense-modal-title"
+          >
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Submit Expense Claim</h3>
-              <button onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-white/5">
+              <h3 id="expense-modal-title" className="text-lg font-bold text-white">Submit Expense Claim</h3>
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="p-2 rounded-lg hover:bg-white/5">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -249,7 +264,7 @@ export default function MyExpensesClient() {
                   className="w-full bg-slate-800/60 border border-white/10 rounded-lg px-4 py-2 text-white text-sm" />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button variant="primary" isLoading={saving} onClick={submit}>
                   <CheckCircle2 className="size-4" /> Submit for Approval
                 </Button>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { monthDepreciation, monthKey, periodLabel } from "@/lib/fixedAssets";
 import { nextVoucherNumber } from "@/lib/voucherNumbers";
 
@@ -196,19 +196,23 @@ export async function POST(req: Request) {
       };
 
       if (action === "create") {
-        const asset = await prisma.fixedAsset.create({
-          data: {
-            ...data,
-            assetCode: assetCode?.trim() || (await nextAssetCode()),
-            bookValue: costN,
-          },
-        });
-        await logAudit({
-          actor,
-          action: "ASSET_CREATED",
-          entityType: "FIXED_ASSET",
-          entityId: asset.id,
-          details: `${asset.assetCode} ${asset.name} ₹${costN} ${method}`,
+        const assetCodeResolved = assetCode?.trim() || (await nextAssetCode());
+        const asset = await prisma.$transaction(async (tx) => {
+          const created = await tx.fixedAsset.create({
+            data: {
+              ...data,
+              assetCode: assetCodeResolved,
+              bookValue: costN,
+            },
+          });
+          await logAuditTx(tx, {
+            actor,
+            action: "ASSET_CREATED",
+            entityType: "FIXED_ASSET",
+            entityId: created.id,
+            details: `${created.assetCode} ${created.name} ₹${costN} ${method}`,
+          });
+          return created;
         });
         return NextResponse.json({ asset });
       }
@@ -221,16 +225,19 @@ export async function POST(req: Request) {
           { error: "Disposed assets cannot be edited" },
           { status: 400 },
         );
-      const asset = await prisma.fixedAsset.update({
-        where: { id },
-        data: { ...data, bookValue: costN - existing.accumulatedDepreciation },
-      });
-      await logAudit({
-        actor,
-        action: "ASSET_UPDATED",
-        entityType: "FIXED_ASSET",
-        entityId: id,
-        details: `${asset.assetCode} ${asset.name} updated`,
+      const asset = await prisma.$transaction(async (tx) => {
+        const updated = await tx.fixedAsset.update({
+          where: { id },
+          data: { ...data, bookValue: costN - existing.accumulatedDepreciation },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "ASSET_UPDATED",
+          entityType: "FIXED_ASSET",
+          entityId: id,
+          details: `${updated.assetCode} ${updated.name} updated`,
+        });
+        return updated;
       });
       return NextResponse.json({ asset });
     }
@@ -245,20 +252,23 @@ export async function POST(req: Request) {
       const existing = await prisma.fixedAsset.findUnique({ where: { id } });
       if (!existing)
         return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-      const asset = await prisma.fixedAsset.update({
-        where: { id },
-        data: {
-          status: "DISPOSED",
-          disposedAt: new Date(),
-          notes: notes.trim(),
-        },
-      });
-      await logAudit({
-        actor,
-        action: "ASSET_DISPOSED",
-        entityType: "FIXED_ASSET",
-        entityId: id,
-        details: `${asset.assetCode} ${asset.name} disposed — ${notes.trim()}`,
+      const asset = await prisma.$transaction(async (tx) => {
+        const updated = await tx.fixedAsset.update({
+          where: { id },
+          data: {
+            status: "DISPOSED",
+            disposedAt: new Date(),
+            notes: notes.trim(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "ASSET_DISPOSED",
+          entityType: "FIXED_ASSET",
+          entityId: id,
+          details: `${updated.assetCode} ${updated.name} disposed — ${notes.trim()}`,
+        });
+        return updated;
       });
       return NextResponse.json({ asset });
     }
@@ -288,10 +298,9 @@ export async function POST(req: Request) {
         existingEntries.filter((e) => e.voucher).map((e) => e.voucher!.id),
       );
 
-      const made: {
-        assetCode: string;
-        name: string;
-        amount: number;
+      const itemsToMake: {
+        asset: (typeof assets)[0];
+        charge: number;
         voucherNumber: string;
       }[] = [];
       const skipped: string[] = [];
@@ -310,34 +319,50 @@ export async function POST(req: Request) {
           skipped.push(`${asset.assetCode} (already booked)`);
           continue;
         }
-        const voucher = await prisma.voucher.create({
-          data: {
-            voucherNumber: await nextVoucherNumber(
-              new Date(period + "-01T00:00:00.000Z"),
-            ),
-            voucherType: "DEPRECIATION",
-            amount: charge,
-            particulars: `Depreciation ${asset.name} — ${periodLabel(period)}`,
-            voucherDate: new Date(period + "-01T00:00:00.000Z"),
-            status: "PENDING_CHECK",
-            enteredBy: actor,
-            sourceAssetId: asset.id,
-          },
-        });
-        made.push({
-          assetCode: asset.assetCode,
-          name: asset.name,
-          amount: charge,
-          voucherNumber: voucher.voucherNumber,
-        });
+        const vNum = await nextVoucherNumber(
+          new Date(period + "-01T00:00:00.000Z"),
+        );
+        itemsToMake.push({ asset, charge, voucherNumber: vNum });
       }
 
-      await logAudit({
-        actor,
-        action: "DEPRECIATION_DRAFTS",
-        entityType: "DEPRECIATION",
-        entityId: period,
-        details: `${periodLabel(period)}: ${made.length} voucher draft(s) created (${skipped.length} skipped)`,
+      const made = await prisma.$transaction(async (tx) => {
+        const createdList: {
+          assetCode: string;
+          name: string;
+          amount: number;
+          voucherNumber: string;
+        }[] = [];
+
+        for (const item of itemsToMake) {
+          const voucher = await tx.voucher.create({
+            data: {
+              voucherNumber: item.voucherNumber,
+              voucherType: "DEPRECIATION",
+              amount: item.charge,
+              particulars: `Depreciation ${item.asset.name} — ${periodLabel(period)}`,
+              voucherDate: new Date(period + "-01T00:00:00.000Z"),
+              status: "PENDING_CHECK",
+              enteredBy: actor,
+              sourceAssetId: item.asset.id,
+            },
+          });
+          createdList.push({
+            assetCode: item.asset.assetCode,
+            name: item.asset.name,
+            amount: item.charge,
+            voucherNumber: voucher.voucherNumber,
+          });
+        }
+
+        await logAuditTx(tx, {
+          actor,
+          action: "DEPRECIATION_DRAFTS",
+          entityType: "DEPRECIATION",
+          entityId: period,
+          details: `${periodLabel(period)}: ${createdList.length} voucher draft(s) created (${skipped.length} skipped)`,
+        });
+
+        return createdList;
       });
 
       return NextResponse.json({

@@ -1,20 +1,24 @@
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
 
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
 
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (
     !user.isOwner &&
     !can(user, "system.edit") &&
-    !user.isOwner &&
-    !can(user, "ops.edit")
+    !can(user, "ops.edit") &&
+    !can(user, "quality.view")
   ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -47,10 +51,14 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  const userName = headersList.get("x-user-name") || "ADMIN";
+  const userName = user.name || headersList.get("x-user-name") || "ADMIN";
 
-  if (!user.isOwner && !can(user, "system.edit")) {
+  if (!user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!user.isOwner && !can(user, "system.edit") && !can(user, "quality.edit")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
@@ -63,32 +71,36 @@ export async function POST(req: Request) {
       );
     }
 
-    const certification = await prisma.certification.upsert({
-      where: {
-        userId_machineId: { userId, machineId },
-      },
-      update: {
-        isActive: true,
-        validUntil: validUntil ? new Date(validUntil) : null,
-        certifiedBy: userName,
-        notes,
-      },
-      create: {
-        userId,
-        machineId,
-        validUntil: validUntil ? new Date(validUntil) : null,
-        certifiedBy: userName,
-        notes,
-        isActive: true,
-      },
-    });
+    const certification = await prisma.$transaction(async (tx) => {
+      const res = await tx.certification.upsert({
+        where: {
+          userId_machineId: { userId, machineId },
+        },
+        update: {
+          isActive: true,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          certifiedBy: userName,
+          notes,
+        },
+        create: {
+          userId,
+          machineId,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          certifiedBy: userName,
+          notes,
+          isActive: true,
+        },
+      });
 
-    await logAudit({
-      actor: userName,
-      action: "CERTIFICATION_CREATED",
-      entityType: "Certification",
-      entityId: certification.id,
-      details: `user ${userId} · machine ${machineId}`,
+      await logAuditTx(tx, {
+        actor: userName,
+        action: "CERTIFICATION_CREATED",
+        entityType: "Certification",
+        entityId: res.id,
+        details: `user ${userId} · machine ${machineId}`,
+      });
+
+      return res;
     });
 
     return NextResponse.json(certification);

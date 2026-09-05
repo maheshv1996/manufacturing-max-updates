@@ -73,6 +73,16 @@ export default function ToolsManagementPageClient() {
     fetchToolsData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showAddModal) {
+        setShowAddModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showAddModal]);
+
   const handleResetCounter = async (toolId: string) => {
     if (
       !confirm(
@@ -445,13 +455,20 @@ export default function ToolsManagementPageClient() {
 
       {/* ADD TOOL MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setShowAddModal(false)}
+        >
           <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-tool-modal-title"
+            onClick={(e) => e.stopPropagation()}
             onSubmit={handleCreateTool}
             className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <h3 id="create-tool-modal-title" className="text-lg font-black text-white flex items-center gap-2">
                 <Wrench className="w-5 h-5 text-amber-400" />
                 Add New Tool to Inventory
               </h3>

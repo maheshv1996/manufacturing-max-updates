@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAudit, logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 import {
   calculateProjectCompletionPercentage,
   calculateMachineLoadHours,
@@ -221,25 +222,33 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params;
-    // Unlink work orders before deleting project
-    await prisma.workOrder.updateMany({
-      where: { projectId: id },
-      data: { projectId: null },
-    });
-
-    const deleted = await prisma.project.delete({
-      where: { id },
-    });
-
     const reqHeaders = await headers();
-    const actor = reqHeaders.get("x-user-name") || "Admin";
-    await logAudit({
-      actor,
-      action: "DELETE_PROJECT",
-      entityType: "PROJECT",
-      entityId: id,
-      details: `Deleted project "${deleted.name}"`,
+    const user = getUserFromHeaders(reqHeaders);
+    if (!user.isOwner && !can(user, "system.edit") && !can(user, "ops.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor = user.name || reqHeaders.get("x-user-name") || "Admin";
+    const { id } = await params;
+
+    await prisma.$transaction(async (tx) => {
+      // Unlink work orders before deleting project
+      await tx.workOrder.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+
+      const deleted = await tx.project.delete({
+        where: { id },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "DELETE_PROJECT",
+        entityType: "PROJECT",
+        entityId: id,
+        details: `Deleted project "${deleted.name}"`,
+        severity: "WARN",
+      });
     });
 
     return NextResponse.json({ success: true });

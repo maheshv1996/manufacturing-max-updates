@@ -1,5 +1,7 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -159,27 +161,43 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "COMMISSIONING_STEP_SAVED", entityType: "CommissioningChecklist", details: "Commissioning step saved" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["ops.edit", "engineering.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { tag, state } = body;
+    const tag = typeof body.tag === "string" ? body.tag : "";
+    const state = Boolean(body.state);
+    if (!tag) {
+      return NextResponse.json({ error: "tag is required" }, { status: 400 });
+    }
 
     plcIO.digitalInputs = plcIO.digitalInputs.map((inp) =>
-      inp.tag === tag ? { ...inp, state: Boolean(state) } : inp,
+      inp.tag === tag ? { ...inp, state } : inp,
     );
 
     evaluatePlcLogic();
+
+    const actor = user.name || user.id || "Operator";
+    await logAudit({
+      actor,
+      action: "COMMISSIONING_STEP_SAVED",
+      entityType: "CommissioningChecklist",
+      details: `Toggled PLC IO ${tag} to ${state}`,
+    });
 
     return NextResponse.json({
       success: true,
       message: `Toggled ${tag} to ${state}`,
       io: plcIO,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Toggle PLC IO error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

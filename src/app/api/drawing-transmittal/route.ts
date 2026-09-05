@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
 
 export const maxDuration = 60;
@@ -58,6 +58,12 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (
+    !user.isOwner &&
+    !canAny(user, ["engineering.edit", "ops.edit", "quality.edit", "system.edit"])
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
@@ -101,19 +107,22 @@ export async function POST(req: Request) {
           deduped: true,
         });
       }
-      result = await prisma.drawingTransmittal.create({
-        data: {
-          documentId: doc.id,
-          revision: doc.version,
-          releasedBy: user.name || "Engineering",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DRAWING_RELEASED",
-        entityType: "DOCUMENT",
-        entityId: doc.id,
-        details: `${doc.title} rev ${doc.version} released — awaiting Production + Quality acknowledgement`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.drawingTransmittal.create({
+          data: {
+            documentId: doc.id,
+            revision: doc.version,
+            releasedBy: user.name || "Engineering",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DRAWING_RELEASED",
+          entityType: "DOCUMENT",
+          entityId: doc.id,
+          details: `${doc.title} rev ${doc.version} released — awaiting Production + Quality acknowledgement`,
+        });
+        return created;
       });
     } else if (action === "ack") {
       // Acknowledging a revision is a department-head decision for that function.
@@ -150,16 +159,19 @@ export async function POST(req: Request) {
               ackQualityBy: user.name || "Quality Manager",
               ackQualityAt: new Date(),
             };
-      result = await prisma.drawingTransmittal.update({
-        where: { id: t.id },
-        data: field,
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DRAWING_ACK",
-        entityType: "DOCUMENT",
-        entityId: t.documentId,
-        details: `${role} acknowledged drawing rev ${t.revision} (${reason.reason})`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.drawingTransmittal.update({
+          where: { id: t.id },
+          data: field,
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DRAWING_ACK",
+          entityType: "DOCUMENT",
+          entityId: t.documentId,
+          details: `${role} acknowledged drawing rev ${t.revision} (${reason.reason})`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

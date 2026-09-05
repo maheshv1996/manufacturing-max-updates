@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { requireManagerLevel } from "@/lib/managerGate";
 import {
   getObjectiveActuals,
@@ -90,22 +90,25 @@ export async function POST(req: Request) {
       if (!OBJECTIVE_KPI_TYPES.some((k) => k.value === kpiType)) {
         return NextResponse.json({ error: "Invalid kpiType" }, { status: 400 });
       }
-      result = await prisma.qualityObjective.create({
-        data: {
-          department,
-          kpiType,
-          targetValue: Number(targetValue),
-          period,
-          ownerName: ownerName || null,
-          isActive: data.isActive !== false,
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "OBJECTIVE_CREATED",
-        entityType: "QUALITY_OBJECTIVE",
-        entityId: result.id,
-        details: `${department} ${kpiType} target ${targetValue} for ${period}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.qualityObjective.create({
+          data: {
+            department,
+            kpiType,
+            targetValue: Number(targetValue),
+            period,
+            ownerName: ownerName || null,
+            isActive: data.isActive !== false,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "OBJECTIVE_CREATED",
+          entityType: "QUALITY_OBJECTIVE",
+          entityId: created.id,
+          details: `${department} ${kpiType} target ${targetValue} for ${period}`,
+        });
+        return created;
       });
     } else if (action === "update") {
       const { id, ...rest } = data;
@@ -121,16 +124,19 @@ export async function POST(req: Request) {
       if (payload.targetValue !== undefined)
         payload.targetValue = Number(payload.targetValue);
       delete payload.id;
-      result = await prisma.qualityObjective.update({
-        where: { id },
-        data: payload,
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "OBJECTIVE_UPDATED",
-        entityType: "QUALITY_OBJECTIVE",
-        entityId: id,
-        details: `${result.department} ${result.kpiType} target ${result.targetValue}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.qualityObjective.update({
+          where: { id },
+          data: payload,
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "OBJECTIVE_UPDATED",
+          entityType: "QUALITY_OBJECTIVE",
+          entityId: id,
+          details: `${updated.department} ${updated.kpiType} target ${updated.targetValue}`,
+        });
+        return updated;
       });
     } else if (action === "delete") {
       const existing = await prisma.qualityObjective.findUnique({
@@ -141,13 +147,15 @@ export async function POST(req: Request) {
           { error: "Objective not found" },
           { status: 404 },
         );
-      await prisma.qualityObjective.delete({ where: { id: data.id } });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "OBJECTIVE_DELETED",
-        entityType: "QUALITY_OBJECTIVE",
-        entityId: data.id,
-        details: `${existing.department} ${existing.kpiType}`,
+      await prisma.$transaction(async (tx) => {
+        await tx.qualityObjective.delete({ where: { id: data.id } });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "OBJECTIVE_DELETED",
+          entityType: "QUALITY_OBJECTIVE",
+          entityId: data.id,
+          details: `${existing.department} ${existing.kpiType}`,
+        });
       });
       return NextResponse.json({ success: true });
     } else {

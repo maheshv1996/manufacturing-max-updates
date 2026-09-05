@@ -1,6 +1,8 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,26 +37,41 @@ export async function GET() {
     ];
 
     return NextResponse.json({ success: true, transfers, plants, rawMaterials });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "PLANT_TRANSFER_CREATED", entityType: "PlantTransfer", details: "Plant transfer initiated" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["supply.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+
     const stnNumber = `STN-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const material = typeof body.material === "string" ? body.material.slice(0, 100) : "items";
+    const actor = user.name || user.id || "Logistics Lead";
+
+    await logAudit({
+      actor,
+      action: "PLANT_TRANSFER_CREATED",
+      entityType: "PlantTransfer",
+      details: `Issued Inter-Plant Stock Transfer Note ${stnNumber} for ${material}`,
+    });
+
     return NextResponse.json({
       success: true,
-      message: `Issued Inter-Plant Stock Transfer Note ${stnNumber} for ${body.material || "items"}!`,
+      message: `Issued Inter-Plant Stock Transfer Note ${stnNumber} for ${material}!`,
       stnNumber,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

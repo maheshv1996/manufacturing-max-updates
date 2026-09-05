@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { fromPaise, toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 import { parseOr400 } from "@/lib/validate";
@@ -13,7 +13,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view"]))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -113,10 +116,12 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     if (
-      !user.id ||
-      (!user.isOwner &&
-        !canAny(user, ["commercial.edit", "ops.edit", "system.edit"]))
+      !user.isOwner &&
+      !canAny(user, ["commercial.edit", "ops.edit", "system.edit"])
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -160,47 +165,51 @@ export async function POST(req: Request) {
     }
 
     const contactPerson = d.contactName || d.contactPerson || null;
-    const customer = await prisma.customer.create({
-      data: {
-        code,
-        name: d.name,
-        type: d.type,
-        contactPerson,
-        email: d.email || null,
-        phone: d.phone || null,
-        address: d.address || null,
-        billingAddress: d.billingAddress || d.address || null,
-        shippingAddress: d.shippingAddress || null,
-        city: d.city || null,
-        state: d.state || null,
-        gstin: d.gstin || null,
-        pan: d.pan || null,
-        paymentTerms: d.paymentTerms || "NET30",
-        creditLimit: toPaise(d.creditLimit || 0),
-        creditDays: d.creditDays ?? 30,
-        currency: d.currency || "INR",
-        notes: d.notes || null,
-        createdBy: actor,
-        contacts: {
-          create:
-            d.contacts?.map((c, idx) => ({
-              name: c.name,
-              role: c.role || null,
-              phone: c.phone || null,
-              email: c.email || null,
-              isPrimary: idx === 0,
-            })) || [],
+    const customer = await prisma.$transaction(async (tx) => {
+      const created = await tx.customer.create({
+        data: {
+          code,
+          name: d.name,
+          type: d.type,
+          contactPerson,
+          email: d.email || null,
+          phone: d.phone || null,
+          address: d.address || null,
+          billingAddress: d.billingAddress || d.address || null,
+          shippingAddress: d.shippingAddress || null,
+          city: d.city || null,
+          state: d.state || null,
+          gstin: d.gstin || null,
+          pan: d.pan || null,
+          paymentTerms: d.paymentTerms || "NET30",
+          creditLimit: toPaise(d.creditLimit || 0),
+          creditDays: d.creditDays ?? 30,
+          currency: d.currency || "INR",
+          notes: d.notes || null,
+          createdBy: actor,
+          contacts: {
+            create:
+              d.contacts?.map((c, idx) => ({
+                name: c.name,
+                role: c.role || null,
+                phone: c.phone || null,
+                email: c.email || null,
+                isPrimary: idx === 0,
+              })) || [],
+          },
         },
-      },
-      include: { contacts: true },
-    });
+        include: { contacts: true },
+      });
 
-    await logAudit({
-      actor,
-      action: "CUSTOMER_CREATED",
-      entityType: "Customer",
-      entityId: customer.id,
-      details: `Created customer ${customer.code} ${customer.name} (${customer.type})`,
+      await logAuditTx(tx, {
+        actor,
+        action: "CUSTOMER_CREATED",
+        entityType: "Customer",
+        entityId: created.id,
+        details: `Created customer ${created.code} ${created.name} (${created.type})`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, customer: fromPaiseRow("Customer", customer) });

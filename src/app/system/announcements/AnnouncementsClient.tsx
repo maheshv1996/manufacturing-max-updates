@@ -73,6 +73,16 @@ export default function AnnouncementsClient({ canEdit = true }: { canEdit?: bool
 
   useEffect(load, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && composeOpen) {
+        setComposeOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [composeOpen]);
+
   const visible = useMemo(() => items, [items]);
   const liveCount = visible.filter((a) => a.active).length;
   const expiredInList = visible.filter((a) => a.active && a.expiresAt && new Date(a.expiresAt) < new Date()).length;
@@ -251,17 +261,28 @@ export default function AnnouncementsClient({ canEdit = true }: { canEdit?: bool
       </Card>
 
       {composeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setComposeOpen(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="compose-announcement-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setComposeOpen(false)}
+        >
           <div
             className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">New Announcement</h3>
+                <h3 id="compose-announcement-modal-title" className="font-semibold text-white">New Announcement</h3>
                 <p className="text-xs text-slate-400">Reaches every screen the moment you publish</p>
               </div>
-              <button onClick={() => setComposeOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+              <button
+                type="button"
+                onClick={() => setComposeOpen(false)}
+                aria-label="Close announcement dialog"
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
                 <X className="size-5" />
               </button>
             </div>

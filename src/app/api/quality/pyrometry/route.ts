@@ -1,5 +1,8 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,15 +42,35 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "PYROMETRY_RECORDED", entityType: "PyrometryLog", details: "Pyrometry survey logged" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["quality.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
+
+    const furnaceId = typeof body.furnaceId === "string" ? body.furnaceId : "Furnace";
+    const actor = user.name || user.id || "Quality Inspector";
+
+    await prisma.$transaction(async (tx) => {
+      await logAuditTx(tx, {
+        actor,
+        action: "PYROMETRY_RECORDED",
+        entityType: "PyrometryLog",
+        details: `Pyrometry TUS survey logged for ${furnaceId}`,
+      });
+    });
+
     return NextResponse.json({ success: true, message: "Pyrometry TUS logged", record: body });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

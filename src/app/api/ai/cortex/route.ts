@@ -125,7 +125,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-    await logAudit({ actor: "system", action: "AI_CORTEX_PROMPT", entityType: "AiCortex", details: "AI Cortex query executed" });
   try {
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -135,9 +134,17 @@ export async function POST(req: NextRequest) {
     const { action, payload } = body;
 
     if (action === "resolve_conflict") {
-      const { conflictId, optionIndex } = payload;
+      const { conflictId, optionIndex } = payload || {};
       const conflict = SAMPLE_CONFLICTS.find((c) => c.id === conflictId) || SAMPLE_CONFLICTS[0];
       const selectedOption = conflict.options[optionIndex] || conflict.options[0];
+
+      await logAudit({
+        actor: "system",
+        action: "AI_CORTEX_CONFLICT_RESOLVED",
+        entityType: "AiCortex",
+        entityId: conflictId,
+        details: `Resolved conflict ${conflictId}: ${selectedOption.label}`,
+      });
 
       return NextResponse.json({
         status: "ok",

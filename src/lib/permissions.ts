@@ -123,6 +123,7 @@ export function getUserFromHeaders(headersList: Headers) {
   return {
     id: headersList.get("x-user-id") || "",
     name: headersList.get("x-user-name") || "",
+    email: headersList.get("x-user-email") || "",
     roleId: headersList.get("x-user-role-id") || "",
     roleName: headersList.get("x-user-role-name") || "",
     isOwner,

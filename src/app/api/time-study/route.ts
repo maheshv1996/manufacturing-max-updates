@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 const FIELDS = [
   "productSku",
@@ -66,6 +66,9 @@ async function actualAvgMin(
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["ops.view", "system.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -99,6 +102,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -117,30 +123,35 @@ export async function POST(req: Request) {
       );
     }
 
-    let result: any;
-    if (action === "create") {
-      result = await prisma.timeStudy.create({ data: coerce(data) });
-    } else if (action === "update") {
-      if (!data.id)
-        return NextResponse.json({ error: "Missing id" }, { status: 400 });
-      result = await prisma.timeStudy.update({
-        where: { id: data.id },
-        data: coerce(data),
-      });
-    } else if (action === "delete") {
-      if (!data.id)
-        return NextResponse.json({ error: "Missing id" }, { status: 400 });
-      result = await prisma.timeStudy.delete({ where: { id: data.id } });
-    } else {
+    if (action !== "create" && action !== "update" && action !== "delete") {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
+    if ((action === "update" || action === "delete") && !data.id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_TIME_STUDY`,
-      entityType: "TIME_STUDY",
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} time study`,
+    const result = await prisma.$transaction(async (tx) => {
+      let res: any;
+      if (action === "create") {
+        res = await tx.timeStudy.create({ data: coerce(data) });
+      } else if (action === "update") {
+        res = await tx.timeStudy.update({
+          where: { id: data.id },
+          data: coerce(data),
+        });
+      } else if (action === "delete") {
+        res = await tx.timeStudy.delete({ where: { id: data.id } });
+      }
+
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
+        action: `${action.toUpperCase()}_TIME_STUDY`,
+        entityType: "TIME_STUDY",
+        entityId: res?.id || data?.id || "unknown",
+        details: `${user.name || "Admin"} ${action} time study`,
+      });
+
+      return res;
     });
 
     return NextResponse.json({ success: true, record: result });

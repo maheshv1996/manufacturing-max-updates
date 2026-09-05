@@ -94,6 +94,12 @@ export default function AppShell({
 
   return (
     <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:font-semibold focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+      >
+        Skip to main content
+      </a>
       {showAurora && !isExcluded && (
         <div
           aria-hidden
@@ -148,11 +154,13 @@ export default function AppShell({
         ) : (
           <SubscriptionGuard>
             <motion.main
+              id="main-content"
+              tabIndex={-1}
               key={pathname}
               initial={reducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, ease: PREMIUM_EASE }}
-              className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full overflow-x-hidden print:!p-0 print:!transform-none print:!animate-none"
+              className="flex-1 p-3 sm:p-4 md:p-6 min-w-0 max-w-full overflow-x-hidden print:!p-0 print:!transform-none print:!animate-none outline-none"
             >
               {children}
             </motion.main>

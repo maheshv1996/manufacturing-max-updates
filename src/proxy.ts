@@ -69,6 +69,35 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Fetch Metadata & CSRF Defense (modern-web-guidance §3.7):
+  // Inspect Sec-Fetch-* request headers to block unauthorized cross-site requests
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  const secFetchMode = request.headers.get("sec-fetch-mode");
+  const secFetchDest = request.headers.get("sec-fetch-dest");
+
+  if (secFetchSite === "cross-site") {
+    // Allow top-level browser navigations (link clicks to public pages or login),
+    // but reject cross-site subresource requests, objects/embeds, and non-GET mutations (CSRF).
+    const isTopLevelNavigate =
+      request.method === "GET" &&
+      secFetchMode === "navigate" &&
+      !["object", "embed", "iframe"].includes(secFetchDest || "");
+
+    const isOAuthCallback = pathname === "/api/auth/google/callback";
+
+    if (!isTopLevelNavigate && !isOAuthCallback) {
+      return NextResponse.json(
+        { error: "Forbidden: Cross-site request rejected" },
+        {
+          status: 403,
+          headers: {
+            Vary: "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest",
+          },
+        },
+      );
+    }
+  }
+
   // Allow static files (.js, .css, .ico, etc.) and public routes. When a valid
   // session exists we still forward identity headers so public surfaces (e.g.
   // /api/auth/me, the gateway, /login) can greet the logged-in user by name.

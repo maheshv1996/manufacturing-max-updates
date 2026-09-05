@@ -1,5 +1,7 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { numberToIndianWords } from "@/lib/invoicingEngine";
 import { fromPaiseRow, fromPaiseRows } from "@/lib/money";
@@ -60,8 +62,13 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-    await logAudit({ actor: "system", action: "INVOICE_UPDATED", entityType: "Invoice", details: "Invoice updated" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id || (!user.isOwner && !can(user, "commercial.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await req.json();
     const {
@@ -83,23 +90,25 @@ export async function PATCH(
     if (dueDate !== undefined)
       updateData.dueDate = dueDate ? new Date(dueDate) : null;
 
-    const updated = await (prisma as any).invoice.update({
-      where: { id },
-      data: updateData,
-      include: {
-        dispatchRecord: true,
-        workOrder: { include: { product: true } },
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const inv = await (tx as any).invoice.update({
+        where: { id },
+        data: updateData,
+        include: {
+          dispatchRecord: true,
+          workOrder: { include: { product: true } },
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
-        actor: "Admin",
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
         action: "UPDATED_INVOICE",
         entityType: "Invoice",
         entityId: id,
         details: JSON.stringify(updateData),
-      },
+      });
+
+      return inv;
     });
 
     return NextResponse.json({ invoice: updated });

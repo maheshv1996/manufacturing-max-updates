@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Manufacturing Max
 
-## Getting Started
+One offline, install-once system that runs a complete manufacturing plant — shop floor, quality/aero compliance, supply chain, engineering, finance, people, maintenance, EHS/lean — with a configurable org model and role-aware AI copilots. See `docs/DEPTH_01…06` for the vision and depth specs, and `docs/plans/` for the v2 rebuild program.
 
-First, run the development server:
+**Branches**
+- `master` — the shippable prototype (1.0.x desktop edition, pilot-capable).
+- `v2` — from-zero rebuild on the typed core + org model (cycles C1…C13, `docs/plans/2026-09-05-rebuild-master.md`). Work lands here, uncommitted until a cycle gate passes.
+
+## Prerequisites
+
+- **Node.js ≥ 20** (`.nvmrc` pins 24) and **npm** (the repo is `package-lock.json`-based).
+- **PostgreSQL** running locally (any recent version). The committed `.env` points at the cloud pilot DB — **for development always override** `DATABASE_URL` via `.env.local` (gitignored) to your local server, e.g.:
+  ```bash
+  # .env.local
+  DATABASE_URL="postgresql://postgres:1996@localhost:5432/mfgmax_v2_dev"
+  ```
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env        # then fill SESSION_SECRET etc. (first run only)
+npm install                 # postinstall runs `prisma generate`
+node scripts/v2-smoke-db.mjs mfgmax_v2_dev   # optional: recreate + push + seed a local scratch DB
+npm run dev                 # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Login requires seeded users (prototype `prisma/seed.ts` on an empty DB, or v2 org data via `prisma/seed-v2.ts`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Next.js dev server (uses `.env.local` over `.env`) |
+| `npm test` | All suites: `desktop/tests/*.test.js` + `tests/*.test.ts` (tsx) |
+| `npm run lint` | ESLint |
+| `npx tsc --noEmit` | Whole-repo type gate |
+| `npm run ci` | verify-counts → tsc → build → tests (CI gate) |
+| `node scripts/v2-smoke-db.mjs [db]` | Recreate a local scratch DB, `prisma db push`, run `seed-v2.ts` (localhost only) |
+| `npm run dist` | Build the Windows desktop `.exe` (electron-builder NSIS; requires Windows) |
 
-## Learn More
+## Conventions (v2 rebuild)
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Type discipline: strict TS, **no `(prisma as any)`**, zod `parseOr400` at every API edge, DTO mapping, `src/lib/core/errors.ts` for API errors.
+- Layering: route → engine (`src/lib/<domain>/`) → Prisma. Pure engines are TDD-tested DB-free (`tests/`); DB adapters (`*Db.ts` / `applyJobAction.ts`) are the only Prisma callers beyond routes.
+- Integrity: audits (`recordAudit`), idempotency (`runIdempotent`), sequences (`allocateSequence`) on every mutating path.
+- Seats & approval chains resolve through the org model (`src/lib/org/`); compliance guardrails G-1…G-10 (`docs/DEPTH_01`) are enforced in engines, never only in UI.

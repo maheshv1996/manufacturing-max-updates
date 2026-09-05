@@ -53,6 +53,18 @@ export default function TrainingClient() {
   const [score, setScore] = useState("");
   const [attendeeFor] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!showCreate && !scoreFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowCreate(false);
+        setScoreFor(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCreate, scoreFor]);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/training");
@@ -366,8 +378,11 @@ export default function TrainingClient() {
           <div
             className="rounded-2xl bg-slate-800 border border-slate-700 p-6 w-full max-w-md space-y-3"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="training-create-title"
           >
-            <h2 className="font-semibold text-white">New training program</h2>
+            <h2 id="training-create-title" className="font-semibold text-white">New training program</h2>
             <input
               placeholder="Title"
               value={form.title}
@@ -417,6 +432,7 @@ export default function TrainingClient() {
                 Create
               </button>
               <button
+                type="button"
                 onClick={() => setShowCreate(false)}
                 className="rounded-xl bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm text-white"
               >
@@ -435,8 +451,11 @@ export default function TrainingClient() {
           <div
             className="rounded-2xl bg-slate-800 border border-slate-700 p-6 w-full max-w-sm space-y-3"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="training-score-title"
           >
-            <h2 className="font-semibold text-white">
+            <h2 id="training-score-title" className="font-semibold text-white">
               Post-training check — {scoreFor.name}
             </h2>
             <input
@@ -467,6 +486,7 @@ export default function TrainingClient() {
                 Record — closes the record
               </button>
               <button
+                type="button"
                 onClick={() => setScoreFor(null)}
                 className="rounded-xl bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm text-white"
               >

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -83,10 +83,10 @@ export async function POST(req: Request) {
     const canEdit =
       user.isOwner ||
       (await requireManagerLevel(user)).ok ||
-      canAny(user, ["people.edit"]);
+      canAny(user, ["people.edit", "hr.edit", "system.edit"]);
     if (!canEdit)
       return NextResponse.json(
-        { error: "Requires manager or people.edit" },
+        { error: "Requires manager, hr.edit, or people.edit" },
         { status: 403 },
       );
 
@@ -107,24 +107,27 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       const code = await nextSeqNumber("contractor", "code", "CNT");
-      result = await prisma.contractor.create({
-        data: {
-          name,
-          code,
-          licenseNumber,
-          licenseValidUntil: new Date(licenseValidUntil),
-          gstin: gstin || null,
-          address: address || null,
-          phone: phone || null,
-          notes: notes || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "CLRA_CONTRACTOR_CREATED",
-        entityType: "CONTRACTOR",
-        entityId: result.id,
-        details: `${result.code} · ${name} · licence ${licenseNumber}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.contractor.create({
+          data: {
+            name,
+            code,
+            licenseNumber,
+            licenseValidUntil: new Date(licenseValidUntil),
+            gstin: gstin || null,
+            address: address || null,
+            phone: phone || null,
+            notes: notes || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CLRA_CONTRACTOR_CREATED",
+          entityType: "CONTRACTOR",
+          entityId: created.id,
+          details: `${created.code} · ${name} · licence ${licenseNumber}`,
+        });
+        return created;
       });
     } else if (action === "update-contractor") {
       const c = await prisma.contractor.findUnique({ where: { id: data.id } });
@@ -144,16 +147,19 @@ export async function POST(req: Request) {
       if (data.phone !== undefined) patch.phone = data.phone || null;
       if (data.notes !== undefined) patch.notes = data.notes || null;
       if (data.isActive !== undefined) patch.isActive = Boolean(data.isActive);
-      result = await prisma.contractor.update({
-        where: { id: c.id },
-        data: patch,
-      });
-      await logAudit({
-        actor,
-        action: "CLRA_CONTRACTOR_UPDATED",
-        entityType: "CONTRACTOR",
-        entityId: c.id,
-        details: `${c.code} · ${c.name}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.contractor.update({
+          where: { id: c.id },
+          data: patch,
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CLRA_CONTRACTOR_UPDATED",
+          entityType: "CONTRACTOR",
+          entityId: c.id,
+          details: `${c.code} · ${c.name}`,
+        });
+        return updated;
       });
     } else if (action === "create-labour") {
       const {
@@ -177,25 +183,28 @@ export async function POST(req: Request) {
           { error: "Contractor not found" },
           { status: 404 },
         );
-      result = await prisma.contractLabourRecord.create({
-        data: {
-          contractorId,
-          name,
-          workType,
-          wagePerDay:
-            wagePerDay !== undefined && wagePerDay !== null
-              ? Number(wagePerDay)
-              : 0,
-          joinedAt: new Date(joinedAt),
-          aadharLast4: aadharLast4 || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "CLRA_LABOUR_CREATED",
-        entityType: "CONTRACT_LABOUR",
-        entityId: result.id,
-        details: `${c.name} · ${name} · ${workType}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.contractLabourRecord.create({
+          data: {
+            contractorId,
+            name,
+            workType,
+            wagePerDay:
+              wagePerDay !== undefined && wagePerDay !== null
+                ? Number(wagePerDay)
+                : 0,
+            joinedAt: new Date(joinedAt),
+            aadharLast4: aadharLast4 || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CLRA_LABOUR_CREATED",
+          entityType: "CONTRACT_LABOUR",
+          entityId: created.id,
+          details: `${c.name} · ${name} · ${workType}`,
+        });
+        return created;
       });
     } else if (action === "update-labour") {
       const r = await prisma.contractLabourRecord.findUnique({
@@ -218,16 +227,19 @@ export async function POST(req: Request) {
       if (data.wagePerDay !== undefined && data.wagePerDay !== null)
         patch.wagePerDay = Number(data.wagePerDay);
       if (data.name !== undefined) patch.name = data.name;
-      result = await prisma.contractLabourRecord.update({
-        where: { id: r.id },
-        data: patch,
-      });
-      await logAudit({
-        actor,
-        action: "CLRA_LABOUR_UPDATED",
-        entityType: "CONTRACT_LABOUR",
-        entityId: r.id,
-        details: `${result.name} · ${result.leftAt ? "left" : "edited"}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.contractLabourRecord.update({
+          where: { id: r.id },
+          data: patch,
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CLRA_LABOUR_UPDATED",
+          entityType: "CONTRACT_LABOUR",
+          entityId: r.id,
+          details: `${updated.name} · ${updated.leftAt ? "left" : "edited"}`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

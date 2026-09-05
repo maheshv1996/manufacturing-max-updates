@@ -518,12 +518,25 @@ class DesktopApp {
   }
 
   stop() {
+    if (this._stopping) return;
+    this._stopping = true;
     this.serverWatchdog?.stop();
-    this.dbWatchdog?.stop();
+    this.serverWatchdog = null;
+    if (this.dbWatchdog) {
+      clearInterval(this.dbWatchdog);
+      this.dbWatchdog = null;
+    }
     this.stopDb();
     this.controlServer?.stop();
-    if (this.backupTimer) clearInterval(this.backupTimer);
-    if (this.pruneTimer) clearInterval(this.pruneTimer);
+    this.controlServer = null;
+    if (this.backupTimer) {
+      clearInterval(this.backupTimer);
+      this.backupTimer = null;
+    }
+    if (this.pruneTimer) {
+      clearInterval(this.pruneTimer);
+      this.pruneTimer = null;
+    }
     if (this.integritySweep) this.integritySweep.stop();
     this.integritySweep = null;
     this.state.server = "stopped";
@@ -870,14 +883,19 @@ async function main(argv) {
   app.silentUpdateCheck(); // fires and forgets — logs availability
   console.log(`[launcher] running — http://localhost:${port} (data: ${app.dataDir})`);
   console.log("Press Ctrl+C to stop.");
-  process.on("SIGINT", () => {
-    app.stop();
+  let isStopping = false;
+  const gracefulShutdown = (signal) => {
+    if (isStopping) return;
+    isStopping = true;
+    try {
+      app.stop();
+    } catch (e) {
+      console.error(`[launcher] error during ${signal} shutdown:`, e);
+    }
     process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    app.stop();
-    process.exit(0);
-  });
+  };
+  process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 }
 
 if (require.main === module) {

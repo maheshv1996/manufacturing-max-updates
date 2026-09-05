@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAudit, logAuditTx } from "@/lib/audit";
 import { autoPostToGL } from "@/lib/glPosting";
 import { toPaise } from "@/lib/money";
 
@@ -45,6 +45,9 @@ function coerce(data: any): any {
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["people.view", "system.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -79,6 +82,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["people.edit", "system.edit"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -127,20 +133,23 @@ export async function POST(req: Request) {
             { error: `Run is ${run.status} — only DRAFT runs can be approved` },
             { status: 400 },
           );
-        run = await prisma.payrollRun.update({
-          where: { month },
-          data: {
-            status: "APPROVED",
-            approvedBy: user.name || "System",
-            approvedAt: new Date(),
-          },
-        });
-        await logAudit({
-          actor: user.name || "System",
-          action: "PAYROLL_RUN_APPROVED",
-          entityType: "PAYROLL",
-          entityId: run.id,
-          details: `${month} approved — ${data.reason.slice(0, 80)}`,
+        run = await prisma.$transaction(async (tx) => {
+          const updated = await tx.payrollRun.update({
+            where: { month },
+            data: {
+              status: "APPROVED",
+              approvedBy: user.name || "System",
+              approvedAt: new Date(),
+            },
+          });
+          await logAuditTx(tx, {
+            actor: user.name || "System",
+            action: "PAYROLL_RUN_APPROVED",
+            entityType: "PAYROLL",
+            entityId: updated.id,
+            details: `${month} approved — ${data.reason.slice(0, 80)}`,
+          });
+          return updated;
         });
 
         // GL auto-post: monthly salary voucher (accrual) —
@@ -199,20 +208,23 @@ export async function POST(req: Request) {
             { error: `Run is ${run.status} — approve it before locking` },
             { status: 400 },
           );
-        run = await prisma.payrollRun.update({
-          where: { month },
-          data: {
-            status: "LOCKED",
-            lockedBy: user.name || "System",
-            lockedAt: new Date(),
-          },
-        });
-        await logAudit({
-          actor: user.name || "System",
-          action: "PAYROLL_RUN_LOCKED",
-          entityType: "PAYROLL",
-          entityId: run.id,
-          details: `${month} locked — ${data.reason.slice(0, 80)}`,
+        run = await prisma.$transaction(async (tx) => {
+          const updated = await tx.payrollRun.update({
+            where: { month },
+            data: {
+              status: "LOCKED",
+              lockedBy: user.name || "System",
+              lockedAt: new Date(),
+            },
+          });
+          await logAuditTx(tx, {
+            actor: user.name || "System",
+            action: "PAYROLL_RUN_LOCKED",
+            entityType: "PAYROLL",
+            entityId: updated.id,
+            details: `${month} locked — ${data.reason.slice(0, 80)}`,
+          });
+          return updated;
         });
       }
       return NextResponse.json({ run });
@@ -276,30 +288,33 @@ export async function POST(req: Request) {
       const total = Math.round((netSum + statu) * 100) / 100;
       const method = data.method || "Bank";
 
-      const treasury = await prisma.treasuryTransaction.create({
-        data: {
-          type: "OUTFLOW",
-          account: "Main",
-          amount: toPaise(total),
-          reference: `Payroll-${month}`,
-          category: "Payroll Settlement",
-          notes: `${(data.reason || "").slice(0, 200)} — net ${Math.round(netSum)} + statutory ${Math.round(statu)}`,
-        },
-      });
-      const settled = await prisma.payrollRun.update({
-        where: { month },
-        data: {
-          status: "LOCKED",
-          settledBy: user.name || "System",
-          settledAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "PAYROLL_RUN_SETTLED",
-        entityType: "PAYROLL",
-        entityId: run.id,
-        details: `${month} settled ${total} via ${method} (net ${Math.round(netSum)} + statutory ${Math.round(statu)}) — ${(data.reason || "").slice(0, 80)}`,
+      const { treasury, settled } = await prisma.$transaction(async (tx) => {
+        const tr = await tx.treasuryTransaction.create({
+          data: {
+            type: "OUTFLOW",
+            account: "Main",
+            amount: toPaise(total),
+            reference: `Payroll-${month}`,
+            category: "Payroll Settlement",
+            notes: `${(data.reason || "").slice(0, 200)} — net ${Math.round(netSum)} + statutory ${Math.round(statu)}`,
+          },
+        });
+        const st = await tx.payrollRun.update({
+          where: { month },
+          data: {
+            status: "LOCKED",
+            settledBy: user.name || "System",
+            settledAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "PAYROLL_RUN_SETTLED",
+          entityType: "PAYROLL",
+          entityId: run.id,
+          details: `${month} settled ${total} via ${method} (net ${Math.round(netSum)} + statutory ${Math.round(statu)}) — ${(data.reason || "").slice(0, 80)}`,
+        });
+        return { treasury: tr, settled: st };
       });
 
       await autoPostToGL({
@@ -382,34 +397,37 @@ export async function POST(req: Request) {
         )
           patch[k] = Number(v);
       }
-      const updated = await prisma.payslip.update({
-        where: { id: payslipId },
-        data: { ...patch, generatedAt: new Date() },
-      });
-      const corrections: any[] = (run?.corrections as any) || [];
-      if (run) {
-        await prisma.payrollRun.update({
-          where: { month: m },
-          data: {
-            corrections: [
-              ...corrections,
-              {
-                at: new Date().toISOString(),
-                by: user.name || "System",
-                note: reason,
-                detail: JSON.stringify(patch),
-                payslipId,
-              },
-            ],
-          },
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.payslip.update({
+          where: { id: payslipId },
+          data: { ...patch, generatedAt: new Date() },
         });
-      }
-      await logAudit({
-        actor: user.name || "System",
-        action: "PAYROLL_OVERRIDE",
-        entityType: "PAYROLL",
-        entityId: payslipId,
-        details: `${slip.month} ${reason.slice(0, 80)} ${JSON.stringify(patch)}`,
+        const corrections: any[] = (run?.corrections as any) || [];
+        if (run) {
+          await tx.payrollRun.update({
+            where: { month: m },
+            data: {
+              corrections: [
+                ...corrections,
+                {
+                  at: new Date().toISOString(),
+                  by: user.name || "System",
+                  note: reason,
+                  detail: JSON.stringify(patch),
+                  payslipId,
+                },
+              ],
+            },
+          });
+        }
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "PAYROLL_OVERRIDE",
+          entityType: "PAYROLL",
+          entityId: payslipId,
+          details: `${slip.month} ${reason.slice(0, 80)} ${JSON.stringify(patch)}`,
+        });
+        return u;
       });
       return NextResponse.json({ payslip: updated });
     }
@@ -450,24 +468,27 @@ export async function POST(req: Request) {
       const ar = Number(arrears) || 0;
       const net =
         gross + (slip.otPay || 0) + b + ar - pf - pt - esi - lopD;
-      const updated = await prisma.payslip.update({
-        where: { id: payslipId },
-        data: {
-          esiDeduction: esi,
-          lopDays: Number(lopDays) || 0,
-          lopDeduction: lopD,
-          bonus: b,
-          arrears: ar,
-          netPay: net,
-          generatedAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "PAYSLIP_ADJUSTED",
-        entityType: "PAYROLL",
-        entityId: payslipId,
-        details: `${slip.month} LOP ${Number(lopDays) || 0}d / bonus ${b} / arrears ${ar} — ${(reason || "adjustment").slice(0, 80)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.payslip.update({
+          where: { id: payslipId },
+          data: {
+            esiDeduction: esi,
+            lopDays: Number(lopDays) || 0,
+            lopDeduction: lopD,
+            bonus: b,
+            arrears: ar,
+            netPay: net,
+            generatedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "PAYSLIP_ADJUSTED",
+          entityType: "PAYROLL",
+          entityId: payslipId,
+          details: `${slip.month} LOP ${Number(lopDays) || 0}d / bonus ${b} / arrears ${ar} — ${(reason || "adjustment").slice(0, 80)}`,
+        });
+        return u;
       });
       return NextResponse.json({ payslip: updated });
     }
@@ -502,64 +523,81 @@ export async function POST(req: Request) {
       const bonusByCode: Record<string, number> = data.bonusByCode || {};
       const arrearsByCode: Record<string, number> = data.arrearsByCode || {};
       let created = 0;
-      for (const s of structures) {
-        const gross =
-          s.basicPay +
-          s.hra +
-          s.specialAllowance +
-          s.conveyance +
-          s.otherAllowance;
-        const pfBase = Math.min(s.basicPay, 15000);
-        const pf = Math.round((pfBase * (s.pfPercent || 12)) / 100);
-        const pt = s.professionalTax || 0;
-        // ESI: 0.75% employee share when gross <= 21000 (statutory threshold)
-        const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
-        const hourly = gross / 208;
-        const otMatch = otByUser.get(s.employeeCode) ||
-          otByUser.get(s.employeeName) || { hours: 0 };
-        const otPay = Number((otMatch.hours * hourly * 1.5).toFixed(0)); // 1.5× statutory OT rate
-        const lopDays = Number(lopByCode[s.employeeCode] || 0) || 0;
-        const lopDeduction = Math.round((gross / 30) * lopDays);
-        const bonus = Number(bonusByCode[s.employeeCode] || 0) || 0;
-        const arrears = Number(arrearsByCode[s.employeeCode] || 0) || 0;
-        const grossWithOt = gross + otPay;
-        const net = grossWithOt + bonus + arrears - pf - pt - esi - lopDeduction;
-        await prisma.payslip.upsert({
-          where: {
-            salaryStructureId_month: { salaryStructureId: s.id, month },
-          },
-          update: {
-            grossPay: grossWithOt,
-            pfDeduction: pf,
-            ptDeduction: pt,
-            esiDeduction: esi,
-            lopDays,
-            lopDeduction,
-            bonus,
-            arrears,
-            netPay: net,
-            otHours: otMatch.hours,
-            otPay,
-            generatedAt: new Date(),
-          },
+      await prisma.$transaction(async (tx) => {
+        for (const s of structures) {
+          const gross =
+            s.basicPay +
+            s.hra +
+            s.specialAllowance +
+            s.conveyance +
+            s.otherAllowance;
+          const pfBase = Math.min(s.basicPay, 15000);
+          const pf = Math.round((pfBase * (s.pfPercent || 12)) / 100);
+          const pt = s.professionalTax || 0;
+          const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+          const hourly = gross / 208;
+          const otMatch = otByUser.get(s.employeeCode) ||
+            otByUser.get(s.employeeName) || { hours: 0 };
+          const otPay = Number((otMatch.hours * hourly * 1.5).toFixed(0));
+          const lopDays = Number(lopByCode[s.employeeCode] || 0) || 0;
+          const lopDeduction = Math.round((gross / 30) * lopDays);
+          const bonus = Number(bonusByCode[s.employeeCode] || 0) || 0;
+          const arrears = Number(arrearsByCode[s.employeeCode] || 0) || 0;
+          const grossWithOt = gross + otPay;
+          const net = grossWithOt + bonus + arrears - pf - pt - esi - lopDeduction;
+          await tx.payslip.upsert({
+            where: {
+              salaryStructureId_month: { salaryStructureId: s.id, month },
+            },
+            update: {
+              grossPay: grossWithOt,
+              pfDeduction: pf,
+              ptDeduction: pt,
+              esiDeduction: esi,
+              lopDays,
+              lopDeduction,
+              bonus,
+              arrears,
+              netPay: net,
+              otHours: otMatch.hours,
+              otPay,
+              generatedAt: new Date(),
+            },
+            create: {
+              salaryStructureId: s.id,
+              month,
+              grossPay: grossWithOt,
+              pfDeduction: pf,
+              ptDeduction: pt,
+              esiDeduction: esi,
+              lopDays,
+              lopDeduction,
+              bonus,
+              arrears,
+              netPay: net,
+              otHours: otMatch.hours,
+              otPay,
+            },
+          });
+          created++;
+        }
+        await tx.payrollRun.upsert({
+          where: { month },
+          update: { status: "DRAFT", generatedByName: user.name || "System" },
           create: {
-            salaryStructureId: s.id,
             month,
-            grossPay: grossWithOt,
-            pfDeduction: pf,
-            ptDeduction: pt,
-            esiDeduction: esi,
-            lopDays,
-            lopDeduction,
-            bonus,
-            arrears,
-            netPay: net,
-            otHours: otMatch.hours,
-            otPay,
+            status: "DRAFT",
+            generatedByName: user.name || "System",
           },
         });
-        created++;
-      }
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "GENERATE_PAYROLL",
+          entityType: "PAYROLL",
+          entityId: month,
+          details: `${user.name || "Admin"} generated payroll for ${month} (${created} payslips)`,
+        });
+      });
       result = {
         month,
         generated: created,
@@ -568,31 +606,50 @@ export async function POST(req: Request) {
           0,
         ),
       };
-      // P23 — generating (or re-generating) a draft always (re)creates the run as DRAFT
-      await prisma.payrollRun.upsert({
-        where: { month },
-        update: { status: "DRAFT", generatedByName: user.name || "System" },
-        create: {
-          month,
-          status: "DRAFT",
-          generatedByName: user.name || "System",
-        },
-      });
     } else if (entity === "salaryStructures") {
-      const model = prisma.salaryStructure;
       if (action === "create") {
-        result = await model.create({ data: coerce(data) });
+        result = await prisma.$transaction(async (tx) => {
+          const res = await tx.salaryStructure.create({ data: coerce(data) });
+          await logAuditTx(tx, {
+            actor: user.name || "Admin",
+            action: "CREATE_SALARY_STRUCTURE",
+            entityType: "SALARY_STRUCTURE",
+            entityId: res.id,
+            details: `Created salary structure for ${res.employeeName} (${res.employeeCode})`,
+          });
+          return res;
+        });
       } else if (action === "update") {
         if (!data.id)
           return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.update({
-          where: { id: data.id },
-          data: coerce(data),
+        result = await prisma.$transaction(async (tx) => {
+          const res = await tx.salaryStructure.update({
+            where: { id: data.id },
+            data: coerce(data),
+          });
+          await logAuditTx(tx, {
+            actor: user.name || "Admin",
+            action: "UPDATE_SALARY_STRUCTURE",
+            entityType: "SALARY_STRUCTURE",
+            entityId: res.id,
+            details: `Updated salary structure for ${res.employeeName} (${res.employeeCode})`,
+          });
+          return res;
         });
       } else if (action === "delete") {
         if (!data.id)
           return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.delete({ where: { id: data.id } });
+        result = await prisma.$transaction(async (tx) => {
+          const res = await tx.salaryStructure.delete({ where: { id: data.id } });
+          await logAuditTx(tx, {
+            actor: user.name || "Admin",
+            action: "DELETE_SALARY_STRUCTURE",
+            entityType: "SALARY_STRUCTURE",
+            entityId: data.id,
+            details: `Deleted salary structure ${data.id}`,
+          });
+          return res;
+        });
       } else {
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
       }
@@ -600,13 +657,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
     }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_PAYROLL`,
-      entityType: (entity || "PAYROLL").toUpperCase(),
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} on payroll${action === "generate" ? ` for ${data.month}` : ""}`,
-    });
+    if (entity !== "salaryStructures" && action !== "generate") {
+      await logAudit({
+        actor: user.name || "Admin",
+        action: `${action.toUpperCase()}_PAYROLL`,
+        entityType: (entity || "PAYROLL").toUpperCase(),
+        entityId: result?.id || data?.id || "unknown",
+        details: `${user.name || "Admin"} ${action} on payroll`,
+      });
+    }
 
     return NextResponse.json({ success: true, record: result });
   } catch (error) {

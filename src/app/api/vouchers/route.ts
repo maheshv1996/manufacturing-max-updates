@@ -6,6 +6,7 @@ import { nextSequenceTx } from "@/lib/sequence";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -124,14 +125,12 @@ export async function POST(req: Request) {
           enteredBy: actor,
         },
       });
-      await (tx as any).auditLog.create({
-        data: {
-          actor,
-          action: "VOUCHER_CREATED",
-          entityType: "VOUCHER",
-          entityId: created.id,
-          details: `${voucherNumber} ${voucherType} ₹${Number(amount)} — entered, awaiting manager check`,
-        },
+      await logAuditTx(tx, {
+        actor,
+        action: "VOUCHER_CREATED",
+        entityType: "VOUCHER",
+        entityId: created.id,
+        details: `${voucherNumber} ${voucherType} ₹${Number(amount)} — entered, awaiting manager check`,
       });
       return created;
     });

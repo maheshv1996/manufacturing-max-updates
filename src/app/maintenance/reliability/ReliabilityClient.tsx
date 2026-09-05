@@ -119,6 +119,17 @@ export default function ReliabilityClient() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showLogModal) setShowLogModal(false);
+        if (selectedJob) setSelectedJob(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLogModal, selectedJob]);
+
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formMachineId || !formDesc) return;
@@ -513,14 +524,24 @@ export default function ReliabilityClient() {
 
       {/* Log Request Modal */}
       {showLogModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowLogModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="log-maintenance-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5"
+          >
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-extrabold text-text-1 text-base flex items-center gap-2">
+              <h3 id="log-maintenance-title" className="font-extrabold text-text-1 text-base flex items-center gap-2">
                 <Wrench className="w-5 h-5 text-accent" />
                 Log Maintenance Request
               </h3>
               <button
+                type="button"
                 onClick={() => setShowLogModal(false)}
                 className="p-1 rounded-lg hover:bg-surface-3 text-text-3 hover:text-text-1"
               >
@@ -630,14 +651,24 @@ export default function ReliabilityClient() {
 
       {/* Close Job RCA Modal */}
       {selectedJob && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedJob(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rca-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4"
+          >
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-extrabold text-text-1 text-base flex items-center gap-2">
+              <h3 id="rca-modal-title" className="font-extrabold text-text-1 text-base flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 Close Job & Record Root Cause (RCA)
               </h3>
               <button
+                type="button"
                 onClick={() => setSelectedJob(null)}
                 className="p-1 rounded-lg hover:bg-surface-3 text-text-3 hover:text-text-1"
               >
@@ -683,12 +714,14 @@ export default function ReliabilityClient() {
 
             <div className="flex gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => setSelectedJob(null)}
                 className="w-1/2 py-2.5 rounded-xl bg-surface-2 hover:bg-surface-3 text-text-2 font-semibold text-xs"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => handleUpdateJobStatus(selectedJob.id, "CLOSED")}
                 className="w-1/2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors"
               >

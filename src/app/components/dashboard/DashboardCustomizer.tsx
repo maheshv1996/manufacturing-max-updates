@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Save } from "lucide-react";
 import { UserPreferences, KpiCardConfig, SectionConfig } from "@/lib/userPrefs";
 import { v4 as uuidv4 } from "uuid";
@@ -16,6 +16,14 @@ export default function DashboardCustomizer({
   prefs: UserPreferences;
   onUpdatePrefs: (p: UserPreferences) => void;
 }) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
   const activeView = prefs.activeViewId
     ? prefs.views.find((v) => v.id === prefs.activeViewId)
     : null;
@@ -110,13 +118,22 @@ export default function DashboardCustomizer({
     });
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboard-customizer-title"
+      className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-sm"
+    >
       <div className="w-full max-w-md h-full bg-slate-800/60 border-l border-slate-700 shadow-xl overflow-y-auto">
         <div className="p-4 border-b border-slate-700 flex items-center justify-between sticky top-0 bg-slate-800/60 z-10">
-          <h2 className="text-lg font-bold">Customize Dashboard</h2>
+          <h2 id="dashboard-customizer-title" className="text-lg font-bold">Customize Dashboard</h2>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close customizer"
             className="p-2 hover:bg-slate-800/90 rounded-full"
           >
             <X className="w-5 h-5" />
@@ -129,6 +146,7 @@ export default function DashboardCustomizer({
             <h3 className="font-bold text-white mb-3">Active View</h3>
             <div className="flex gap-2 mb-4">
               <select
+                aria-label="Active View"
                 className="flex-1 p-2 border border-slate-600 rounded-lg bg-slate-800/60"
                 value={prefs.activeViewId || ""}
                 onChange={(e) => handleSwitchView(e.target.value || null)}
@@ -142,6 +160,7 @@ export default function DashboardCustomizer({
               </select>
               {prefs.activeViewId && (
                 <button
+                  type="button"
                   onClick={() => handleDeleteView(prefs.activeViewId!)}
                   className="px-3 py-2 text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 hover:bg-rose-900/30"
                 >
@@ -160,12 +179,14 @@ export default function DashboardCustomizer({
                   onChange={(e) => setViewName(e.target.value)}
                 />
                 <button
+                  type="button"
                   onClick={handleSaveAs}
                   className="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium"
                 >
                   Save
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsSavingAs(false)}
                   className="px-3 py-2 text-slate-500"
                 >
@@ -174,6 +195,7 @@ export default function DashboardCustomizer({
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => setIsSavingAs(true)}
                 className="text-sm font-medium text-blue-400 hover:underline"
               >
@@ -197,12 +219,16 @@ export default function DashboardCustomizer({
                 >
                   <div className="flex flex-col gap-1 cursor-pointer opacity-50 hover:opacity-100">
                     <button
+                      type="button"
+                      aria-label={`Move ${c.id} up`}
                       onClick={() => handleMoveCard(idx, -1)}
                       disabled={idx === 0}
                     >
                       ▲
                     </button>
                     <button
+                      type="button"
+                      aria-label={`Move ${c.id} down`}
                       onClick={() => handleMoveCard(idx, 1)}
                       disabled={idx === cards.length - 1}
                     >
@@ -211,6 +237,7 @@ export default function DashboardCustomizer({
                   </div>
                   <input
                     type="checkbox"
+                    aria-label={`Show ${c.id} card`}
                     checked={c.visible}
                     onChange={() => handleToggleCard(c.id)}
                     className="w-4 h-4"
@@ -248,6 +275,7 @@ export default function DashboardCustomizer({
 
           {/* Save Button */}
           <button
+            type="button"
             onClick={handleSave}
             className="w-full flex justify-center items-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors"
           >

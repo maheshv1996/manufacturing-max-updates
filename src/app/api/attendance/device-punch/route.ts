@@ -1,9 +1,8 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
-    await logAudit({ actor: "system", action: "DEVICE_PUNCH", entityType: "AttendanceLog", details: "Attendance punch from device" });
   try {
     const deviceKey = req.headers.get("x-device-key");
     if (!deviceKey) {
@@ -17,10 +16,17 @@ export async function POST(req: NextRequest) {
       where: { endpointKey: deviceKey },
     });
 
-    if (!device || !device.isActive) {
+    if (!device) {
       return NextResponse.json(
-        { error: "Invalid or inactive device" },
+        { error: "Invalid device key" },
         { status: 401 },
+      );
+    }
+
+    if (!device.isActive) {
+      return NextResponse.json(
+        { error: "Inactive device: Forbidden" },
+        { status: 403 },
       );
     }
 
@@ -61,18 +67,28 @@ export async function POST(req: NextRequest) {
     // Get the active shift for this time
     const shiftId = await getActiveShiftId(punchTime);
 
-    await prisma.attendanceLog.create({
-      data: {
-        userId: user.id,
-        shiftId,
-        clockIn: event === "IN" ? punchTime : undefined,
-        clockOut: event === "OUT" ? punchTime : undefined,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      const log = await tx.attendanceLog.create({
+        data: {
+          userId: user.id,
+          shiftId,
+          clockIn: event === "IN" ? punchTime : undefined,
+          clockOut: event === "OUT" ? punchTime : undefined,
+        },
+      });
 
-    await prisma.attendanceDevice.update({
-      where: { id: device.id },
-      data: { lastSeen: new Date() },
+      await tx.attendanceDevice.update({
+        where: { id: device.id },
+        data: { lastSeen: new Date() },
+      });
+
+      await logAuditTx(tx, {
+        actor: device.name || "Device",
+        action: "DEVICE_PUNCH",
+        entityType: "AttendanceLog",
+        entityId: log.id,
+        details: `Employee ${employeeNumber} punch ${event} via device ${device.name || device.id}`,
+      });
     });
 
     return NextResponse.json({ success: true, userId: user.id });

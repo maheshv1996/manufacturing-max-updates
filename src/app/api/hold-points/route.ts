@@ -1,11 +1,23 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const canSign = user.isOwner || canAny(user, ["quality.edit", "ops.edit", "system.edit"]);
+    if (!canSign) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -21,6 +33,8 @@ export async function POST(req: Request) {
       remarks,
       signedById,
     } = body;
+
+    const actor = user.name || user.email || inspectorName || "Inspector";
 
     if (
       !workOrderId ||
@@ -58,9 +72,10 @@ export async function POST(req: Request) {
         );
       }
 
-      const signoffs = await Promise.all(
-        serialUnitIds.map((serialUnitId) =>
-          prisma.holdPointSignoff.create({
+      const signoffs = await prisma.$transaction(async (tx) => {
+        const createdSignoffs = [];
+        for (const serialUnitId of serialUnitIds) {
+          const signoff = await tx.holdPointSignoff.create({
             data: {
               workOrderId,
               routingStepId,
@@ -69,43 +84,48 @@ export async function POST(req: Request) {
               inspectorOrg,
               result,
               remarks,
-              signedById: signedById || "system",
+              signedById: signedById || user.id || "system",
             },
-          }),
-        ),
-      );
+          });
+          createdSignoffs.push(signoff);
+        }
 
-      await prisma.auditLog.create({
-        data: {
+        await logAuditTx(tx, {
           action: "HOLDPOINT_SIGNED",
-          actor: signedById || "system",
+          actor,
           details: `Hold point signed off for ${serialUnitIds.length} serials by ${inspectorName} (${inspectorOrg}) - ${result}`,
           entityType: "WorkOrder",
           entityId: workOrderId,
-        },
+        });
+
+        return createdSignoffs;
       });
 
       return NextResponse.json({ success: true, count: signoffs.length });
     } else {
       // BATCH mode
-      const signoff = await prisma.holdPointSignoff.create({
-        data: {
-          workOrderId,
-          routingStepId,
-          inspectorName,
-          inspectorOrg,
-          result,
-          remarks,
-          signedById: signedById || "system",
-        },
-      });
+      const signoff = await prisma.$transaction(async (tx) => {
+        const created = await tx.holdPointSignoff.create({
+          data: {
+            workOrderId,
+            routingStepId,
+            inspectorName,
+            inspectorOrg,
+            result,
+            remarks,
+            signedById: signedById || user.id || "system",
+          },
+        });
 
-      await logAudit({
-        action: "HOLDPOINT_SIGNED",
-        actor: signedById || inspectorName || "system",
-        details: `Hold point step ${routingStepId} signed off by ${inspectorName} (${inspectorOrg}) - ${result}`,
-        entityType: "WorkOrder",
-        entityId: workOrderId,
+        await logAuditTx(tx, {
+          action: "HOLDPOINT_SIGNED",
+          actor,
+          details: `Hold point step ${routingStepId} signed off by ${inspectorName} (${inspectorOrg}) - ${result}`,
+          entityType: "WorkOrder",
+          entityId: workOrderId,
+        });
+
+        return created;
       });
 
       return NextResponse.json({ success: true, signoff });

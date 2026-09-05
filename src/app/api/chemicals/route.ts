@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -111,28 +111,31 @@ export async function POST(req: Request) {
         "chemicalNumber",
         "CHM",
       );
-      result = await prisma.chemical.create({
-        data: {
-          chemicalNumber,
-          name,
-          casNumber: casNumber || null,
-          hazards,
-          storageLocation,
-          quantityOnHand:
-            quantityOnHand !== undefined && quantityOnHand !== null
-              ? Number(quantityOnHand)
-              : 0,
-          unit: unit || "L",
-          msdsFilePath: msdsFilePath || null,
-          msdsReviewDate: msdsReviewDate ? new Date(msdsReviewDate) : null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "CHEMICAL_CREATED",
-        entityType: "CHEMICAL",
-        entityId: result.id,
-        details: `${chemicalNumber} · ${name} · stored ${storageLocation}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.chemical.create({
+          data: {
+            chemicalNumber,
+            name,
+            casNumber: casNumber || null,
+            hazards,
+            storageLocation,
+            quantityOnHand:
+              quantityOnHand !== undefined && quantityOnHand !== null
+                ? Number(quantityOnHand)
+                : 0,
+            unit: unit || "L",
+            msdsFilePath: msdsFilePath || null,
+            msdsReviewDate: msdsReviewDate ? new Date(msdsReviewDate) : null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CHEMICAL_CREATED",
+          entityType: "CHEMICAL",
+          entityId: created.id,
+          details: `${chemicalNumber} · ${name} · stored ${storageLocation}`,
+        });
+        return created;
       });
     } else if (action === "update-chemical") {
       const c = await prisma.chemical.findUnique({ where: { id: data.id } });
@@ -157,16 +160,19 @@ export async function POST(req: Request) {
         patch.msdsReviewDate = data.msdsReviewDate
           ? new Date(data.msdsReviewDate)
           : null;
-      result = await prisma.chemical.update({
-        where: { id: c.id },
-        data: patch,
-      });
-      await logAudit({
-        actor,
-        action: "CHEMICAL_UPDATED",
-        entityType: "CHEMICAL",
-        entityId: c.id,
-        details: `${c.chemicalNumber} · ${result.name}`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.chemical.update({
+          where: { id: c.id },
+          data: patch,
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "CHEMICAL_UPDATED",
+          entityType: "CHEMICAL",
+          entityId: c.id,
+          details: `${c.chemicalNumber} · ${updated.name}`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
 import {
   getDiagnostics,
   summarizeDiagnostics,
@@ -51,6 +52,14 @@ export async function DELETE() {
   }
 
   clearDiagnostics();
+
+  await logAudit({
+    actor: user.name || "Admin",
+    action: "DIAGNOSTICS_BUFFER_CLEARED",
+    entityType: "Diagnostics",
+    details: "Diagnostics ring buffer cleared",
+    severity: "WARN",
+  });
 
   return NextResponse.json({
     success: true,

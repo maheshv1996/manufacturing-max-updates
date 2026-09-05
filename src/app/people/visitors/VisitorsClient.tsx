@@ -82,6 +82,15 @@ export default function VisitorsClient() {
 
   useEffect(load, []);
 
+  useEffect(() => {
+    if (!formOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFormOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [formOpen]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return visitors;
@@ -290,15 +299,23 @@ export default function VisitorsClient() {
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setFormOpen(false)}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visitor-modal-title"
             className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">Check-In Visitor</h3>
+                <h3 id="visitor-modal-title" className="font-semibold text-white">Check-In Visitor</h3>
                 <p className="text-xs text-slate-400">Front-desk entry — logged against the gate register</p>
               </div>
-              <button onClick={() => setFormOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+              <button
+                type="button"
+                onClick={() => setFormOpen(false)}
+                aria-label="Close visitor dialog"
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
                 <X className="size-5" />
               </button>
             </div>

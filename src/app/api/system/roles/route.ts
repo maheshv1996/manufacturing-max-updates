@@ -1,11 +1,22 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny, can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "users.manage") && !canAny(user, ["system.view", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const roles = await prisma.role.findMany({
       include: {
         users: {
@@ -77,24 +88,50 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "ROLE_SAVED", entityType: "Role", details: "Role created or updated" });
   try {
-    const { name, departmentName, description, permissions } = await req.json();
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "users.manage") && !can(user, "system.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const departmentName = typeof body.departmentName === "string" ? body.departmentName.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    const permissions = Array.isArray(body.permissions) ? body.permissions.map(String) : [];
 
     if (!name) {
       return NextResponse.json({ success: false, error: "Role name is required" }, { status: 400 });
     }
 
-    const created = await prisma.role.create({
-      data: {
-        name,
-        description: description || `Custom role for ${departmentName || "General"}`,
-        permissions: permissions || [],
-      },
+    const actor = user.name || user.id || "Admin";
+
+    const created = await prisma.$transaction(async (tx) => {
+      const role = await tx.role.create({
+        data: {
+          name,
+          description: description || `Custom role for ${departmentName || "General"}`,
+          permissions,
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "ROLE_CREATED",
+        entityType: "Role",
+        entityId: role.id,
+        details: `Created security role "${name}" with ${permissions.length} permissions`,
+      });
+
+      return role;
     });
 
     return NextResponse.json({ success: true, role: created });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

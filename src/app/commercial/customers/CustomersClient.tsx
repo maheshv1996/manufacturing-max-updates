@@ -66,6 +66,15 @@ export default function CustomersClient() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [contactDraft, setContactDraft] = useState({ name: "", role: "", phone: "", email: "" });
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
+
   const load = () => {
     fetch("/api/commercial/customers")
       .then((r) => r.json())
@@ -376,15 +385,18 @@ export default function CustomersClient() {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setModalOpen(false)}>
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-customer-modal-title"
             className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">New Customer</h3>
+                <h3 id="new-customer-modal-title" className="font-semibold text-white">New Customer</h3>
                 <p className="text-xs text-slate-400">Master record — credit, tax and contact data</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white" aria-label="Close modal">
                 <X className="size-5" />
               </button>
             </div>
@@ -420,8 +432,8 @@ export default function CustomersClient() {
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/10">
-              <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-              <Button variant="success" onClick={saveCustomer} isLoading={saving}>
+              <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
+              <Button type="button" variant="success" onClick={saveCustomer} isLoading={saving}>
                 Create Customer
               </Button>
             </div>

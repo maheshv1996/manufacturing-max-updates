@@ -287,7 +287,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-    await logAudit({ actor: "system", action: "AI_AGENT_ACTION", entityType: "AiAgent", details: "AI Agent action triggered" });
   try {
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -811,6 +810,14 @@ export async function POST(req: NextRequest) {
       finalOutcome,
       kpisAffected,
     };
+
+    await logAudit({
+      actor: "system",
+      action: "AI_AGENT_MISSION_COMPLETED",
+      entityType: "AiAgent",
+      entityId: agent.id,
+      details: `Mission ${missionResult.missionId} completed by ${agent.name}: "${String(missionResult.goal).slice(0, 80)}"`,
+    });
 
     return NextResponse.json({
       status: "ok",

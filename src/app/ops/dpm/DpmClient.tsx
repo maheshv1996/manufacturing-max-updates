@@ -58,6 +58,16 @@ export default function DpmClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && blockOpen) {
+        setBlockOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [blockOpen]);
+
   const api = async (body: any): Promise<boolean> => {
     setSaving(true);
     try {
@@ -332,6 +342,9 @@ export default function DpmClient() {
       {/* Raise blocker modal */}
       {blockOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dpm-blocker-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           onClick={() => setBlockOpen(false)}
         >
@@ -340,12 +353,14 @@ export default function DpmClient() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 id="dpm-blocker-modal-title" className="text-lg font-semibold text-white">
                 Raise DPM Blocker
               </h2>
               <button
+                type="button"
                 onClick={() => setBlockOpen(false)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close dialog"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

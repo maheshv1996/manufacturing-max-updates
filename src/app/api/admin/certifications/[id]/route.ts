@@ -1,7 +1,7 @@
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
 
 export async function DELETE(
@@ -11,23 +11,32 @@ export async function DELETE(
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
 
-  if (!user.isOwner && !can(user, "system.edit")) {
+  if (!user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!user.isOwner && !can(user, "system.edit") && !can(user, "quality.edit")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
     const { id } = await params;
-    const certification = await prisma.certification.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const certification = await prisma.$transaction(async (tx) => {
+      const res = await tx.certification.update({
+        where: { id },
+        data: { isActive: false },
+      });
 
-    await logAudit({
-      actor: user.name || "ADMIN",
-      action: "CERTIFICATION_DELETED",
-      entityType: "Certification",
-      entityId: id,
-      details: `revoked certification ${id}`,
+      await logAuditTx(tx, {
+        actor: user.name || "ADMIN",
+        action: "CERTIFICATION_DELETED",
+        entityType: "Certification",
+        entityId: id,
+        details: `revoked certification ${id}`,
+        severity: "WARN",
+      });
+
+      return res;
     });
 
     return NextResponse.json(certification);

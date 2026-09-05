@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { toPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
 
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["commercial.view", "system.view"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -69,6 +72,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   if (!user.isOwner && !canAny(user, ["commercial.edit", "system.edit"])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -107,47 +113,56 @@ export async function POST(req: Request) {
         select: { id: true, date: true, amount: true },
       });
 
-      let autoMatched = 0;
-      for (const row of rows) {
-        const date = new Date(row.date);
-        const amountPaise = toPaise(Number(row.amount) || 0); // CSV is rupees → paise
-        if (isNaN(date.getTime()) || amountPaise === 0) continue;
+      result = await prisma.$transaction(async (tx) => {
+        let autoMatched = 0;
+        for (const row of rows) {
+          const date = new Date(row.date);
+          const amountPaise = toPaise(Number(row.amount) || 0); // CSV is rupees → paise
+          if (isNaN(date.getTime()) || amountPaise === 0) continue;
 
-        const match = unmatchedTreasury.find(
-          (t) =>
-            Math.abs(Math.abs(t.amount) - Math.abs(amountPaise)) <= 1 && // both paise
-            new Date(t.date).toDateString() === date.toDateString(),
-        );
+          const match = unmatchedTreasury.find(
+            (t) =>
+              Math.abs(Math.abs(t.amount) - Math.abs(amountPaise)) <= 1 && // both paise
+              new Date(t.date).toDateString() === date.toDateString(),
+          );
 
-        if (match) {
-          await prisma.bankStatementEntry.create({
-            data: {
-              date,
-              description: String(row.description || ""),
-              amount: amountPaise,
-              balanceAfter:
-                row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
-              matchedTreasuryId: match.id,
-              matchStatus: "MATCHED",
-              uploadBatch: batch,
-            },
-          });
-          autoMatched++;
-        } else {
-          await prisma.bankStatementEntry.create({
-            data: {
-              date,
-              description: String(row.description || ""),
-              amount: amountPaise,
-              balanceAfter:
-                row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
-              matchStatus: "UNMATCHED",
-              uploadBatch: batch,
-            },
-          });
+          if (match) {
+            await tx.bankStatementEntry.create({
+              data: {
+                date,
+                description: String(row.description || ""),
+                amount: amountPaise,
+                balanceAfter:
+                  row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
+                matchedTreasuryId: match.id,
+                matchStatus: "MATCHED",
+                uploadBatch: batch,
+              },
+            });
+            autoMatched++;
+          } else {
+            await tx.bankStatementEntry.create({
+              data: {
+                date,
+                description: String(row.description || ""),
+                amount: amountPaise,
+                balanceAfter:
+                  row.balanceAfter != null ? toPaise(Number(row.balanceAfter)) : null,
+                matchStatus: "UNMATCHED",
+                uploadBatch: batch,
+              },
+            });
+          }
         }
-      }
-      result = { batch, imported: rows.length, autoMatched };
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "UPLOAD_BANK_RECONCILE",
+          entityType: "BANK_RECONCILE",
+          entityId: batch,
+          details: `${user.name || "Admin"} uploaded ${rows.length} bank statement rows (${autoMatched} auto-matched)`,
+        });
+        return { batch, imported: rows.length, autoMatched };
+      });
     } else if (action === "match") {
       if (!data.entryId || !data.treasuryId) {
         return NextResponse.json(
@@ -155,30 +170,52 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      result = await prisma.bankStatementEntry.update({
-        where: { id: data.entryId },
-        data: { matchedTreasuryId: data.treasuryId, matchStatus: "MANUAL" },
+      result = await prisma.$transaction(async (tx) => {
+        const res = await tx.bankStatementEntry.update({
+          where: { id: data.entryId },
+          data: { matchedTreasuryId: data.treasuryId, matchStatus: "MANUAL" },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MATCH_BANK_RECONCILE",
+          entityType: "BANK_RECONCILE",
+          entityId: data.entryId,
+          details: `${user.name || "Admin"} matched entry ${data.entryId} to treasury ${data.treasuryId}`,
+        });
+        return res;
       });
     } else if (action === "unmatch") {
-      result = await prisma.bankStatementEntry.update({
-        where: { id: data.entryId },
-        data: { matchedTreasuryId: null, matchStatus: "UNMATCHED" },
+      result = await prisma.$transaction(async (tx) => {
+        const res = await tx.bankStatementEntry.update({
+          where: { id: data.entryId },
+          data: { matchedTreasuryId: null, matchStatus: "UNMATCHED" },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "UNMATCH_BANK_RECONCILE",
+          entityType: "BANK_RECONCILE",
+          entityId: data.entryId,
+          details: `${user.name || "Admin"} unmatched entry ${data.entryId}`,
+        });
+        return res;
       });
     } else if (action === "deleteEntry") {
-      result = await prisma.bankStatementEntry.delete({
-        where: { id: data.entryId },
+      result = await prisma.$transaction(async (tx) => {
+        const res = await tx.bankStatementEntry.delete({
+          where: { id: data.entryId },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DELETEENTRY_BANK_RECONCILE",
+          entityType: "BANK_RECONCILE",
+          entityId: data.entryId,
+          details: `${user.name || "Admin"} deleted bank entry ${data.entryId}`,
+        });
+        return res;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
-
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_BANK_RECONCILE`,
-      entityType: "BANK_RECONCILE",
-      entityId: result?.id || result?.batch || data?.entryId || "unknown",
-      details: `${user.name || "Admin"} ${action} on bank reconciliation`,
-    });
 
     // match/unmatch/delete return a ledger row — expose the rupee contract.
     const recordRupees =

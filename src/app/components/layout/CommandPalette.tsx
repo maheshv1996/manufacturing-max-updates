@@ -11,6 +11,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -41,8 +42,31 @@ export default function CommandPalette() {
     } else {
       setQuery("");
       setResults([]);
+      setSelectedIndex(-1);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [results]);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (results.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % results.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev <= 0 ? results.length - 1 : prev - 1));
+    } else if (e.key === "Enter") {
+      if (selectedIndex >= 0 && results[selectedIndex]) {
+        e.preventDefault();
+        setIsOpen(false);
+        router.push(results[selectedIndex].href);
+      }
+    }
+  };
 
   useEffect(() => {
     if (query.length < 2) {
@@ -71,23 +95,37 @@ export default function CommandPalette() {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-start justify-center pt-[12vh] p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command Palette and Search"
+      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-start justify-center pt-[12vh] p-4"
+      onClick={() => setIsOpen(false)}
+    >
       <div
         className="bg-surface-1 rounded-3xl shadow-2xl w-full max-w-2xl border border-border overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center px-5 py-4 border-b border-border">
-          <Search className="w-5 h-5 text-accent mr-3" />
+          <Search className="w-5 h-5 text-accent mr-3" aria-hidden="true" />
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-expanded={results.length > 0}
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-activedescendant={
+              selectedIndex >= 0 ? `palette-opt-${selectedIndex}` : undefined
+            }
             placeholder="Search functions, tools, machines, work orders, schemas... (Ctrl+K)"
             className="flex-1 bg-transparent border-none outline-none text-text-1 placeholder:text-text-3 text-base font-medium"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleInputKeyDown}
           />
           {loading && (
-            <Loader2 className="w-5 h-5 text-accent animate-spin ml-3" />
+            <Loader2 className="w-5 h-5 text-accent animate-spin ml-3" aria-label="Searching..." />
           )}
           <kbd className="hidden sm:inline-flex ml-3 items-center gap-1 font-mono text-xs bg-surface-3 text-text-3 px-2 py-1 rounded-lg">
             ESC
@@ -95,7 +133,12 @@ export default function CommandPalette() {
         </div>
 
         {(results.length > 0 || query.length >= 2) && (
-          <div className="max-h-[60vh] overflow-y-auto p-3 space-y-1">
+          <div
+            id="command-palette-results"
+            role="listbox"
+            aria-label="Search results"
+            className="max-h-[60vh] overflow-y-auto p-3 space-y-1"
+          >
             {results.length > 0 ? (
               <div>
                 <div className="px-3 py-1.5 text-[10px] font-bold text-text-3 uppercase tracking-wider">
@@ -103,12 +146,20 @@ export default function CommandPalette() {
                 </div>
                 {results.map((result, idx) => (
                   <button
+                    type="button"
                     key={`${result.type}-${result.id}-${idx}`}
+                    id={`palette-opt-${idx}`}
+                    role="option"
+                    aria-selected={selectedIndex === idx}
                     onClick={() => {
                       setIsOpen(false);
                       router.push(result.href);
                     }}
-                    className="w-full flex items-center justify-between px-3.5 py-3 hover:bg-surface-2 rounded-2xl text-left transition-colors cursor-pointer group"
+                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-left transition-colors cursor-pointer group ${
+                      selectedIndex === idx
+                        ? "bg-surface-2 ring-1 ring-accent text-accent"
+                        : "hover:bg-surface-2"
+                    }`}
                   >
                     <div>
                       <div className="text-sm font-bold text-text-1 group-hover:text-accent transition-colors">
@@ -166,6 +217,7 @@ export default function CommandPalette() {
                 { label: "Quality Hub (AS9100)", href: "/quality", tag: "QA" },
               ].map((item) => (
                 <button
+                  type="button"
                   key={item.href}
                   onClick={() => {
                     setIsOpen(false);

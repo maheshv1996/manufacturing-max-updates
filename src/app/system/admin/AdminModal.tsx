@@ -61,6 +61,14 @@ export default function AdminModal({
     }
   }, [entity, initialData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const handleChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
@@ -506,16 +514,27 @@ export default function AdminModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-modal-title"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+      >
         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50">
-          <h3 className="text-lg font-bold text-white capitalize">
+          <h3 id="admin-modal-title" className="text-lg font-bold text-white capitalize">
             {initialData ? "Edit" : "Add"}{" "}
             {entity.replace(/([A-Z])/g, " $1").trim()}
           </h3>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors p-1"
+            aria-label="Close admin modal"
+            className="text-slate-400 hover:text-white transition-colors p-1 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

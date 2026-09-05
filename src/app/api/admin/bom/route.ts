@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export async function GET() {
   try {
@@ -39,7 +40,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const headersList = await headers();
-    const actorName = headersList.get("x-user-name") || "Admin";
+    const user = getUserFromHeaders(headersList);
+    if (!user.id || (!user.isOwner && !can(user, "engineering.edit") && !can(user, "ops.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+    const actorName = user.name || headersList.get("x-user-name") || "Admin";
 
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -91,24 +96,28 @@ export async function POST(req: Request) {
         where: { id: rawMaterialId },
       });
 
-      const newLine = await db.bomLine.create({
-        data: {
-          productId,
-          rawMaterialId,
-          qtyPerUnit: parseFloat(qtyPerUnit),
-        },
-        include: {
-          rawMaterial: true,
-          product: true,
-        },
-      });
+      const newLine = await db.$transaction(async (tx: any) => {
+        const created = await tx.bomLine.create({
+          data: {
+            productId,
+            rawMaterialId,
+            qtyPerUnit: parseFloat(qtyPerUnit),
+          },
+          include: {
+            rawMaterial: true,
+            product: true,
+          },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "BOM_LINE_ADDED",
-        entityType: "BOM_LINE",
-        entityId: newLine.id,
-        details: `Added BOM line to ${product?.name || "Product"}: ${qtyPerUnit} ${rawMaterial?.unit || "units"} of ${rawMaterial?.name || "Material"}`,
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "BOM_LINE_ADDED",
+          entityType: "BOM_LINE",
+          entityId: created.id,
+          details: `Added BOM line to ${product?.name || "Product"}: ${qtyPerUnit} ${rawMaterial?.unit || "units"} of ${rawMaterial?.name || "Material"}`,
+        });
+
+        return created;
       });
 
       return NextResponse.json({ success: true, line: newLine });
@@ -136,23 +145,27 @@ export async function POST(req: Request) {
         );
       }
 
-      const updatedLine = await db.bomLine.update({
-        where: { id: lineId },
-        data: {
-          qtyPerUnit: parseFloat(qtyPerUnit),
-        },
-        include: {
-          rawMaterial: true,
-          product: true,
-        },
-      });
+      const updatedLine = await db.$transaction(async (tx: any) => {
+        const updated = await tx.bomLine.update({
+          where: { id: lineId },
+          data: {
+            qtyPerUnit: parseFloat(qtyPerUnit),
+          },
+          include: {
+            rawMaterial: true,
+            product: true,
+          },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "BOM_LINE_UPDATED",
-        entityType: "BOM_LINE",
-        entityId: lineId,
-        details: `Updated BOM line for ${existingLine.product?.name}: changed ${existingLine.rawMaterial?.name} qty per unit from ${existingLine.qtyPerUnit} to ${qtyPerUnit}`,
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "BOM_LINE_UPDATED",
+          entityType: "BOM_LINE",
+          entityId: lineId,
+          details: `Updated BOM line for ${existingLine.product?.name}: changed ${existingLine.rawMaterial?.name} qty per unit from ${existingLine.qtyPerUnit} to ${qtyPerUnit}`,
+        });
+
+        return updated;
       });
 
       return NextResponse.json({ success: true, line: updatedLine });
@@ -177,16 +190,18 @@ export async function POST(req: Request) {
         );
       }
 
-      await db.bomLine.delete({
-        where: { id: lineId },
-      });
+      await db.$transaction(async (tx: any) => {
+        await tx.bomLine.delete({
+          where: { id: lineId },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "BOM_LINE_DELETED",
-        entityType: "BOM_LINE",
-        entityId: lineId,
-        details: `Deleted BOM line from ${existingLine.product?.name}: removed ${existingLine.rawMaterial?.name}`,
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "BOM_LINE_DELETED",
+          entityType: "BOM_LINE",
+          entityId: lineId,
+          details: `Deleted BOM line from ${existingLine.product?.name}: removed ${existingLine.rawMaterial?.name}`,
+        });
       });
 
       return NextResponse.json({ success: true });

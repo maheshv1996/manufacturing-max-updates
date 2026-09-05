@@ -34,6 +34,16 @@ export default function CertificationsTab() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showModal) {
+        setShowModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showModal]);
+
   const fetchData = async () => {
     try {
       const res = await fetch("/api/admin/certifications");
@@ -208,15 +218,26 @@ export default function CertificationsTab() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cert-modal-title"
+          onClick={() => setShowModal(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="cert-modal-title" className="text-lg font-bold text-white">
                 Issue Certification
               </h3>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                aria-label="Close certification dialog"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
               >
                 <XCircle className="w-6 h-6" />
               </button>

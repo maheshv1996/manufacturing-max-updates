@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -45,23 +45,42 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "PM_WORK_ORDERS_GENERATED", entityType: "MaintenanceJob", details: "Preventive maintenance jobs generated" });
   try {
-    const { machineId, machineCode } = await req.json();
+    const body = await req.json();
+    // @ts-ignore - body is any from req.json()
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { machineId, machineCode } = body;
+    if (!machineId) {
+      return NextResponse.json({ error: "machineId is required" }, { status: 400 });
+    }
 
-    const created = await prisma.maintenanceJob.create({
-      data: {
-        machineId,
-        type: "PM",
-        description: `Spindle 500h Scheduled Service for ${machineCode}`,
-        costRupees: 4500,
-        requestedByName: "Autonomous PM Scheduler",
-        priority: "MEDIUM",
-        status: "OPEN",
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      const job = await tx.maintenanceJob.create({
+        data: {
+          machineId,
+          type: "PM",
+          description: `Spindle 500h Scheduled Service for ${machineCode || machineId}`,
+          costRupees: 4500,
+          requestedByName: "Autonomous PM Scheduler",
+          priority: "MEDIUM",
+          status: "OPEN",
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor: "system",
+        action: "PM_WORK_ORDERS_GENERATED",
+        entityType: "MaintenanceJob",
+        entityId: job.id,
+        details: `Generated PM Service Work Order for ${machineCode || machineId}`,
+      });
+
+      return job;
     });
 
-    return NextResponse.json({ success: true, message: `Generated PM Service Work Order for ${machineCode}!`, job: created });
+    return NextResponse.json({ success: true, message: `Generated PM Service Work Order for ${machineCode || machineId}!`, job: created });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }

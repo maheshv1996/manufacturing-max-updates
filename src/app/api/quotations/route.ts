@@ -7,11 +7,21 @@ import { computeDiscountPct, discountApprovalFor } from "@/lib/winLoss";
 import { parseOr400, quotationSchema } from "@/lib/validate";
 import { nextSequenceTx } from "@/lib/sequence";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "commercial.edit", "ops.view", "ops.edit", "system.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const quotations = await (prisma as any).quotation.findMany({
       include: {
         lines: {
@@ -39,15 +49,17 @@ export async function POST(req: Request) {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     const actor = user.name || user.id || "Admin";
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     if (
-      !user.id ||
-      (!user.isOwner &&
-        !canAny(user, [
-          "commercial.edit",
-          "ops.edit",
-          "system.edit",
-          "people.edit",
-        ]))
+      !user.isOwner &&
+      !canAny(user, [
+        "commercial.edit",
+        "ops.edit",
+        "system.edit",
+        "people.edit",
+      ])
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -110,10 +122,9 @@ export async function POST(req: Request) {
         include: { lines: { include: { product: { select: { id: true, name: true, sku: true } } } } },
       });
 
-      await (tx as any).auditLog.create({
-        data: {
-          actor,
-          action: "CREATED_QUOTATION",
+      await logAuditTx(tx, {
+        actor,
+        action: "CREATED_QUOTATION",
           entityType: "Quotation",
           entityId: quotationTx.id,
           details: JSON.stringify({
@@ -124,19 +135,16 @@ export async function POST(req: Request) {
             discountPct,
             discountApprovalStatus: quotationTx.discountApprovalStatus,
           }),
-        },
       });
 
       if (approval.discountApprovalStatus === "PENDING_MANAGER") {
-        await (tx as any).auditLog.create({
-          data: {
-            actor,
-            action: "QUOTE_DISCOUNT_PENDING",
+        await logAuditTx(tx, {
+        actor,
+        action: "QUOTE_DISCOUNT_PENDING",
             entityType: "Quotation",
             entityId: quotationTx.id,
             details: `${quoteNumber} — ${discountPct}% discount (₹${(listTotal - estimate.quotedPrice).toLocaleString("en-IN")} off ${listTotal.toLocaleString("en-IN")}) needs a manager${autoApproved ? " — auto-approved (actor is a manager)" : ""}`,
-          },
-        });
+      });
       }
 
       return { quotation: quotationTx, estimate };

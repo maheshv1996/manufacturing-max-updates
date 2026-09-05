@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, addWeeks, subWeeks, parseISO, addDays } from "date-fns";
 import {
@@ -30,6 +30,16 @@ export default function CapacityClient({
     machineName: string;
     cell: CapacityPlanCell;
   } | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedCell) {
+        setSelectedCell(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCell]);
 
   const handlePrevWeek = () => {
     const prev = subWeeks(startDate, 1);
@@ -176,19 +186,30 @@ export default function CapacityClient({
 
       {/* Detail Modal */}
       {selectedCell && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="capacity-load-details-title"
+          onClick={() => setSelectedCell(null)}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800/60">
               <div>
-                <h3 className="text-lg font-black text-white">Load Details</h3>
+                <h3 id="capacity-load-details-title" className="text-lg font-black text-white">Load Details</h3>
                 <p className="text-sm text-slate-500">
                   {selectedCell.machineName} on{" "}
                   {format(parseISO(selectedCell.cell.date), "MMM d, yyyy")}
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedCell(null)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:text-slate-300 hover:bg-slate-800/90 rounded-full transition-colors"
+                aria-label="Close load details dialog"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:text-slate-300 hover:bg-slate-800/90 rounded-full transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

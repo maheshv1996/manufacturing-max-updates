@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!user.isOwner && !can(user, "system.edit") && !can(user, "ops.edit")) {
+  if (
+    !user.isOwner &&
+    !canAny(user, ["quality.edit", "ops.edit", "system.edit"])
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -41,21 +47,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Empty file" }, { status: 400 });
     }
 
-    await prisma.calibratedTool.update({
-      where: { id: toolId },
-      data: {
-        certFileData: bytes,
-        certFileMime: file.type || "application/pdf",
-        certFileSizeKb: sizeKb,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.calibratedTool.update({
+        where: { id: toolId },
+        data: {
+          certFileData: bytes,
+          certFileMime: file.type || "application/pdf",
+          certFileSizeKb: sizeKb,
+        },
+      });
 
-    await logAudit({
-      actor: user.name || "Crib Clerk",
-      action: "CERT_UPLOADED",
-      entityType: "CALIBRATED_TOOL",
-      entityId: toolId,
-      details: `Uploaded calibration certificate for ${tool.name} (${tool.serialNumber}): ${file.name} (${sizeKb} KB)`,
+      await logAuditTx(tx, {
+        actor: user.name || "Crib Clerk",
+        action: "CERT_UPLOADED",
+        entityType: "CALIBRATED_TOOL",
+        entityId: toolId,
+        details: `Uploaded calibration certificate for ${tool.name} (${tool.serialNumber}): ${file.name} (${sizeKb} KB)`,
+      });
     });
 
     return NextResponse.json({ success: true, sizeKb, fileName: file.name });

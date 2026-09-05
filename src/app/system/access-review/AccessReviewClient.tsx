@@ -98,6 +98,19 @@ export default function AccessReviewClient() {
     notes: "",
   });
 
+  useEffect(() => {
+    if (!showCycle && !certFor && !showDrill) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowCycle(false);
+        setCertFor(null);
+        setShowDrill(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCycle, certFor, showDrill]);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/access-review", { cache: "no-store" });
@@ -545,8 +558,11 @@ export default function AccessReviewClient() {
           <div
             className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cycle-modal-title"
           >
-            <h3 className="font-bold text-white">
+            <h3 id="cycle-modal-title" className="font-bold text-white">
               Open Quarterly Access Review
             </h3>
             <div>
@@ -566,7 +582,7 @@ export default function AccessReviewClient() {
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setShowCycle(false)}>
+              <Button type="button" variant="ghost" onClick={() => setShowCycle(false)}>
                 Cancel
               </Button>
               <Button onClick={createCycle} disabled={busy}>
@@ -589,10 +605,13 @@ export default function AccessReviewClient() {
           <div
             className="w-full max-w-lg rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cert-modal-title"
           >
             <div className="flex items-center gap-2">
               <BadgeCheck className="h-5 w-5 text-emerald-500" />
-              <h3 className="font-bold text-white">Certify — {certFor.name}</h3>
+              <h3 id="cert-modal-title" className="font-bold text-white">Certify — {certFor.name}</h3>
             </div>
             <p className="text-xs text-slate-500">
               Role: {certFor.role} · {certFor.level}. Tick the departments whose
@@ -633,8 +652,8 @@ export default function AccessReviewClient() {
                 placeholder="e.g. Access verified against org chart"
               />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setCertFor(null)}>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button type="button" variant="ghost" onClick={() => setCertFor(null)}>
                 Cancel
               </Button>
               <Button
@@ -660,8 +679,11 @@ export default function AccessReviewClient() {
           <div
             className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="drill-modal-title"
           >
-            <h3 className="font-bold text-white">Log Restore Drill</h3>
+            <h3 id="drill-modal-title" className="font-bold text-white">Log Restore Drill</h3>
             <div>
               <label className="text-xs text-slate-400">
                 Backup (from job list)
@@ -731,7 +753,7 @@ export default function AccessReviewClient() {
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setShowDrill(false)}>
+              <Button type="button" variant="ghost" onClick={() => setShowDrill(false)}>
                 Cancel
               </Button>
               <Button onClick={logDrill} disabled={busy}>

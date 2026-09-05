@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!user.isOwner && !can(user, "system.edit") && !can(user, "ops.edit")) {
+  if (
+    !user.isOwner &&
+    !canAny(user, ["quality.edit", "ops.edit", "system.edit"])
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -41,26 +47,30 @@ export async function POST(req: Request) {
       );
     }
 
-    const updated = await prisma.instrumentIssue.update({
-      where: { id: issueId },
-      data: {
-        returnedAt: new Date(),
-        returnedToName: user.name || "Crib Clerk",
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.instrumentIssue.update({
+        where: { id: issueId },
+        data: {
+          returnedAt: new Date(),
+          returnedToName: user.name || "Crib Clerk",
+        },
+      });
 
-    // Back to the lab cabinet (an EXPIRED instrument surfaces as QUARANTINE automatically).
-    await prisma.calibratedTool.update({
-      where: { id: issue.calibratedToolId },
-      data: { location: "LAB_CABINET", custodianName: null },
-    });
+      // Back to the lab cabinet (an EXPIRED instrument surfaces as QUARANTINE automatically).
+      await tx.calibratedTool.update({
+        where: { id: issue.calibratedToolId },
+        data: { location: "LAB_CABINET", custodianName: null },
+      });
 
-    await logAudit({
-      actor: user.name || "Crib Clerk",
-      action: "INSTRUMENT_RETURNED",
-      entityType: "CALIBRATED_TOOL",
-      entityId: issue.calibratedToolId,
-      details: `Returned ${issue.calibratedTool.name} (${issue.calibratedTool.serialNumber}) from ${issue.issuedToName}`,
+      await logAuditTx(tx, {
+        actor: user.name || "Crib Clerk",
+        action: "INSTRUMENT_RETURNED",
+        entityType: "CALIBRATED_TOOL",
+        entityId: issue.calibratedToolId,
+        details: `Returned ${issue.calibratedTool.name} (${issue.calibratedTool.serialNumber}) from ${issue.issuedToName}`,
+      });
+
+      return rec;
     });
 
     return NextResponse.json({ success: true, issue: updated });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Download, Share, PlusSquare } from "lucide-react";
 
 export default function InstallPrompt() {
@@ -8,6 +8,7 @@ export default function InstallPrompt() {
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+  const iosTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Check if already installed (standalone mode)
@@ -39,6 +40,10 @@ export default function InstallPrompt() {
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
       );
+      if (iosTimerRef.current) {
+        clearTimeout(iosTimerRef.current);
+        iosTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -51,8 +56,11 @@ export default function InstallPrompt() {
       }
     } else if (isIOS) {
       setShowIOSPrompt(true);
-      // Auto-hide after 5 seconds
-      setTimeout(() => setShowIOSPrompt(false), 5000);
+      if (iosTimerRef.current) clearTimeout(iosTimerRef.current);
+      iosTimerRef.current = setTimeout(() => {
+        setShowIOSPrompt(false);
+        iosTimerRef.current = null;
+      }, 5000);
     }
   };
 
@@ -70,7 +78,11 @@ export default function InstallPrompt() {
       </button>
 
       {showIOSPrompt && (
-        <div className="absolute right-0 mt-2 w-48 p-3 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 text-xs text-slate-200">
+        <div
+          role="status"
+          aria-live="polite"
+          className="absolute right-0 mt-2 w-48 p-3 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 text-xs text-slate-200"
+        >
           <p className="mb-2 font-semibold">To install on iOS:</p>
           <ol className="list-decimal pl-4 space-y-1">
             <li className="flex items-center gap-1">

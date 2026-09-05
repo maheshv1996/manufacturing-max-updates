@@ -60,13 +60,14 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const q = searchParams.get("q")?.trim();
+    const rawQ = searchParams.get("q")?.trim();
 
-    if (!q || q.length < 2) {
+    if (!rawQ || rawQ.length < 2) {
       return NextResponse.json({ results: [] });
     }
 
-    const query = q.toLowerCase();
+    // Bound query length to max 100 characters to prevent ReDoS / CPU starvation on fuzzy trigrams
+    const query = rawQ.slice(0, 100).toLowerCase();
     const SIMILARITY_THRESHOLD = 0.35;
 
     // 1. Fuzzy index matching across all 11 departments and 100+ functions

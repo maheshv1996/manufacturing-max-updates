@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { monthKey } from "@/lib/fixedAssets";
 
 export const dynamic = "force-dynamic";
@@ -51,72 +51,75 @@ export async function PATCH(
     }
 
     if (action === "check-post") {
-      const updated = await prisma.voucher.update({
-        where: { id },
-        data: {
-          status: "POSTED",
-          checkedBy: actor,
-          checkedAt: new Date(),
-          postedToTreasury: CASH_TYPES.includes(voucher.voucherType),
-        },
-      });
-      if (CASH_TYPES.includes(voucher.voucherType)) {
-        await prisma.treasuryTransaction.create({
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.voucher.update({
+          where: { id },
           data: {
-            date: voucher.voucherDate,
-            type: voucher.voucherType === "PAYMENT" ? "OUTFLOW" : "INFLOW",
-            account: voucher.account || "Main",
-            amount: voucher.amount,
-            reference: voucher.voucherNumber,
-            category: `Voucher ${voucher.voucherType}`,
-            notes: `${voucher.voucherNumber} — ${voucher.particulars.slice(0, 80)}`,
+            status: "POSTED",
+            checkedBy: actor,
+            checkedAt: new Date(),
+            postedToTreasury: CASH_TYPES.includes(voucher.voucherType),
           },
         });
-      }
-      if (voucher.voucherType === "DEPRECIATION" && voucher.sourceAssetId) {
-        // M19 — posting the draft books the actual depreciation entry.
-        const asset = await prisma.fixedAsset.findUnique({
-          where: { id: voucher.sourceAssetId },
-        });
-        if (asset && asset.status === "ACTIVE") {
-          const period = monthKey(voucher.voucherDate);
-          const existingEntry = await prisma.assetDepreciationEntry.findUnique({
-            where: { assetId_period: { assetId: asset.id, period } },
+        if (CASH_TYPES.includes(voucher.voucherType)) {
+          await tx.treasuryTransaction.create({
+            data: {
+              date: voucher.voucherDate,
+              type: voucher.voucherType === "PAYMENT" ? "OUTFLOW" : "INFLOW",
+              account: voucher.account || "Main",
+              amount: voucher.amount,
+              reference: voucher.voucherNumber,
+              category: `Voucher ${voucher.voucherType}`,
+              notes: `${voucher.voucherNumber} — ${voucher.particulars.slice(0, 80)}`,
+            },
           });
-          if (!existingEntry) {
-            await prisma.assetDepreciationEntry.create({
-              data: {
-                assetId: asset.id,
-                period,
-                amount: voucher.amount,
-                bookedBy: actor,
-                voucherId: id,
-              },
+        }
+        if (voucher.voucherType === "DEPRECIATION" && voucher.sourceAssetId) {
+          // M19 — posting the draft books the actual depreciation entry.
+          const asset = await tx.fixedAsset.findUnique({
+            where: { id: voucher.sourceAssetId },
+          });
+          if (asset && asset.status === "ACTIVE") {
+            const period = monthKey(voucher.voucherDate);
+            const existingEntry = await tx.assetDepreciationEntry.findUnique({
+              where: { assetId_period: { assetId: asset.id, period } },
             });
-            const accumulated = asset.accumulatedDepreciation + voucher.amount;
-            await prisma.fixedAsset.update({
-              where: { id: asset.id },
-              data: {
-                accumulatedDepreciation: accumulated,
-                bookValue: asset.cost - accumulated,
-              },
-            });
-            await logAudit({
-              actor,
-              action: "ASSET_DEPRECIATION_BOOKED",
-              entityType: "FIXED_ASSET",
-              entityId: asset.id,
-              details: `${period} ₹${voucher.amount} via ${voucher.voucherNumber}`,
-            });
+            if (!existingEntry) {
+              await tx.assetDepreciationEntry.create({
+                data: {
+                  assetId: asset.id,
+                  period,
+                  amount: voucher.amount,
+                  bookedBy: actor,
+                  voucherId: id,
+                },
+              });
+              const accumulated = asset.accumulatedDepreciation + voucher.amount;
+              await tx.fixedAsset.update({
+                where: { id: asset.id },
+                data: {
+                  accumulatedDepreciation: accumulated,
+                  bookValue: asset.cost - accumulated,
+                },
+              });
+              await logAuditTx(tx, {
+                actor,
+                action: "ASSET_DEPRECIATION_BOOKED",
+                entityType: "FIXED_ASSET",
+                entityId: asset.id,
+                details: `${period} ₹${voucher.amount} via ${voucher.voucherNumber}`,
+              });
+            }
           }
         }
-      }
-      await logAudit({
-        actor,
-        action: "VOUCHER_POSTED",
-        entityType: "VOUCHER",
-        entityId: id,
-        details: `${voucher.voucherNumber} ${voucher.voucherType} ₹${voucher.amount} checked & posted → ${CASH_TYPES.includes(voucher.voucherType) ? "treasury ledger" : "books (non-cash)"}`,
+        await logAuditTx(tx, {
+          actor,
+          action: "VOUCHER_POSTED",
+          entityType: "VOUCHER",
+          entityId: id,
+          details: `${voucher.voucherNumber} ${voucher.voucherType} ₹${voucher.amount} checked & posted → ${CASH_TYPES.includes(voucher.voucherType) ? "treasury ledger" : "books (non-cash)"}`,
+        });
+        return res;
       });
       return NextResponse.json({ voucher: updated });
     }
@@ -125,21 +128,24 @@ export async function PATCH(
       const reason = validateReason(body);
       if (!reason.ok)
         return NextResponse.json({ error: reason.error }, { status: 400 });
-      const updated = await prisma.voucher.update({
-        where: { id },
-        data: {
-          status: "REJECTED",
-          checkedBy: actor,
-          checkedAt: new Date(),
-          rejectReason: reason.reason,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "VOUCHER_REJECTED",
-        entityType: "VOUCHER",
-        entityId: id,
-        details: `${voucher.voucherNumber} ₹${voucher.amount} rejected — ${reason.reason}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.voucher.update({
+          where: { id },
+          data: {
+            status: "REJECTED",
+            checkedBy: actor,
+            checkedAt: new Date(),
+            rejectReason: reason.reason,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "VOUCHER_REJECTED",
+          entityType: "VOUCHER",
+          entityId: id,
+          details: `${voucher.voucherNumber} ₹${voucher.amount} rejected — ${reason.reason}`,
+        });
+        return res;
       });
       return NextResponse.json({ voucher: updated });
     }

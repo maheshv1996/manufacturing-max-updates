@@ -1,5 +1,7 @@
 import { logAudit } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -169,14 +171,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "FACTORYPLUS_SCHEMA_SAVED", entityType: "FactoryPlusSchema", details: "Factory+ schema registered" });
   try {
-    const body = await req.json();
-    // @ts-ignore - body is any from req.json()
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["engineering.view", "engineering.edit", "system.view", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { schemaUuid, payload } = body;
+    const schemaUuid = typeof body.schemaUuid === "string" ? body.schemaUuid : "";
+    const payload = (typeof body.payload === "object" && body.payload !== null && !Array.isArray(body.payload) ? body.payload : {}) as Record<string, unknown>;
 
     const schema =
       schemasList.find((s) => s.uuid === schemaUuid) || schemasList[0];
@@ -189,7 +196,16 @@ export async function POST(req: Request) {
       }
     });
 
+    const actor = user.name || user.id || "System";
+
     if (errors.length === 0) {
+      await logAudit({
+        actor,
+        action: "FACTORYPLUS_SCHEMA_VALIDATED",
+        entityType: "FactoryPlusSchema",
+        details: `Successfully validated payload against schema ${schema.name} (${schema.version})`,
+      });
+
       return NextResponse.json({
         valid: true,
         qualityCode: "GOOD_192",
@@ -205,7 +221,7 @@ export async function POST(req: Request) {
         validatedAt: new Date().toISOString(),
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Schema validation error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

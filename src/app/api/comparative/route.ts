@@ -3,13 +3,24 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { approvalFor, formatRupees } from "@/lib/poApproval";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (
+      !user.isOwner &&
+      !canAny(user, ["supply.view", "commercial.view", "ops.view", "system.view"])
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const [statements, rawMaterials, suppliers] = await Promise.all([
       prisma.comparativeStatement.findMany({
         include: { quotes: { include: { supplier: true } }, rawMaterial: true },
@@ -33,6 +44,9 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const actor = user.name || "Admin";
     const canEdit =
       user.isOwner ||
@@ -76,32 +90,36 @@ export async function POST(req: Request) {
       const count = await prisma.comparativeStatement.count();
       const statementNumber = `CS-${year}-${String(count + 1).padStart(3, "0")}`;
 
-      const statement = await prisma.comparativeStatement.create({
-        data: {
-          statementNumber,
-          rawMaterialId,
-          qty: parseFloat(qty),
-          requiredBy: requiredBy ? new Date(requiredBy) : null,
-          createdBy: actor,
-          quotes: {
-            create: quotes.map((q: any) => ({
-              supplierId: q.supplierId,
-              unitRate: parseFloat(q.unitRate),
-              leadDays: parseInt(q.leadDays || "7", 10),
-              paymentTerms: q.paymentTerms || "NET30",
-              notes: q.notes || null,
-            })),
+      const statement = await prisma.$transaction(async (tx) => {
+        const created = await tx.comparativeStatement.create({
+          data: {
+            statementNumber,
+            rawMaterialId,
+            qty: parseFloat(qty),
+            requiredBy: requiredBy ? new Date(requiredBy) : null,
+            createdBy: actor,
+            quotes: {
+              create: quotes.map((q: any) => ({
+                supplierId: q.supplierId,
+                unitRate: parseFloat(q.unitRate),
+                leadDays: parseInt(q.leadDays || "7", 10),
+                paymentTerms: q.paymentTerms || "NET30",
+                notes: q.notes || null,
+              })),
+            },
           },
-        },
-        include: { quotes: { include: { supplier: true } }, rawMaterial: true },
-      });
+          include: { quotes: { include: { supplier: true } }, rawMaterial: true },
+        });
 
-      await logAudit({
-        actor,
-        action: "COMPARATIVE_STATEMENT_CREATED",
-        entityType: "COMPARATIVE_STATEMENT",
-        entityId: statement.id,
-        details: `${statementNumber} — ${statement.rawMaterial.name} × ${qty}, ${quotes.length} quote(s)`,
+        await logAuditTx(tx, {
+          actor,
+          action: "COMPARATIVE_STATEMENT_CREATED",
+          entityType: "COMPARATIVE_STATEMENT",
+          entityId: created.id,
+          details: `${statementNumber} — ${created.rawMaterial.name} × ${qty}, ${quotes.length} quote(s)`,
+        });
+
+        return created;
       });
       return NextResponse.json({ success: true, statement });
     }
@@ -137,23 +155,26 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      const quote = await prisma.comparativeQuote.create({
-        data: {
-          statementId,
-          supplierId,
-          unitRate: parseFloat(unitRate),
-          leadDays: parseInt(leadDays || "7", 10),
-          paymentTerms: paymentTerms || "NET30",
-          notes: notes || null,
-        },
-        include: { supplier: true },
-      });
-      await logAudit({
-        actor,
-        action: "COMPARATIVE_QUOTE_ADDED",
-        entityType: "COMPARATIVE_QUOTE",
-        entityId: quote.id,
-        details: `${statement.statementNumber} — ${quote.supplier.name} @ ${formatRupees(quote.unitRate)}`,
+      const quote = await prisma.$transaction(async (tx) => {
+        const created = await tx.comparativeQuote.create({
+          data: {
+            statementId,
+            supplierId,
+            unitRate: parseFloat(unitRate),
+            leadDays: parseInt(leadDays || "7", 10),
+            paymentTerms: paymentTerms || "NET30",
+            notes: notes || null,
+          },
+          include: { supplier: true },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "COMPARATIVE_QUOTE_ADDED",
+          entityType: "COMPARATIVE_QUOTE",
+          entityId: created.id,
+          details: `${statement.statementNumber} — ${created.supplier.name} @ ${formatRupees(created.unitRate)}`,
+        });
+        return created;
       });
       return NextResponse.json({ success: true, quote });
     }
@@ -176,13 +197,15 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      await prisma.comparativeQuote.delete({ where: { id: quoteId } });
-      await logAudit({
-        actor,
-        action: "COMPARATIVE_QUOTE_REMOVED",
-        entityType: "COMPARATIVE_QUOTE",
-        entityId: quoteId,
-        details: `${quote.statement.statementNumber} — removed ${quote.supplier?.name || "quote"}`,
+      await prisma.$transaction(async (tx) => {
+        await tx.comparativeQuote.delete({ where: { id: quoteId } });
+        await logAuditTx(tx, {
+          actor,
+          action: "COMPARATIVE_QUOTE_REMOVED",
+          entityType: "COMPARATIVE_QUOTE",
+          entityId: quoteId,
+          details: `${quote.statement.statementNumber} — removed ${quote.supplier?.name || "quote"}`,
+        });
       });
       return NextResponse.json({ success: true });
     }
@@ -236,46 +259,51 @@ export async function POST(req: Request) {
         );
       }
 
-      const updated = await prisma.comparativeStatement.update({
-        where: { id: statementId },
-        data: { status: "AWARDED", awardedQuoteId: quoteId },
-        include: { quotes: { include: { supplier: true } }, rawMaterial: true },
-      });
-
       const total = statement.qty * quote.unitRate;
       const approval = approvalFor(total);
-      const poCount = await prisma.purchaseOrder.count();
       const year = new Date().getFullYear();
-      const poNumber = `PO-${year}-${String(poCount + 1).padStart(3, "0")}`;
-      const po = await prisma.purchaseOrder.create({
-        data: {
-          poNumber,
-          supplierId: quote.supplierId,
-          rawMaterialId: statement.rawMaterialId,
-          qty: statement.qty,
-          unitCost: quote.unitRate,
-          lines: {
-            create: {
-              rawMaterialId: statement.rawMaterialId,
-              lineNo: 1,
-              qty: statement.qty,
-              unitCost: quote.unitRate,
-            },
-          },
-          status: "ORDERED",
-          expectedDate: statement.requiredBy,
-          createdBy: actor,
-          approvalStatus: approval.approvalStatus,
-          approvalLevel: approval.approvalLevel,
-        },
-      });
 
-      await logAudit({
-        actor,
-        action: "COMPARATIVE_AWARDED",
-        entityType: "COMPARATIVE_STATEMENT",
-        entityId: statement.id,
-        details: `${statement.statementNumber} awarded to ${quote.supplier.name} @ ${formatRupees(quote.unitRate)} — PO ${poNumber} created (${approval.approvalStatus}). Reason: ${reason}`,
+      const { updated, po } = await prisma.$transaction(async (tx) => {
+        const stmt = await tx.comparativeStatement.update({
+          where: { id: statementId },
+          data: { status: "AWARDED", awardedQuoteId: quoteId },
+          include: { quotes: { include: { supplier: true } }, rawMaterial: true },
+        });
+
+        const poCount = await tx.purchaseOrder.count();
+        const poNumber = `PO-${year}-${String(poCount + 1).padStart(3, "0")}`;
+        const createdPo = await tx.purchaseOrder.create({
+          data: {
+            poNumber,
+            supplierId: quote.supplierId,
+            rawMaterialId: statement.rawMaterialId,
+            qty: statement.qty,
+            unitCost: quote.unitRate,
+            lines: {
+              create: {
+                rawMaterialId: statement.rawMaterialId,
+                lineNo: 1,
+                qty: statement.qty,
+                unitCost: quote.unitRate,
+              },
+            },
+            status: "ORDERED",
+            expectedDate: statement.requiredBy,
+            createdBy: actor,
+            approvalStatus: approval.approvalStatus,
+            approvalLevel: approval.approvalLevel,
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "COMPARATIVE_AWARDED",
+          entityType: "COMPARATIVE_STATEMENT",
+          entityId: statement.id,
+          details: `${statement.statementNumber} awarded to ${quote.supplier.name} @ ${formatRupees(quote.unitRate)} — PO ${poNumber} created (${approval.approvalStatus}). Reason: ${reason}`,
+        });
+
+        return { updated: stmt, po: createdPo };
       });
 
       return NextResponse.json({
@@ -308,16 +336,19 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      const updated = await prisma.comparativeStatement.update({
-        where: { id: statementId },
-        data: { status: "CLOSED" },
-      });
-      await logAudit({
-        actor,
-        action: "COMPARATIVE_CLOSED",
-        entityType: "COMPARATIVE_STATEMENT",
-        entityId: statement.id,
-        details: `Closed ${statement.statementNumber} without award`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.comparativeStatement.update({
+          where: { id: statementId },
+          data: { status: "CLOSED" },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "COMPARATIVE_CLOSED",
+          entityType: "COMPARATIVE_STATEMENT",
+          entityId: statement.id,
+          details: `Closed ${statement.statementNumber} without award`,
+        });
+        return rec;
       });
       return NextResponse.json({ success: true, statement: updated });
     }

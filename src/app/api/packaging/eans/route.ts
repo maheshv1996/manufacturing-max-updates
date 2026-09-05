@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["ops.edit", "supply.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -20,18 +28,24 @@ export async function POST(req: Request) {
       );
     }
 
-    const updated = await prisma.workOrder.update({
-      where: { id: workOrderId },
-      data: { eanCode: eanCode.trim() },
-      include: { product: true },
-    });
+    const actor = user.name || user.id || "Operator";
 
-    await logAudit({
-      actor: "system",
-      action: "EAN_ASSIGNED",
-      entityType: "WorkOrder",
-      entityId: workOrderId,
-      details: `Assigned EAN: ${eanCode} to WO #${updated.woNumber}`,
+    const updated = await prisma.$transaction(async (tx) => {
+      const wo = await tx.workOrder.update({
+        where: { id: workOrderId },
+        data: { eanCode: eanCode.trim() },
+        include: { product: true },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "EAN_ASSIGNED",
+        entityType: "WorkOrder",
+        entityId: workOrderId,
+        details: `Assigned EAN: ${eanCode} to WO #${wo.woNumber}`,
+      });
+
+      return wo;
     });
 
     return NextResponse.json({ success: true, workOrder: updated });

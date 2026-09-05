@@ -44,6 +44,16 @@ export default function IqcClient() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && editing) {
+        setEditing(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editing]);
+
   const inspect = async (grn: any, decision: "PASSED" | "REJECTED") => {
     setBusy(true);
     setMsg("");
@@ -217,10 +227,13 @@ export default function IqcClient() {
           onClick={() => setEditing(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="iqc-aql-title"
             className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 p-5 space-y-3 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-bold text-white">
+            <h3 id="iqc-aql-title" className="font-bold text-white">
               {editing.id
                 ? `Edit AQL plan — class ${editing.materialClass}`
                 : "New AQL plan"}
@@ -303,10 +316,10 @@ export default function IqcClient() {
               </div>
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => setEditing(null)}>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button onClick={savePlan} disabled={busy}>
+              <Button type="button" onClick={savePlan} disabled={busy}>
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

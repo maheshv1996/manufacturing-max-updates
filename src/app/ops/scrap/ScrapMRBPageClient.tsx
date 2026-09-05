@@ -86,6 +86,15 @@ export default function ScrapMRBPageClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!selectedItem) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedItem(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedItem]);
+
   const handleOpenModal = (item: ScrapQuarantineItem) => {
     setSelectedItem(item);
     setDispositionStatus(item.status === "PENDING" ? "SCRAPPED" : item.status);
@@ -399,11 +408,20 @@ export default function ScrapMRBPageClient() {
 
       {/* DISPOSITION MODAL */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border-2 border-blue-500/50 rounded-3xl w-full max-w-xl p-6 space-y-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setSelectedItem(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mrb-review-title"
+        >
+          <div
+            className="bg-slate-900 border-2 border-blue-500/50 rounded-3xl w-full max-w-xl p-6 space-y-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                <h3 id="mrb-review-title" className="text-lg font-black text-white flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-blue-400" />
                   MRB Disposition Review — {selectedItem.workOrder?.woNumber}
                 </h3>
@@ -413,8 +431,10 @@ export default function ScrapMRBPageClient() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedItem(null)}
                 className="text-slate-400 hover:text-white"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

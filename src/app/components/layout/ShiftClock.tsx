@@ -39,8 +39,11 @@ export default function ShiftClock() {
   if (!timeStr) return null;
 
   return (
-    <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-xl bg-surface-2/70 border border-border text-xs font-mono">
-      <Clock className="w-3.5 h-3.5 text-accent" />
+    <div
+      aria-label={`Current time ${timeStr}, ${shiftName}`}
+      className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-xl bg-surface-2/70 border border-border text-xs font-mono"
+    >
+      <Clock className="w-3.5 h-3.5 text-accent" aria-hidden="true" />
       <span className="text-text-1 font-bold">{timeStr}</span>
       <span className="w-1 h-1 rounded-full bg-border" />
       <span className="text-[10px] font-bold text-accent px-1.5 py-0.5 rounded-md bg-accent/15">

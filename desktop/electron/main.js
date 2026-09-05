@@ -73,6 +73,19 @@ function iconPath(name) {
   return candidates.find((c) => fs.existsSync(c)) || candidates[0];
 }
 
+function safeOpenExternal(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      shell.openExternal(targetUrl);
+    } else {
+      console.warn("[security] Blocked attempt to open non-http external URL:", targetUrl);
+    }
+  } catch {
+    console.warn("[security] Invalid external URL:", targetUrl);
+  }
+}
+
 function createWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -85,9 +98,42 @@ function createWindow(url) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
       spellcheck: false,
     },
   });
+
+  // Webview Hardening: prevent webview attachment inside the main window
+  mainWindow.webContents.on("will-attach-webview", (event) => {
+    event.preventDefault();
+    console.warn("[security] Prevented webview attachment");
+  });
+
+  // Navigation Hardening: prevent in-window navigation away from the local app
+  mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      const isLocal =
+        (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
+        parsed.port === String(appInstance?.port || "3000");
+      if (!isLocal) {
+        event.preventDefault();
+        console.log("[security] will-navigate blocked cross-origin:", navigationUrl);
+        safeOpenExternal(navigationUrl);
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
+  // Popup Hardening: deny untrusted child windows; open safe http(s) externally
+  mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    safeOpenExternal(targetUrl);
+    return { action: "deny" };
+  });
+
   mainWindow.loadURL(url);
   mainWindow.on("closed", () => (mainWindow = null));
 }
@@ -161,7 +207,7 @@ function buildTrayMenu() {
         }
       },
     },
-    { label: "LAN QR / Health Page", click: () => shell.openExternal(`http://127.0.0.1:${appInstance.port}/system/health`) },
+    { label: "LAN QR / Health Page", click: () => safeOpenExternal(`http://127.0.0.1:${appInstance.port}/system/health`) },
     {
       label: "Reload App Window",
       click: () => mainWindow?.webContents.reloadIgnoringCache(),
@@ -197,6 +243,29 @@ function buildTrayMenu() {
   ]);
 }
 
+// ---------------------------------------------------------------------------
+// STARTUP SECURITY & FLAG INJECTION DEFENSE
+// ---------------------------------------------------------------------------
+// Prevent attackers or untrusted local processes from launching Electron with
+// dangerous debugging or web security bypass flags via Windows shortcuts/CLI.
+const DANGEROUS_FLAGS = [
+  "inspect",
+  "inspect-brk",
+  "remote-debugging-port",
+  "remote-debugging-pipe",
+  "disable-web-security",
+  "allow-running-insecure-content",
+  "ignore-certificate-errors",
+  "js-flags",
+];
+for (const flag of DANGEROUS_FLAGS) {
+  if (app.commandLine?.hasSwitch && app.commandLine.hasSwitch(flag)) {
+    console.error(`[security] Terminating: unauthorized security flag detected: --${flag}`);
+    app.quit();
+    process.exit(1);
+  }
+}
+
 // Single-instance: a second launch focuses the existing window instead of
 // double-booting Postgres against the same data dir.
 const gotLock = app.requestSingleInstanceLock();
@@ -206,6 +275,16 @@ if (!gotLock) {
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
+
+  // Permission Hardening: deny arbitrary device sensor, microphone, and camera access
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowed = ["notifications"];
+    const isAllowed = allowed.includes(permission);
+    if (!isAllowed) {
+      console.warn(`[security] Denied permission request: ${permission}`);
+    }
+    callback(isAllowed);
+  });
 
   // Packaged layout: standalone build + data resources live under resourcesPath.
   if (process.resourcesPath) {
@@ -276,6 +355,35 @@ app.whenReady().then(async () => {
 
   createWindow(`http://127.0.0.1:${appInstance.port}`);
   mainWindow.webContents.on("did-finish-load", () => armStaleGuard(appInstance.port));
+});
+
+// Global security hardening for all web contents (main window, popups, utility views)
+app.on("web-contents-created", (event, contents) => {
+  contents.on("will-attach-webview", (ev) => {
+    ev.preventDefault();
+    console.warn("[security] Blocked webview creation in child contents");
+  });
+
+  contents.setWindowOpenHandler(({ url: targetUrl }) => {
+    safeOpenExternal(targetUrl);
+    return { action: "deny" };
+  });
+
+  contents.on("will-navigate", (ev, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      const isLocal =
+        (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
+        parsed.port === String(appInstance?.port || "3000");
+      if (!isLocal) {
+        ev.preventDefault();
+        console.warn("[security] will-navigate blocked cross-origin in contents:", navigationUrl);
+        safeOpenExternal(navigationUrl);
+      }
+    } catch {
+      ev.preventDefault();
+    }
+  });
 });
 
 app.on("window-all-closed", () => {

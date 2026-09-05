@@ -6,7 +6,6 @@ import { queryAuraLLM } from "@/lib/llmGateway";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "AI_ASSISTANT_QUERY", entityType: "AiAssistant", details: "AI Assistant queried" });
   try {
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -18,6 +17,7 @@ export async function POST(req: Request) {
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
+    const sanitizedMessage = String(message).slice(0, 1000);
 
     // Fetch live factory context snapshot to feed into the LLM
     const [machines, activeWorkOrders, lowStockMaterials] = await Promise.all([
@@ -46,7 +46,14 @@ export async function POST(req: Request) {
 `;
 
     // Query free LLM / Ollama / Gemini / Groq
-    const result = await queryAuraLLM(message, liveFactoryContext);
+    const result = await queryAuraLLM(sanitizedMessage, liveFactoryContext);
+
+    await logAudit({
+      actor: "system",
+      action: "AI_ASSISTANT_QUERY",
+      entityType: "AiAssistant",
+      details: `Queried assistant in ${contextDomain || "Factory Master"}: "${sanitizedMessage.slice(0, 80)}"`,
+    });
 
     return NextResponse.json({
       success: true,

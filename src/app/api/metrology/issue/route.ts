@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 import { effectiveLocation } from "@/lib/calibration";
 
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!user.isOwner && !can(user, "system.edit") && !can(user, "ops.edit")) {
+  if (
+    !user.isOwner &&
+    !canAny(user, ["quality.edit", "ops.edit", "system.edit"])
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -68,27 +74,31 @@ export async function POST(req: Request) {
       );
     }
 
-    const issue = await prisma.instrumentIssue.create({
-      data: {
-        calibratedToolId,
-        issuedToName,
-        issuedBy: user.name || "Crib Clerk",
-        expectedReturnAt: new Date(expectedReturnAt),
-        notes: notes || null,
-      },
-    });
+    const issue = await prisma.$transaction(async (tx) => {
+      const created = await tx.instrumentIssue.create({
+        data: {
+          calibratedToolId,
+          issuedToName,
+          issuedBy: user.name || "Crib Clerk",
+          expectedReturnAt: new Date(expectedReturnAt),
+          notes: notes || null,
+        },
+      });
 
-    await prisma.calibratedTool.update({
-      where: { id: calibratedToolId },
-      data: { location: "WITH_OPERATOR", custodianName: issuedToName },
-    });
+      await tx.calibratedTool.update({
+        where: { id: calibratedToolId },
+        data: { location: "WITH_OPERATOR", custodianName: issuedToName },
+      });
 
-    await logAudit({
-      actor: user.name || "Crib Clerk",
-      action: "INSTRUMENT_ISSUED",
-      entityType: "CALIBRATED_TOOL",
-      entityId: calibratedToolId,
-      details: `Issued ${tool.name} (${tool.serialNumber}) to ${issuedToName}, expected return ${new Date(expectedReturnAt).toLocaleDateString()}`,
+      await logAuditTx(tx, {
+        actor: user.name || "Crib Clerk",
+        action: "INSTRUMENT_ISSUED",
+        entityType: "CALIBRATED_TOOL",
+        entityId: calibratedToolId,
+        details: `Issued ${tool.name} (${tool.serialNumber}) to ${issuedToName}, expected return ${new Date(expectedReturnAt).toLocaleDateString()}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, issue });

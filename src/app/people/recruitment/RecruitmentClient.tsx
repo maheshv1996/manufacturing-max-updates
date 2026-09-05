@@ -121,6 +121,15 @@ export default function RecruitmentClient() {
   const [modal, setModal] = useState<{ entity: string; row: any } | null>(null);
   const [form, setForm] = useState<any>({});
 
+  useEffect(() => {
+    if (!modal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModal(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modal]);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/recruitment");
@@ -740,10 +749,16 @@ export default function RecruitmentClient() {
 
       {/* MODAL */}
       {modal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModal(null)}>
+          <div
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recruitment-modal-title"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="recruitment-modal-title" className="text-lg font-bold text-white">
                 {modal.row ? "Edit" : "New"} Record
               </h3>
               <button

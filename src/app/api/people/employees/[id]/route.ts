@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAudit, logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -15,7 +15,10 @@ export async function GET(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const { id } = await params;
@@ -61,7 +64,10 @@ export async function PATCH(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -118,7 +124,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "people.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "people.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -134,26 +143,30 @@ export async function POST(
     }
 
     const exiting = parsed.data.action === "exit";
-    const updated = await prisma.employee.update({
-      where: { id },
-      data: {
-        status: exiting ? "EXITED" : "ACTIVE",
-        exitDate: exiting
-          ? parsed.data.exitDate
-            ? new Date(parsed.data.exitDate)
-            : new Date()
-          : null,
-        exitReason: exiting ? parsed.data.reason || null : null,
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const up = await tx.employee.update({
+        where: { id },
+        data: {
+          status: exiting ? "EXITED" : "ACTIVE",
+          exitDate: exiting
+            ? parsed.data.exitDate
+              ? new Date(parsed.data.exitDate)
+              : new Date()
+            : null,
+          exitReason: exiting ? parsed.data.reason || null : null,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: exiting ? "EMPLOYEE_EXITED" : "EMPLOYEE_REACTIVATED",
-      entityType: "Employee",
-      entityId: id,
-      details: `${employee.employeeNumber} ${employee.name} ${exiting ? "exited" : "reactivated"}${parsed.data.reason ? " — " + parsed.data.reason.slice(0, 120) : ""}`,
-      severity: exiting ? "WARN" : "INFO",
+      await logAuditTx(tx, {
+        actor,
+        action: exiting ? "EMPLOYEE_EXITED" : "EMPLOYEE_REACTIVATED",
+        entityType: "Employee",
+        entityId: id,
+        details: `${employee.employeeNumber} ${employee.name} ${exiting ? "exited" : "reactivated"}${parsed.data.reason ? " — " + parsed.data.reason.slice(0, 120) : ""}`,
+        severity: exiting ? "WARN" : "INFO",
+      });
+
+      return up;
     });
 
     return NextResponse.json({ success: true, employee: updated });

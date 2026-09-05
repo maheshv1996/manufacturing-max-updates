@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Settings2, X, Check, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,6 +32,15 @@ export default function DashboardCustomizer({
   const [kpis, setKpis] = useState(currentKpis);
   const [sections, setSections] = useState(currentSections);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
   const toggleKpi = (id: string) => {
     setKpis(kpis.map((k) => (k.id === id ? { ...k, visible: !k.visible } : k)));
   };
@@ -50,7 +59,11 @@ export default function DashboardCustomizer({
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        aria-label="Customize Workspace Layout"
         className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 transition-all shadow-sm group"
       >
         <Settings2 className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform" />
@@ -59,7 +72,12 @@ export default function DashboardCustomizer({
 
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="personalize-workspace-title"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -68,7 +86,7 @@ export default function DashboardCustomizer({
             >
               <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
                 <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h3 id="personalize-workspace-title" className="text-lg font-bold text-white flex items-center gap-2">
                     <Settings2 className="w-5 h-5 text-blue-400" />
                     Personalize Workspace
                   </h3>
@@ -78,7 +96,9 @@ export default function DashboardCustomizer({
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close layout customizer"
                   className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -95,6 +115,8 @@ export default function DashboardCustomizer({
                     {kpis.map((k) => (
                       <button
                         key={k.id}
+                        type="button"
+                        aria-pressed={k.visible}
                         onClick={() => toggleKpi(k.id)}
                         className={`flex items-center justify-between p-3 rounded-xl border text-sm font-bold transition-all ${
                           k.visible
@@ -125,6 +147,8 @@ export default function DashboardCustomizer({
                       {sections.map((s) => (
                         <button
                           key={s.id}
+                          type="button"
+                          aria-pressed={s.visible}
                           onClick={() => toggleSection(s.id)}
                           className={`flex items-center justify-between p-4 rounded-xl border text-sm font-bold transition-all ${
                             s.visible
@@ -147,12 +171,14 @@ export default function DashboardCustomizer({
 
               <div className="p-5 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
                   className="px-5 py-2.5 rounded-xl font-bold text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleSave}
                   className="px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
                 >

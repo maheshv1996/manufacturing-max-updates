@@ -1,16 +1,24 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
-    await logAudit({ actor: "system", action: "DATA_PACKAGE_CREATED", entityType: "WorkOrderDataPackage", details: "Data package created" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id || (!user.isOwner && !can(user, "ops.edit") && !can(user, "quality.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { workOrderId, createdBy = "System" } = body;
+    const { workOrderId } = body;
+    const createdBy = user.name || body.createdBy || "System";
 
     if (!workOrderId) {
       return NextResponse.json(
@@ -44,24 +52,26 @@ export async function POST(request: Request) {
     const seq = (count + 1).toString().padStart(4, "0");
     const packageNumber = `DP-${year}-${seq}`;
 
-    // Create the draft data package
-    const dataPackage = await prisma.dataPackage.create({
-      data: {
-        packageNumber,
-        workOrderId,
-        status: "DRAFT",
-        createdBy,
-      },
-    });
+    // Create the draft data package atomically with audit log
+    const dataPackage = await prisma.$transaction(async (tx) => {
+      const pkg = await tx.dataPackage.create({
+        data: {
+          packageNumber,
+          workOrderId,
+          status: "DRAFT",
+          createdBy,
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         action: "DATA_PACKAGE_CREATED",
         actor: createdBy,
         details: `Created Draft Data Package ${packageNumber}`,
         entityType: "WorkOrder",
         entityId: workOrderId,
-      },
+      });
+
+      return pkg;
     });
 
     return NextResponse.json({ success: true, dataPackage });

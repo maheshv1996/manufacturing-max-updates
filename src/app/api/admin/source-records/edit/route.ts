@@ -5,20 +5,22 @@ import { headers } from "next/headers";
 import { editSourceRecord } from "@/lib/sourceRecordEdit";
 
 export async function POST(request: Request) {
-    await logAudit({ actor: "system", action: "SOURCE_RECORD_EDITED", entityType: "SourceRecord", details: "Edited source record" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    const userName = headersList.get("x-user-name") || "Admin";
+    const userName = headersList.get("x-user-name") || user.name || "Admin";
+
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     if (
       !user.isOwner &&
       !can(user, "system.edit") &&
-      !user.isOwner &&
       !can(user, "ops.edit")
     ) {
       return NextResponse.json(
-        { error: "Unauthorized. Admin/Supervisor permission required." },
+        { error: "Forbidden. Admin/Supervisor permission required." },
         { status: 403 },
       );
     }
@@ -43,6 +45,14 @@ export async function POST(request: Request) {
       updates,
       editorName: userName,
       reason,
+    });
+
+    await logAudit({
+      actor: user.name || userName,
+      action: "SOURCE_RECORD_EDITED",
+      entityType,
+      entityId,
+      details: `Edited ${entityType} ${entityId}: ${reason || "Admin edit"}`,
     });
 
     return NextResponse.json({ success: true, record: updatedRecord });

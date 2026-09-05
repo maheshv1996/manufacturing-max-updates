@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,19 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit", "quality.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { action, code, name, machineId, kind, ratedLifeUnits } = body;
-
-    const headerList = await headers();
-    const actor = headerList.get("x-user-name") || "Admin";
+    const actor = user.name || headerList.get("x-user-name") || "Admin";
 
     const tool = await (prisma as any).maintenanceTool.findUnique({
       where: { id },
@@ -25,21 +33,24 @@ export async function PATCH(
     }
 
     if (action === "RESET") {
-      const updated = await (prisma as any).maintenanceTool.update({
-        where: { id },
-        data: {
-          usedUnits: 0,
-          lastChangedAt: new Date(),
-        },
-        include: { machine: { select: { id: true, name: true, code: true } } },
-      });
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await (tx as any).maintenanceTool.update({
+          where: { id },
+          data: {
+            usedUnits: 0,
+            lastChangedAt: new Date(),
+          },
+          include: { machine: { select: { id: true, name: true, code: true } } },
+        });
 
-      await logAudit({
-        actor,
-        action: "TOOL_COUNTER_RESET",
-        entityType: "MAINTENANCE_TOOL",
-        entityId: id,
-        details: `Reset tool counter for ${tool.code} — tool changed at ${new Date().toLocaleDateString()}`,
+        await logAuditTx(tx, {
+          actor,
+          action: "TOOL_COUNTER_RESET",
+          entityType: "MAINTENANCE_TOOL",
+          entityId: id,
+          details: `Reset tool counter for ${tool.code} — tool changed at ${new Date().toLocaleDateString()}`,
+        });
+        return res;
       });
 
       const lifePct =
@@ -56,26 +67,29 @@ export async function PATCH(
     }
 
     // Edit mode
-    const updated = await (prisma as any).maintenanceTool.update({
-      where: { id },
-      data: {
-        code: code || tool.code,
-        name: name !== undefined ? name : tool.name,
-        machineId: machineId !== undefined ? machineId : tool.machineId,
-        kind: kind || tool.kind,
-        ratedLifeUnits: ratedLifeUnits
-          ? Number(ratedLifeUnits)
-          : tool.ratedLifeUnits,
-      },
-      include: { machine: { select: { id: true, name: true, code: true } } },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const res = await (tx as any).maintenanceTool.update({
+        where: { id },
+        data: {
+          code: code || tool.code,
+          name: name !== undefined ? name : tool.name,
+          machineId: machineId !== undefined ? machineId : tool.machineId,
+          kind: kind || tool.kind,
+          ratedLifeUnits: ratedLifeUnits
+            ? Number(ratedLifeUnits)
+            : tool.ratedLifeUnits,
+        },
+        include: { machine: { select: { id: true, name: true, code: true } } },
+      });
 
-    await logAudit({
-      actor,
-      action: "MAINTENANCE_TOOL_EDIT",
-      entityType: "MAINTENANCE_TOOL",
-      entityId: id,
-      details: `Edited maintenance tool ${updated.code}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "MAINTENANCE_TOOL_EDIT",
+        entityType: "MAINTENANCE_TOOL",
+        entityId: id,
+        details: `Edited maintenance tool ${res.code}`,
+      });
+      return res;
     });
 
     const lifePct =

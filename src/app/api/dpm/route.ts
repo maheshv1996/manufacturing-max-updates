@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -135,21 +135,24 @@ export async function POST(req: Request) {
           { error: "description and ownerDept required" },
           { status: 400 },
         );
-      result = await prisma.dpmBlocker.create({
-        data: {
-          description,
-          ownerDept,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          workOrderId: workOrderId || null,
-          raisedBy: user.name || "Manager",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DPM_BLOCKER_RAISED",
-        entityType: "DPM_BLOCKER",
-        entityId: result.id,
-        details: `${description.slice(0, 100)} → ${ownerDept}${dueDate ? ` by ${dueDate}` : ""}`,
+      result = await prisma.$transaction(async (tx) => {
+        const blk = await tx.dpmBlocker.create({
+          data: {
+            description,
+            ownerDept,
+            dueDate: dueDate ? new Date(dueDate) : null,
+            workOrderId: workOrderId || null,
+            raisedBy: user.name || "Manager",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DPM_BLOCKER_RAISED",
+          entityType: "DPM_BLOCKER",
+          entityId: blk.id,
+          details: `${description.slice(0, 100)} → ${ownerDept}${dueDate ? ` by ${dueDate}` : ""}`,
+        });
+        return blk;
       });
     } else if (action === "resolveBlock") {
       const reason = validateReason(data);
@@ -163,20 +166,23 @@ export async function POST(req: Request) {
           { error: "Blocker not found" },
           { status: 404 },
         );
-      result = await prisma.dpmBlocker.update({
-        where: { id: data.id },
-        data: {
-          status: "RESOLVED",
-          resolvedBy: user.name || "Manager",
-          resolvedAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DPM_BLOCKER_RESOLVED",
-        entityType: "DPM_BLOCKER",
-        entityId: data.id,
-        details: `${reason.reason}`,
+      result = await prisma.$transaction(async (tx) => {
+        const blk = await tx.dpmBlocker.update({
+          where: { id: data.id },
+          data: {
+            status: "RESOLVED",
+            resolvedBy: user.name || "Manager",
+            resolvedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DPM_BLOCKER_RESOLVED",
+          entityType: "DPM_BLOCKER",
+          entityId: data.id,
+          details: `${reason.reason}`,
+        });
+        return blk;
       });
     } else if (action === "deleteBlock") {
       const blocker = await prisma.dpmBlocker.findUnique({
@@ -187,13 +193,15 @@ export async function POST(req: Request) {
           { error: "Blocker not found" },
           { status: 404 },
         );
-      await prisma.dpmBlocker.delete({ where: { id: data.id } });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DPM_BLOCKER_DELETED",
-        entityType: "DPM_BLOCKER",
-        entityId: data.id,
-        details: blocker.description.slice(0, 100),
+      await prisma.$transaction(async (tx) => {
+        await tx.dpmBlocker.delete({ where: { id: data.id } });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DPM_BLOCKER_DELETED",
+          entityType: "DPM_BLOCKER",
+          entityId: data.id,
+          details: blocker.description.slice(0, 100),
+        });
       });
       return NextResponse.json({ success: true });
     } else if (action === "escalate") {
@@ -218,23 +226,26 @@ export async function POST(req: Request) {
           record: existing,
           deduped: true,
         });
-      result = await prisma.escalation.create({
-        data: {
-          sourceType: "DPM_BLOCKER",
-          sourceId: blocker.id,
-          title: `DPM blocker overdue · ${blocker.description.slice(0, 80)}`,
-          severity: "HIGH",
-          dueDate: blocker.dueDate,
-          notes: `Owner dept: ${blocker.ownerDept} — overdue at DPM.`,
-          escalatedAt: new Date(),
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "DPM_BLOCKER_ESCALATED",
-        entityType: "DPM_BLOCKER",
-        entityId: blocker.id,
-        details: `${blocker.description.slice(0, 100)} → escalation ${result.id}`,
+      result = await prisma.$transaction(async (tx) => {
+        const esc = await tx.escalation.create({
+          data: {
+            sourceType: "DPM_BLOCKER",
+            sourceId: blocker.id,
+            title: `DPM blocker overdue · ${blocker.description.slice(0, 80)}`,
+            severity: "HIGH",
+            dueDate: blocker.dueDate,
+            notes: `Owner dept: ${blocker.ownerDept} — overdue at DPM.`,
+            escalatedAt: new Date(),
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "DPM_BLOCKER_ESCALATED",
+          entityType: "DPM_BLOCKER",
+          entityId: blocker.id,
+          details: `${blocker.description.slice(0, 100)} → escalation ${esc.id}`,
+        });
+        return esc;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Layers,
   Search,
@@ -15,6 +15,17 @@ import { formatDistanceToNow } from "date-fns";
 export default function WorkOrderSerialsCard({ wo }: { wo: any }) {
   const [search, setSearch] = useState("");
   const [selectedSerial, setSelectedSerial] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!selectedSerial) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedSerial(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSerial]);
 
   if (wo.trackingMode !== "SERIAL") return null;
 
@@ -96,7 +107,12 @@ export default function WorkOrderSerialsCard({ wo }: { wo: any }) {
 
       {/* Genealogy Drawer */}
       {selectedSerial && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unit-passport-title"
+          className="fixed inset-0 z-50 flex justify-end"
+        >
           <div
             className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
             onClick={() => setSelectedSerial(null)}
@@ -104,7 +120,10 @@ export default function WorkOrderSerialsCard({ wo }: { wo: any }) {
           <div className="relative w-full max-w-md bg-slate-800/60 h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-700">
             <div className="p-6 border-b border-slate-700 flex items-center justify-between bg-slate-800/60">
               <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <h3
+                  id="unit-passport-title"
+                  className="text-xl font-bold text-white flex items-center gap-2"
+                >
                   <ShieldCheck className="w-5 h-5 text-indigo-500" />
                   Unit Passport
                 </h3>
@@ -113,6 +132,8 @@ export default function WorkOrderSerialsCard({ wo }: { wo: any }) {
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close unit passport drawer"
                 onClick={() => setSelectedSerial(null)}
                 className="p-2 hover:bg-slate-200 hover:bg-slate-800/90 rounded-full text-slate-500 transition-colors"
               >

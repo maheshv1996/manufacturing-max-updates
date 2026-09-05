@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,35 +33,46 @@ export async function GET(_req: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const { action } = body;
+    const actor = user.name || user.id || "Operator";
 
     if (action === "UPDATE_PHASE") {
       const { phase, status } = body;
-      const updated = await prisma.improvementProject.update({
-        where: { id },
-        data: {
-          phase,
-          status: status || undefined,
-          completedAt: status === "COMPLETED" ? new Date() : undefined,
-        },
-        include: {
-          machine: { select: { name: true, code: true } },
-          rcaRecord: true,
-          actionItems: true,
-        },
-      });
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.improvementProject.update({
+          where: { id },
+          data: {
+            phase,
+            status: status || undefined,
+            completedAt: status === "COMPLETED" ? new Date() : undefined,
+          },
+          include: {
+            machine: { select: { name: true, code: true } },
+            rcaRecord: true,
+            actionItems: true,
+          },
+        });
 
-      await logAudit({
-        actor: "system",
-        action: "KAIZEN_PHASE_UPDATED",
-        entityType: "ImprovementProject",
-        entityId: id,
-        details: `phase → ${phase}${status ? " · status=" + status : ""}`,
+        await logAuditTx(tx, {
+          actor,
+          action: "KAIZEN_PHASE_UPDATED",
+          entityType: "ImprovementProject",
+          entityId: id,
+          details: `phase → ${phase}${status ? " · status=" + status : ""}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(updated);
@@ -67,25 +80,29 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     if (action === "UPDATE_STATUS") {
       const { status } = body;
-      const updated = await prisma.improvementProject.update({
-        where: { id },
-        data: {
-          status,
-          completedAt: status === "COMPLETED" ? new Date() : undefined,
-        },
-        include: {
-          machine: { select: { name: true, code: true } },
-          rcaRecord: true,
-          actionItems: true,
-        },
-      });
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.improvementProject.update({
+          where: { id },
+          data: {
+            status,
+            completedAt: status === "COMPLETED" ? new Date() : undefined,
+          },
+          include: {
+            machine: { select: { name: true, code: true } },
+            rcaRecord: true,
+            actionItems: true,
+          },
+        });
 
-      await logAudit({
-        actor: "system",
-        action: "KAIZEN_STATUS_UPDATED",
-        entityType: "ImprovementProject",
-        entityId: id,
-        details: `status → ${status}`,
+        await logAuditTx(tx, {
+          actor,
+          action: "KAIZEN_STATUS_UPDATED",
+          entityType: "ImprovementProject",
+          entityId: id,
+          details: `status → ${status}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(updated);
@@ -102,37 +119,42 @@ export async function POST(request: Request, { params }: RouteContext) {
         rootCause,
         fishboneCategory,
       } = body;
-      const rca = await prisma.rcaRecord.upsert({
-        where: { projectId: id },
-        update: {
-          problemStatement,
-          why1,
-          why2,
-          why3,
-          why4,
-          why5,
-          rootCause,
-          fishboneCategory: fishboneCategory || null,
-        },
-        create: {
-          projectId: id,
-          problemStatement,
-          why1,
-          why2,
-          why3,
-          why4,
-          why5,
-          rootCause,
-          fishboneCategory: fishboneCategory || null,
-        },
-      });
 
-      await logAudit({
-        actor: "system",
-        action: "KAIZEN_RCA_SAVED",
-        entityType: "RcaRecord",
-        entityId: rca.id,
-        details: `project ${id} · ${rootCause ? "rootCause set" : "cleared"}`,
+      const rca = await prisma.$transaction(async (tx) => {
+        const res = await tx.rcaRecord.upsert({
+          where: { projectId: id },
+          update: {
+            problemStatement,
+            why1,
+            why2,
+            why3,
+            why4,
+            why5,
+            rootCause,
+            fishboneCategory: fishboneCategory || null,
+          },
+          create: {
+            projectId: id,
+            problemStatement,
+            why1,
+            why2,
+            why3,
+            why4,
+            why5,
+            rootCause,
+            fishboneCategory: fishboneCategory || null,
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "KAIZEN_RCA_SAVED",
+          entityType: "RcaRecord",
+          entityId: res.id,
+          details: `project ${id} · ${rootCause ? "rootCause set" : "cleared"}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(rca);
@@ -146,21 +168,26 @@ export async function POST(request: Request, { params }: RouteContext) {
           { status: 400 },
         );
       }
-      const item = await prisma.actionItem.create({
-        data: {
-          projectId: id,
-          description,
-          ownerName,
-          dueDate: new Date(dueDate),
-        },
-      });
 
-      await logAudit({
-        actor: ownerName,
-        action: "KAIZEN_ACTION_ITEM_ADDED",
-        entityType: "ActionItem",
-        entityId: item.id,
-        details: `project ${id} · ${description.slice(0, 80)}`,
+      const item = await prisma.$transaction(async (tx) => {
+        const res = await tx.actionItem.create({
+          data: {
+            projectId: id,
+            description,
+            ownerName,
+            dueDate: new Date(dueDate),
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "KAIZEN_ACTION_ITEM_ADDED",
+          entityType: "ActionItem",
+          entityId: res.id,
+          details: `project ${id} · ${description.slice(0, 80)}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(item);
@@ -168,17 +195,21 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     if (action === "TOGGLE_ACTION_ITEM") {
       const { itemId, status } = body;
-      const item = await prisma.actionItem.update({
-        where: { id: itemId },
-        data: { status },
-      });
+      const item = await prisma.$transaction(async (tx) => {
+        const res = await tx.actionItem.update({
+          where: { id: itemId },
+          data: { status },
+        });
 
-      await logAudit({
-        actor: "system",
-        action: "KAIZEN_ACTION_ITEM_TOGGLED",
-        entityType: "ActionItem",
-        entityId: itemId,
-        details: `status → ${status}`,
+        await logAuditTx(tx, {
+          actor,
+          action: "KAIZEN_ACTION_ITEM_TOGGLED",
+          entityType: "ActionItem",
+          entityId: itemId,
+          details: `status → ${status}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(item);

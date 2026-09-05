@@ -165,19 +165,38 @@ export default function AuraIntroModal({
     onClose();
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        finishAndStayOnGateway();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="aura-modal-title"
+      onClick={finishAndStayOnGateway}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-4xl bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto"
+      >
         {/* Top Progress Bar & Close */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" aria-hidden="true" />
             </div>
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              <span id="aura-modal-title" className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 System Guide • Step {step} of 4
               </span>
               <div className="flex items-center gap-1.5 mt-1">
@@ -198,8 +217,10 @@ export default function AuraIntroModal({
           </div>
 
           <button
+            type="button"
             onClick={finishAndStayOnGateway}
-            className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors"
+            aria-label="Close system guide"
+            className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -482,9 +503,10 @@ export default function AuraIntroModal({
                   </div>
 
                   <button
+                    type="button"
                     onClick={handleActivateBrain}
                     disabled={activating}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                   >
                     {activating ? (
                       <>
@@ -559,15 +581,17 @@ export default function AuraIntroModal({
 
                 <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
+                    type="button"
                     onClick={finishAndGoToOnboarding}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-all shadow-xl shadow-blue-500/25"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-all shadow-xl shadow-blue-500/25 cursor-pointer"
                   >
                     <ArrowRight className="w-4 h-4" />
                     Launch Guided Factory Onboarding
                   </button>
                   <button
+                    type="button"
                     onClick={finishAndStayOnGateway}
-                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-colors"
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-colors cursor-pointer"
                   >
                     Explore Workspace Directly
                   </button>
@@ -581,11 +605,12 @@ export default function AuraIntroModal({
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
           {step > 1 ? (
             <button
+              type="button"
               onClick={() => {
                 soundFx.playClick();
                 setStep(step - 1);
               }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Back
@@ -596,11 +621,12 @@ export default function AuraIntroModal({
 
           {step < 4 ? (
             <button
+              type="button"
               onClick={() => {
                 soundFx.playClick();
                 setStep(step + 1);
               }}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20 cursor-pointer"
             >
               {step === 1 && "Meet AI Copilot"}
               {step === 2 && "Configure AI Brain"}

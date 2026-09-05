@@ -229,6 +229,13 @@ export default function EximClient() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Exim"
+        description="Quotes, orders, receivables and commercial desk operations."
+        icon={<FileText className="w-6 h-6" />}
+        iconTone="amber"
+      />
+
       {error && (
         <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-300">
           {error}
@@ -664,27 +671,33 @@ function ModalPanel({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
-      <PageHeader
-        title="Exim"
-        description="Quotes, orders, receivables and commercial desk operations."
-        icon={<FileText className="w-6 h-6" />}
-        iconTone="amber"
-      />
-
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exim-drawer-title"
         className="h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700/60 bg-slate-900/95 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
+          <h3 id="exim-drawer-title" className="text-lg font-semibold text-slate-100">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-700 p-1.5 text-slate-400 hover:bg-slate-800"
+            aria-label="Close drawer"
+            className="rounded-lg border border-slate-700 p-1.5 text-slate-400 hover:bg-slate-800 cursor-pointer"
           >
             ✕
           </button>

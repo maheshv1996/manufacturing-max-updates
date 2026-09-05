@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { getAccessReviewState } from "@/lib/accessReview";
 
@@ -11,11 +11,11 @@ export async function GET() {
   try {
     const headerList = await headers();
     const user = getUserFromHeaders(headerList);
-    if (
-      !user ||
-      (!user.isOwner && !can(user, "system.view") && !can(user, "system.edit"))
-    ) {
+    if (!user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.view") && !can(user, "system.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const state = await getAccessReviewState();
     return NextResponse.json(state);
@@ -28,14 +28,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const headerList = await headers();
-    const actor = headerList.get("x-user-name") || "Admin";
     const user = getUserFromHeaders(headerList);
-    if (!user || (!user.isOwner && !can(user, "system.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
       return NextResponse.json(
-        { error: "Insufficient role: system.edit required" },
+        { error: "Forbidden" },
         { status: 403 },
       );
     }
+    const actor = user.name || headerList.get("x-user-name") || "Admin";
 
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
@@ -52,20 +55,23 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const cycle = await prisma.accessReviewCycle.create({
-        data: {
-          name,
-          periodStart: new Date(),
-          dueDate: new Date(dueDate),
-          createdBy: actor,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "ACCESS_REVIEW_CYCLE_OPEN",
-        entityType: "ACCESS_REVIEW",
-        entityId: cycle.id,
-        details: `Opened access review "${name}" due ${new Date(dueDate).toLocaleDateString()}`,
+      const cycle = await prisma.$transaction(async (tx) => {
+        const created = await tx.accessReviewCycle.create({
+          data: {
+            name,
+            periodStart: new Date(),
+            dueDate: new Date(dueDate),
+            createdBy: actor,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "ACCESS_REVIEW_CYCLE_OPEN",
+          entityType: "ACCESS_REVIEW",
+          entityId: created.id,
+          details: `Opened access review "${name}" due ${new Date(dueDate).toLocaleDateString()}`,
+        });
+        return created;
       });
       return NextResponse.json({ cycle }, { status: 201 });
     }
@@ -107,28 +113,31 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const certification = await prisma.accessCertification.upsert({
-        where: { cycleId_userId: { cycleId: cycle.id, userId } },
-        update: {
-          depts,
-          certifiedBy: actor,
-          certifiedAt: new Date(),
-          notes: notes || null,
-        },
-        create: {
-          cycleId: cycle.id,
-          userId,
-          depts,
-          certifiedBy: actor,
-          notes: notes || null,
-        },
-      });
-      await logAudit({
-        actor,
-        action: "ACCESS_CERTIFIED",
-        entityType: "USER",
-        entityId: userId,
-        details: `Certified ${target.name} in "${cycle.name}" for ${depts.length} department(s): ${depts.join(", ")}${notes ? ` — ${notes}` : ""}`,
+      const certification = await prisma.$transaction(async (tx) => {
+        const up = await tx.accessCertification.upsert({
+          where: { cycleId_userId: { cycleId: cycle.id, userId } },
+          update: {
+            depts,
+            certifiedBy: actor,
+            certifiedAt: new Date(),
+            notes: notes || null,
+          },
+          create: {
+            cycleId: cycle.id,
+            userId,
+            depts,
+            certifiedBy: actor,
+            notes: notes || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "ACCESS_CERTIFIED",
+          entityType: "USER",
+          entityId: userId,
+          details: `Certified ${target.name} in "${cycle.name}" for ${depts.length} department(s): ${depts.join(", ")}${notes ? ` — ${notes}` : ""}`,
+        });
+        return up;
       });
       return NextResponse.json({ certification });
     }
@@ -148,25 +157,28 @@ export async function POST(request: Request) {
         });
         if (job) sizeMb = job.sizeMb ?? null;
       }
-      const drill = await prisma.restoreDrill.create({
-        data: {
-          performedBy: actor,
-          backupJobId: backupJobId || null,
-          backupName,
-          backupSizeMb: sizeMb,
-          result,
-          durationSec: durationSec ? Number(durationSec) : null,
-          verifiedAt: new Date(),
-          notes: notes || null,
-        },
-        include: { backupJob: { select: { startedAt: true, status: true } } },
-      });
-      await logAudit({
-        actor,
-        action: "RESTORE_DRILL",
-        entityType: "BACKUP",
-        entityId: drill.id,
-        details: `Restore drill ${result} — restored "${backupName}"${durationSec ? ` in ${durationSec}s` : ""}${notes ? ` (${notes})` : ""}`,
+      const drill = await prisma.$transaction(async (tx) => {
+        const created = await tx.restoreDrill.create({
+          data: {
+            performedBy: actor,
+            backupJobId: backupJobId || null,
+            backupName,
+            backupSizeMb: sizeMb,
+            result,
+            durationSec: durationSec ? Number(durationSec) : null,
+            verifiedAt: new Date(),
+            notes: notes || null,
+          },
+          include: { backupJob: { select: { startedAt: true, status: true } } },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "RESTORE_DRILL",
+          entityType: "BACKUP",
+          entityId: created.id,
+          details: `Restore drill ${result} — restored "${backupName}"${durationSec ? ` in ${durationSec}s` : ""}${notes ? ` (${notes})` : ""}`,
+        });
+        return created;
       });
       return NextResponse.json({ drill }, { status: 201 });
     }

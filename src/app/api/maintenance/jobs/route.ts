@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "system.edit", "quality.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -46,27 +56,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const job = await (prisma as any).maintenanceJob.create({
-      data: {
-        machineId,
-        requestedByName,
-        type: type || "BREAKDOWN",
-        priority: priority || "MEDIUM",
-        description,
-        status: "OPEN",
-      },
-      include: {
-        machine: { select: { id: true, name: true, code: true } },
-      },
-    });
+    const actor = user.name || headersList.get("x-user-name") || requestedByName || "Operator";
 
-    const headerList = await headers();
-    await logAudit({
-      actor: headerList.get("x-user-name") || requestedByName || "Operator",
-      action: "MAINTENANCE_JOB_CREATE",
-      entityType: "MAINTENANCE_JOB",
-      entityId: job.id,
-      details: `Created ${job.type} job [${job.priority}] for machine ${job.machine.name}: "${description}"`,
+    const job = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).maintenanceJob.create({
+        data: {
+          machineId,
+          requestedByName,
+          type: type || "BREAKDOWN",
+          priority: priority || "MEDIUM",
+          description,
+          status: "OPEN",
+        },
+        include: {
+          machine: { select: { id: true, name: true, code: true } },
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "MAINTENANCE_JOB_CREATE",
+        entityType: "MAINTENANCE_JOB",
+        entityId: created.id,
+        details: `Created ${created.type} job [${created.priority}] for machine ${created.machine.name}: "${description}"`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ job }, { status: 201 });

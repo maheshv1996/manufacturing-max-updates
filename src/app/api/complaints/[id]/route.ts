@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -55,7 +55,6 @@ export async function PATCH(
   req: Request,
   props: { params: Promise<{ id: string }> },
 ) {
-    await logAudit({ actor: "system", action: "COMPLAINT_UPDATED", entityType: "CustomerComplaint", details: "Customer complaint updated" });
   try {
     const { id } = await props.params;
     const headersList = await headers();
@@ -84,25 +83,26 @@ export async function PATCH(
       dataToUpdate.eightDClosedAt = new Date();
     }
 
-    const complaint = await prisma.customerComplaint.update({
-      where: { id },
-      data: dataToUpdate,
-    });
-
-    if (status === "CLOSED") {
-      await prisma.auditLog.create({
-        data: {
-          action: "COMPLAINT_CLOSED",
-          entityType: "CustomerComplaint",
-          entityId: complaint.id,
-          details: JSON.stringify({
-            complaintNumber: complaint.complaintNumber,
-            disposition,
-          }),
-          actor: user.name,
-        },
+    const complaint = await prisma.$transaction(async (tx) => {
+      const updated = await tx.customerComplaint.update({
+        where: { id },
+        data: dataToUpdate,
       });
-    }
+
+      await logAuditTx(tx, {
+        actor: user.name || "System",
+        action: status === "CLOSED" ? "COMPLAINT_CLOSED" : "COMPLAINT_UPDATED",
+        entityType: "CustomerComplaint",
+        entityId: updated.id,
+        details: JSON.stringify({
+          complaintNumber: updated.complaintNumber,
+          status,
+          disposition,
+        }),
+      });
+
+      return updated;
+    });
 
     return NextResponse.json(complaint);
   } catch (error) {

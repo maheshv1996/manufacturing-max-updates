@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { computeSalesLineTotals, round2 } from "@/lib/salesOrders";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -18,7 +18,10 @@ export async function GET(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"]))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const { id } = await params;
@@ -67,7 +70,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, WRITE_GATE))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, WRITE_GATE)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -93,21 +99,24 @@ export async function POST(
           { status: 400 },
         );
       }
-      const updated = await prisma.salesOrder.update({
-        where: { id },
-        data: {
-          status: "CONFIRMED",
-          ...(d.expectedDelivery ? { expectedDelivery: new Date(d.expectedDelivery) } : {}),
-          ...(d.poReference !== undefined ? { poReference: d.poReference || null } : {}),
-        },
-        include: { lines: true },
-      });
-      await logAudit({
-        actor,
-        action: "SALES_ORDER_CONFIRMED",
-        entityType: "SalesOrder",
-        entityId: id,
-        details: `${order.orderNumber} confirmed — ${order.grandTotal.toFixed(2)} ${order.currency}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.salesOrder.update({
+          where: { id },
+          data: {
+            status: "CONFIRMED",
+            ...(d.expectedDelivery ? { expectedDelivery: new Date(d.expectedDelivery) } : {}),
+            ...(d.poReference !== undefined ? { poReference: d.poReference || null } : {}),
+          },
+          include: { lines: true },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "SALES_ORDER_CONFIRMED",
+          entityType: "SalesOrder",
+          entityId: id,
+          details: `${order.orderNumber} confirmed — ${order.grandTotal.toFixed(2)} ${order.currency}`,
+        });
+        return res;
       });
       return NextResponse.json({ success: true, order: updated });
     }
@@ -119,17 +128,20 @@ export async function POST(
           { status: 400 },
         );
       }
-      const updated = await prisma.salesOrder.update({
-        where: { id },
-        data: { status: "CANCELLED", notes: d.reason ? `${order.notes ? order.notes + " — " : ""}CANCELLED: ${d.reason}` : order.notes },
-      });
-      await logAudit({
-        actor,
-        action: "SALES_ORDER_CANCELLED",
-        entityType: "SalesOrder",
-        entityId: id,
-        details: `${order.orderNumber} cancelled${d.reason ? " — " + d.reason.slice(0, 120) : ""}`,
-        severity: "WARN",
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.salesOrder.update({
+          where: { id },
+          data: { status: "CANCELLED", notes: d.reason ? `${order.notes ? order.notes + " — " : ""}CANCELLED: ${d.reason}` : order.notes },
+        });
+        await logAuditTx(tx, {
+          actor,
+          action: "SALES_ORDER_CANCELLED",
+          entityType: "SalesOrder",
+          entityId: id,
+          details: `${order.orderNumber} cancelled${d.reason ? " — " + d.reason.slice(0, 120) : ""}`,
+          severity: "WARN",
+        });
+        return res;
       });
       return NextResponse.json({ success: true, order: updated });
     }
@@ -169,7 +181,7 @@ export async function POST(
     });
     const updated = await prisma.$transaction(async (tx) => {
       await tx.salesOrderLine.deleteMany({ where: { salesOrderId: id } });
-      return tx.salesOrder.update({
+      const res = await tx.salesOrder.update({
         where: { id },
         data: {
           totalValue: round2(totalValue),
@@ -180,14 +192,15 @@ export async function POST(
         },
         include: { lines: true },
       });
-    });
-    await logAudit({
-      actor,
-      action: "SALES_ORDER_LINES_UPDATED",
-      entityType: "SalesOrder",
-      entityId: id,
-      details: `${order.orderNumber} lines revised — ${updated.lines.length} line(s), ${updated.grandTotal.toFixed(2)} ${order.currency}`,
-      severity: "WARN",
+      await logAuditTx(tx, {
+        actor,
+        action: "SALES_ORDER_LINES_UPDATED",
+        entityType: "SalesOrder",
+        entityId: id,
+        details: `${order.orderNumber} lines revised — ${res.lines.length} line(s), ${res.grandTotal.toFixed(2)} ${order.currency}`,
+        severity: "WARN",
+      });
+      return res;
     });
     return NextResponse.json({ success: true, order: updated });
   } catch (error) {

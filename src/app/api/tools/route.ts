@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export async function GET() {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const tools = await (prisma as any).tool.findMany({
       include: {
         assignedMachine: true,
@@ -23,6 +31,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (
+      !user.isOwner &&
+      !can(user, "ops.edit") &&
+      !can(user, "system.edit")
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -43,25 +64,31 @@ export async function POST(request: Request) {
       );
     }
 
-    const tool = await (prisma as any).tool.create({
-      data: {
-        toolCode,
-        name,
-        maxLifeCycles: parseInt(String(maxLifeCycles), 10),
-        warningThreshold: warningThreshold
-          ? parseFloat(String(warningThreshold))
-          : 85.0,
-        status: "ACTIVE",
-        assignedMachineId: assignedMachineId || null,
-      },
-    });
+    const actor = user.name || headerList.get("x-user-name") || "Operator";
 
-    await logAudit({
-      actor: "system",
-      action: "TOOL_CREATED",
-      entityType: "Tool",
-      entityId: tool.id,
-      details: `${toolCode} · ${name} · maxLifeCycles=${maxLifeCycles}`,
+    const tool = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).tool.create({
+        data: {
+          toolCode,
+          name,
+          maxLifeCycles: parseInt(String(maxLifeCycles), 10),
+          warningThreshold: warningThreshold
+            ? parseFloat(String(warningThreshold))
+            : 85.0,
+          status: "ACTIVE",
+          assignedMachineId: assignedMachineId || null,
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "TOOL_CREATED",
+        entityType: "Tool",
+        entityId: created.id,
+        details: `${toolCode} · ${name} · maxLifeCycles=${maxLifeCycles}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, tool });
@@ -76,6 +103,19 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (
+      !user.isOwner &&
+      !can(user, "ops.edit") &&
+      !can(user, "system.edit")
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { id, reset, status, assignedMachineId } = body;
 
@@ -85,6 +125,8 @@ export async function PATCH(request: Request) {
         { status: 400 },
       );
     }
+
+    const actor = user.name || headerList.get("x-user-name") || "Operator";
 
     const updateData: any = {};
 
@@ -101,17 +143,21 @@ export async function PATCH(request: Request) {
       updateData.assignedMachineId = assignedMachineId || null;
     }
 
-    const updatedTool = await (prisma as any).tool.update({
-      where: { id },
-      data: updateData,
-    });
+    const updatedTool = await prisma.$transaction(async (tx) => {
+      const u = await (tx as any).tool.update({
+        where: { id },
+        data: updateData,
+      });
 
-    await logAudit({
-      actor: "system",
-      action: "TOOL_UPDATED",
-      entityType: "Tool",
-      entityId: id,
-      details: `reset=${!!reset} · status=${status} · machine=${assignedMachineId}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "TOOL_UPDATED",
+        entityType: "Tool",
+        entityId: id,
+        details: `reset=${!!reset} · status=${status} · machine=${assignedMachineId}`,
+      });
+
+      return u;
     });
 
     return NextResponse.json({ success: true, tool: updatedTool });

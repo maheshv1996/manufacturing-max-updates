@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { fromPaiseRow } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +19,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (
-      !user.id ||
-      (!user.isOwner && !canAny(user, ["finance.view", "commercial.view"]))
-    ) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["finance.view", "commercial.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -44,10 +44,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (
-      !user.id ||
-      (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit"]))
-    ) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || "Admin";
@@ -202,25 +202,28 @@ export async function POST(req: Request) {
       csvTotal: reconciled.reduce((s, r) => s + r.total, 0),
     };
 
-    const run = await prisma.gstReconRun.create({
-      data: {
-        period,
-        label:
-          label?.slice(0, 120) ||
-          `2B upload ${new Date().toISOString().slice(0, 10)}`,
-        rows: allRows,
-        stats,
-        followUps: [],
-        uploadedBy: actor,
-      },
-    });
+    const run = await prisma.$transaction(async (tx) => {
+      const r = await tx.gstReconRun.create({
+        data: {
+          period,
+          label:
+            label?.slice(0, 120) ||
+            `2B upload ${new Date().toISOString().slice(0, 10)}`,
+          rows: allRows,
+          stats,
+          followUps: [],
+          uploadedBy: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "GST_RECON_UPLOADED",
-      entityType: "GST_RECON",
-      entityId: run.id,
-      details: `${period} ${label || "2B"}: ${stats.total} rows → ${stats.matched} matched, ${stats.amountDiff + stats.notInRegister + stats.missingFromCsv} to follow up`,
+      await logAuditTx(tx, {
+        actor,
+        action: "GST_RECON_UPLOADED",
+        entityType: "GST_RECON",
+        entityId: r.id,
+        details: `${period} ${label || "2B"}: ${stats.total} rows → ${stats.matched} matched, ${stats.amountDiff + stats.notInRegister + stats.missingFromCsv} to follow up`,
+      });
+      return r;
     });
 
     return NextResponse.json({ run });

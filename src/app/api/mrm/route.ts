@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
 import { buildMrmAgenda } from "@/lib/mrmAgenda";
 import { currentPeriod } from "@/lib/qualityObjectives";
@@ -77,23 +77,26 @@ export async function POST(req: Request) {
       const count = await prisma.mrmMeeting.count();
       const meetingNumber = `MRM-${new Date().getFullYear()}-${String(count + 1).padStart(3, "0")}`;
       const agenda = await buildMrmAgenda();
-      result = await prisma.mrmMeeting.create({
-        data: {
-          meetingNumber,
-          title,
-          date: new Date(date),
-          attendees: attendeesList,
-          agenda,
-          minutesBy: user.name || "Management",
-          status: "OPEN",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "MRM_CREATED",
-        entityType: "MRM_MEETING",
-        entityId: result.id,
-        details: `Opened ${meetingNumber} — ${title} (${agenda.length} agenda items auto-pulled)`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.mrmMeeting.create({
+          data: {
+            meetingNumber,
+            title,
+            date: new Date(date),
+            attendees: attendeesList,
+            agenda,
+            minutesBy: user.name || "Management",
+            status: "OPEN",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MRM_CREATED",
+          entityType: "MRM_MEETING",
+          entityId: created.id,
+          details: `Opened ${meetingNumber} — ${title} (${agenda.length} agenda items auto-pulled)`,
+        });
+        return created;
       });
     } else if (action === "close") {
       const reason = validateReason(data);
@@ -112,63 +115,67 @@ export async function POST(req: Request) {
           { status: 400 },
         );
 
-      result = await prisma.mrmMeeting.update({
-        where: { id },
-        data: {
-          status: "CLOSED",
-          summary: summary || meeting.summary || reason.reason,
-          decisions:
-            Array.isArray(decisions) && decisions.length
-              ? decisions.map((d: any) =>
-                  typeof d === "string" ? { text: d } : d,
-                )
-              : (meeting.decisions as any[]) || [],
-          closedByName: user.name || "Management",
-          closedAt: new Date(),
-        },
-      });
-
-      // Auto-escalate any still-OPEN action items that are overdue — they survived the review.
-      const overdue = await prisma.mrmActionItem.findMany({
-        where: { meetingId: id, status: "OPEN", dueDate: { lt: new Date() } },
-      });
-      for (const a of overdue) {
-        const existing = await prisma.escalation.findFirst({
-          where: {
-            sourceType: "MRM_ACTION",
-            sourceId: a.id,
-            status: { not: "RESOLVED" },
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.mrmMeeting.update({
+          where: { id },
+          data: {
+            status: "CLOSED",
+            summary: summary || meeting.summary || reason.reason,
+            decisions:
+              Array.isArray(decisions) && decisions.length
+                ? decisions.map((d: any) =>
+                    typeof d === "string" ? { text: d } : d,
+                  )
+                : (meeting.decisions as any[]) || [],
+            closedByName: user.name || "Management",
+            closedAt: new Date(),
           },
         });
-        if (!existing) {
-          await prisma.escalation.create({
-            data: {
+
+        // Auto-escalate any still-OPEN action items that are overdue — they survived the review.
+        const overdue = await tx.mrmActionItem.findMany({
+          where: { meetingId: id, status: "OPEN", dueDate: { lt: new Date() } },
+        });
+        for (const a of overdue) {
+          const existing = await tx.escalation.findFirst({
+            where: {
               sourceType: "MRM_ACTION",
               sourceId: a.id,
-              title: `Overdue MRM action · ${a.description.slice(0, 80)}`,
-              severity:
-                a.priority === "HIGH"
-                  ? "CRITICAL"
-                  : a.priority === "MEDIUM"
-                    ? "HIGH"
-                    : "MEDIUM",
-              dueDate: a.dueDate,
-              notes: `Action item from ${meeting.meetingNumber} remained open past its due date — escalated at meeting close by ${user.name}.`,
-              escalatedAt: new Date(),
+              status: { not: "RESOLVED" },
             },
           });
-          await prisma.mrmActionItem.update({
-            where: { id: a.id },
-            data: { escalated: true },
-          });
+          if (!existing) {
+            await tx.escalation.create({
+              data: {
+                sourceType: "MRM_ACTION",
+                sourceId: a.id,
+                title: `Overdue MRM action · ${a.description.slice(0, 80)}`,
+                severity:
+                  a.priority === "HIGH"
+                    ? "CRITICAL"
+                    : a.priority === "MEDIUM"
+                      ? "HIGH"
+                      : "MEDIUM",
+                dueDate: a.dueDate,
+                notes: `Action item from ${meeting.meetingNumber} remained open past its due date — escalated at meeting close by ${user.name}.`,
+                escalatedAt: new Date(),
+              },
+            });
+            await tx.mrmActionItem.update({
+              where: { id: a.id },
+              data: { escalated: true },
+            });
+          }
         }
-      }
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "MRM_CLOSED",
-        entityType: "MRM_MEETING",
-        entityId: id,
-        details: `Closed ${meeting.meetingNumber} — ${overdue.length} overdue action(s) auto-escalated (${reason.reason})`,
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MRM_CLOSED",
+          entityType: "MRM_MEETING",
+          entityId: id,
+          details: `Closed ${meeting.meetingNumber} — ${overdue.length} overdue action(s) auto-escalated (${reason.reason})`,
+        });
+
+        return updated;
       });
     } else if (action === "addAction") {
       const { meetingId, description, ownerName, dueDate, priority } = data;
@@ -191,21 +198,24 @@ export async function POST(req: Request) {
           { error: "Meeting closed — action items cannot be added" },
           { status: 400 },
         );
-      result = await prisma.mrmActionItem.create({
-        data: {
-          meetingId,
-          description,
-          ownerName,
-          dueDate: dueDate ? new Date(dueDate) : null,
-          priority: priority || "MEDIUM",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "MRM_ACTION_ADDED",
-        entityType: "MRM_ACTION",
-        entityId: result.id,
-        details: `${description.slice(0, 100)} → ${ownerName}${dueDate ? ` by ${new Date(dueDate).toLocaleDateString()}` : ""}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.mrmActionItem.create({
+          data: {
+            meetingId,
+            description,
+            ownerName,
+            dueDate: dueDate ? new Date(dueDate) : null,
+            priority: priority || "MEDIUM",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MRM_ACTION_ADDED",
+          entityType: "MRM_ACTION",
+          entityId: created.id,
+          details: `${description.slice(0, 100)} → ${ownerName}${dueDate ? ` by ${new Date(dueDate).toLocaleDateString()}` : ""}`,
+        });
+        return created;
       });
     } else if (action === "completeAction") {
       const reason = validateReason(data);
@@ -219,16 +229,19 @@ export async function POST(req: Request) {
           { error: "Action item not found" },
           { status: 404 },
         );
-      result = await prisma.mrmActionItem.update({
-        where: { id: data.actionId },
-        data: { status: "DONE" },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "MRM_ACTION_COMPLETED",
-        entityType: "MRM_ACTION",
-        entityId: item.id,
-        details: `${item.description.slice(0, 100)} (${reason.reason})`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.mrmActionItem.update({
+          where: { id: data.actionId },
+          data: { status: "DONE" },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MRM_ACTION_COMPLETED",
+          entityType: "MRM_ACTION",
+          entityId: item.id,
+          details: `${item.description.slice(0, 100)} (${reason.reason})`,
+        });
+        return updated;
       });
     } else if (action === "escalateAction") {
       const reason = validateReason(data);
@@ -256,32 +269,35 @@ export async function POST(req: Request) {
           record: existing,
           deduped: true,
         });
-      result = await prisma.escalation.create({
-        data: {
-          sourceType: "MRM_ACTION",
-          sourceId: item.id,
-          title: `MRM action escalated · ${item.description.slice(0, 80)}`,
-          severity:
-            item.priority === "HIGH"
-              ? "CRITICAL"
-              : item.priority === "MEDIUM"
-                ? "HIGH"
-                : "MEDIUM",
-          dueDate: item.dueDate,
-          notes: `${reason.reason} (from ${item.meeting.meetingNumber})`,
-          escalatedAt: new Date(),
-        },
-      });
-      await prisma.mrmActionItem.update({
-        where: { id: item.id },
-        data: { escalated: true },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: "MRM_ACTION_ESCALATED",
-        entityType: "MRM_ACTION",
-        entityId: item.id,
-        details: `${item.description.slice(0, 100)} → escalation ${result.id}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.escalation.create({
+          data: {
+            sourceType: "MRM_ACTION",
+            sourceId: item.id,
+            title: `MRM action escalated · ${item.description.slice(0, 80)}`,
+            severity:
+              item.priority === "HIGH"
+                ? "CRITICAL"
+                : item.priority === "MEDIUM"
+                  ? "HIGH"
+                  : "MEDIUM",
+            dueDate: item.dueDate,
+            notes: `${reason.reason} (from ${item.meeting.meetingNumber})`,
+            escalatedAt: new Date(),
+          },
+        });
+        await tx.mrmActionItem.update({
+          where: { id: item.id },
+          data: { escalated: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: "MRM_ACTION_ESCALATED",
+          entityType: "MRM_ACTION",
+          entityId: item.id,
+          details: `${item.description.slice(0, 100)} → escalation ${created.id}`,
+        });
+        return created;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

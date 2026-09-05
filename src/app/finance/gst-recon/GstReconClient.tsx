@@ -135,6 +135,15 @@ export default function GstReconClient() {
   } | null>(null);
   const [resolveNote, setResolveNote] = useState("");
 
+  useEffect(() => {
+    if (!resolveFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setResolveFor(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [resolveFor]);
+
   const fetchRuns = useCallback(async () => {
     try {
       const res = await fetch("/api/gst-recon");
@@ -560,9 +569,15 @@ export default function GstReconClient() {
 
       {/* Resolve modal */}
       {resolveFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setResolveFor(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gst-resolve-title"
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="gst-resolve-title" className="font-bold text-white flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-sky-400" /> Resolve mismatch
             </h3>
             <p className="text-xs text-slate-400">
@@ -577,12 +592,14 @@ export default function GstReconClient() {
             />
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setResolveFor(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() =>
                   resolveNote.trim() &&
                   post(resolveFor.runId, "resolve-row", {

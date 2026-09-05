@@ -99,6 +99,15 @@ export default function EmployeesClient() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen]);
+
   const load = () => {
     fetch("/api/people/employees")
       .then((r) => r.json())
@@ -377,15 +386,18 @@ export default function EmployeesClient() {
           <div
             className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur-2xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="employee-modal-title"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div>
-                <h3 className="font-semibold text-white">{editing ? "Edit Employee" : "Add Employee"}</h3>
+                <h3 id="employee-modal-title" className="font-semibold text-white">{editing ? "Edit Employee" : "Add Employee"}</h3>
                 <p className="text-xs text-slate-400">
                   {editing ? `Updating ${editing.employeeNumber} — employee number is immutable` : "Statutory + bank master data"}
                 </p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+              <button type="button" aria-label="Close" onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                 <X className="size-5" />
               </button>
             </div>

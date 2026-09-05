@@ -78,16 +78,21 @@ export default function DrawingLightboxModal({
   const isCurrent = doc.status === "CURRENT";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-xl p-4 sm:p-6 text-white select-none overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lightbox-drawing-title"
+      className="fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-xl p-4 sm:p-6 text-white select-none overflow-hidden"
+    >
       {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 sm:px-6 rounded-2xl shadow-2xl shrink-0">
         <div className="flex items-start sm:items-center gap-4">
           <div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
-            <FileText className="w-6 h-6" />
+            <FileText className="w-6 h-6" aria-hidden="true" />
           </div>
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              <h2 id="lightbox-drawing-title" className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 {doc.title}
               </h2>
               <span
@@ -124,15 +129,18 @@ export default function DrawingLightboxModal({
           <a
             href={fileUrl}
             download={doc.title}
+            aria-label={`Download file ${doc.title}`}
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Download original file"
           >
-            <Download className="w-4 h-4 text-blue-400" />
+            <Download className="w-4 h-4 text-blue-400" aria-hidden="true" />
             Download File
           </a>
 
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close drawing lightbox"
             className="p-2.5 bg-slate-800 hover:bg-rose-900/60 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors cursor-pointer"
             title="Close Lightbox (Esc)"
           >

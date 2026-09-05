@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -63,27 +63,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const leave = await prisma.leaveRequest.create({
-      data: {
-        userId: user.id,
-        type: type,
-        fromDate: new Date(fromDate),
-        toDate: new Date(toDate),
-        days,
-        reason: reason,
-        status: "PENDING",
-      },
-    });
-    await logAudit({ actor: "system", action: "LEAVE_REQUEST_SUBMITTED", entityType: "LeaveRequest", details: "Employee leave request submitted" });
+    const leave = await prisma.$transaction(async (tx) => {
+      const created = await tx.leaveRequest.create({
+        data: {
+          userId: user.id,
+          type: type,
+          fromDate: new Date(fromDate),
+          toDate: new Date(toDate),
+          days,
+          reason: reason,
+          status: "PENDING",
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         action: "LEAVE_APPLIED",
         entityType: "LeaveRequest",
-        entityId: leave.id,
+        entityId: created.id,
         details: JSON.stringify({ type: type, days }),
         actor: user.name,
-      },
+      });
+
+      return created;
     });
 
     return NextResponse.json(leave, { status: 201 });

@@ -18,8 +18,47 @@ const nextConfig: NextConfig = {
   // that shows a version reads process.env.APP_VERSION — bump once in
   // package.json and everywhere follows. A real env var set at runtime takes
   // precedence over this baked value (Next never overrides existing env).
+  // Hardening: disable framework fingerprint header
+  poweredByHeader: false,
   env: {
     APP_VERSION: pkg.version,
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+          },
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
+          },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains; preload",
+          },
+        ],
+      },
+    ];
   },
 };
 

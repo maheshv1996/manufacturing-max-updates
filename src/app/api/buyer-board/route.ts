@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -12,6 +12,8 @@ export async function GET() {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.isOwner && !canAny(user, ["supply.edit", "ops.edit", "system.edit", "finance.edit"]))
+    return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
   try {
     const [requisitions, users, overduePos] = await Promise.all([
       prisma.purchaseRequisition.findMany({
@@ -94,26 +96,29 @@ export async function POST(req: Request) {
       } = data;
       if (!title)
         return NextResponse.json({ error: "title required" }, { status: 400 });
-      const seq = await prisma.purchaseRequisition.count();
-      const req = await prisma.purchaseRequisition.create({
-        data: {
-          reqNumber: `PR-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`,
-          title,
-          description: description || null,
-          itemName: itemName || null,
-          qty: qty != null ? Number(qty) : null,
-          unit: unit || null,
-          estimatedCost: estimatedCost != null ? Number(estimatedCost) : null,
-          urgency: urgency || "NORMAL",
-          requestedBy: user.name || "Stores",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Stores",
-        action: "REQ_CREATED",
-        entityType: "PURCHASE_REQUISITION",
-        entityId: req.id,
-        details: `${req.reqNumber} — ${title}`,
+      const req = await prisma.$transaction(async (tx) => {
+        const seq = await tx.purchaseRequisition.count();
+        const created = await tx.purchaseRequisition.create({
+          data: {
+            reqNumber: `PR-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`,
+            title,
+            description: description || null,
+            itemName: itemName || null,
+            qty: qty != null ? Number(qty) : null,
+            unit: unit || null,
+            estimatedCost: estimatedCost != null ? Number(estimatedCost) : null,
+            urgency: urgency || "NORMAL",
+            requestedBy: user.name || "Stores",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Stores",
+          action: "REQ_CREATED",
+          entityType: "PURCHASE_REQUISITION",
+          entityId: created.id,
+          details: `${created.reqNumber} — ${title}`,
+        });
+        return created;
       });
       return NextResponse.json(
         { success: true, requisition: req },
@@ -150,22 +155,25 @@ export async function POST(req: Request) {
         where: { id: data.buyerId },
         select: { name: true },
       });
-      const updated = await prisma.purchaseRequisition.update({
-        where: { id: data.id },
-        data: {
-          assignedToId: data.buyerId,
-          assignedByName: buyer?.name || "Buyer",
-          assignedAt: new Date(),
-          status: "ASSIGNED",
-          description: reason.reason,
-        },
-      });
-      await logAudit({
-        actor: user.name || "Manager",
-        action: "REQ_ASSIGNED",
-        entityType: "PURCHASE_REQUISITION",
-        entityId: req.id,
-        details: `${req.reqNumber} → ${buyer?.name || data.buyerId} (${reason.reason})`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.purchaseRequisition.update({
+          where: { id: data.id },
+          data: {
+            assignedToId: data.buyerId,
+            assignedByName: buyer?.name || "Buyer",
+            assignedAt: new Date(),
+            status: "ASSIGNED",
+            description: reason.reason,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Manager",
+          action: "REQ_ASSIGNED",
+          entityType: "PURCHASE_REQUISITION",
+          entityId: req.id,
+          details: `${req.reqNumber} → ${buyer?.name || data.buyerId} (${reason.reason})`,
+        });
+        return res;
       });
       return NextResponse.json({ success: true, requisition: updated });
     }
@@ -185,25 +193,28 @@ export async function POST(req: Request) {
           { error: "Requisition not found" },
           { status: 404 },
         );
-      const log = await prisma.poFollowUpLog.create({
-        data: {
-          requisitionId: id,
-          note: note.trim(),
-          by: user.name || "Buyer",
-        },
-      });
-      await prisma.purchaseRequisition.update({
-        where: { id },
-        data: {
-          status: req.status === "ASSIGNED" ? "IN_PROGRESS" : req.status,
-        },
-      });
-      await logAudit({
-        actor: user.name || "Buyer",
-        action: "PO_FOLLOW_UP",
-        entityType: "PURCHASE_REQUISITION",
-        entityId: id,
-        details: `${req.reqNumber} — ${note.trim().slice(0, 100)}`,
+      const log = await prisma.$transaction(async (tx) => {
+        const createdLog = await tx.poFollowUpLog.create({
+          data: {
+            requisitionId: id,
+            note: note.trim(),
+            by: user.name || "Buyer",
+          },
+        });
+        await tx.purchaseRequisition.update({
+          where: { id },
+          data: {
+            status: req.status === "ASSIGNED" ? "IN_PROGRESS" : req.status,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Buyer",
+          action: "PO_FOLLOW_UP",
+          entityType: "PURCHASE_REQUISITION",
+          entityId: id,
+          details: `${req.reqNumber} — ${note.trim().slice(0, 100)}`,
+        });
+        return createdLog;
       });
       return NextResponse.json({ success: true, followUp: log });
     }
@@ -228,20 +239,23 @@ export async function POST(req: Request) {
           { error: "poNumber required" },
           { status: 400 },
         );
-      const updated = await prisma.purchaseRequisition.update({
-        where: { id: data.id },
-        data: {
-          status: "PO_ISSUED",
-          poNumber: data.poNumber,
-          description: reason.reason,
-        },
-      });
-      await logAudit({
-        actor: user.name || "Manager",
-        action: "REQ_PO_ISSUED",
-        entityType: "PURCHASE_REQUISITION",
-        entityId: req.id,
-        details: `${req.reqNumber} → ${data.poNumber} (${reason.reason})`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.purchaseRequisition.update({
+          where: { id: data.id },
+          data: {
+            status: "PO_ISSUED",
+            poNumber: data.poNumber,
+            description: reason.reason,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Manager",
+          action: "REQ_PO_ISSUED",
+          entityType: "PURCHASE_REQUISITION",
+          entityId: req.id,
+          details: `${req.reqNumber} → ${data.poNumber} (${reason.reason})`,
+        });
+        return res;
       });
       return NextResponse.json({ success: true, requisition: updated });
     }
@@ -266,16 +280,19 @@ export async function POST(req: Request) {
           { error: "PO already issued — cancel the PO instead" },
           { status: 400 },
         );
-      const updated = await prisma.purchaseRequisition.update({
-        where: { id: data.id },
-        data: { status: "CANCELLED", description: reason.reason },
-      });
-      await logAudit({
-        actor: user.name || "Manager",
-        action: "REQ_CANCELLED",
-        entityType: "PURCHASE_REQUISITION",
-        entityId: req.id,
-        details: `${req.reqNumber} — ${reason.reason}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.purchaseRequisition.update({
+          where: { id: data.id },
+          data: { status: "CANCELLED", description: reason.reason },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Manager",
+          action: "REQ_CANCELLED",
+          entityType: "PURCHASE_REQUISITION",
+          entityId: req.id,
+          details: `${req.reqNumber} — ${reason.reason}`,
+        });
+        return res;
       });
       return NextResponse.json({ success: true, requisition: updated });
     }

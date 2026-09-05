@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -11,6 +11,8 @@ export async function GET() {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.isOwner && !canAny(user, ["ops.view", "supply.view", "commercial.view", "system.view"]))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
     const [dispatches, dispatchableWos] = await Promise.all([
       prisma.dispatchRecord.findMany({
@@ -57,6 +59,10 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user.isOwner && !canAny(user, ["ops.edit", "supply.edit", "commercial.edit", "system.edit"]))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const actor = user.name || user.email || "Despatch";
+
   try {
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
@@ -146,33 +152,37 @@ export async function POST(req: Request) {
       );
     }
 
-    const seq = await prisma.dispatchRecord.count();
-    const challanNumber = `CH-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`;
-    const gatePassNumber = `GP-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`;
+    const dispatch = await prisma.$transaction(async (tx) => {
+      const seq = await tx.dispatchRecord.count();
+      const challanNumber = `CH-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`;
+      const gatePassNumber = `GP-${new Date().getFullYear()}-${String(seq + 1).padStart(4, "0")}`;
 
-    const dispatch = await prisma.dispatchRecord.create({
-      data: {
-        challanNumber,
-        workOrderId,
-        dispatchedQty: Number(dispatchedQty),
-        carrierName: carrierName || null,
-        vehicleNumber: vehicleNumber.trim(),
-        driverName: driverName.trim(),
-        ewayBillNo: ewayBillNo.trim(),
-        gatePassNumber,
-        securityCheckedBy: user.name || "Security",
-        dispatchedByName: user.name || "Despatch",
-        notes: notes || null,
-      },
-      include: { workOrder: { include: { product: true } } },
-    });
+      const created = await tx.dispatchRecord.create({
+        data: {
+          challanNumber,
+          workOrderId,
+          dispatchedQty: Number(dispatchedQty),
+          carrierName: carrierName || null,
+          vehicleNumber: vehicleNumber.trim(),
+          driverName: driverName.trim(),
+          ewayBillNo: ewayBillNo.trim(),
+          gatePassNumber,
+          securityCheckedBy: actor,
+          dispatchedByName: actor,
+          notes: notes || null,
+        },
+        include: { workOrder: { include: { product: true } } },
+      });
 
-    await logAudit({
-      actor: user.name || "Despatch",
-      action: "GATE_PASS_ISSUED",
-      entityType: "DISPATCH",
-      entityId: dispatch.id,
-      details: `${gatePassNumber} · ${wo.woNumber} · ${dispatch.dispatchedQty} pcs · ${vehicleNumber} / ${driverName} · e-way ${ewayBillNo}`,
+      await logAuditTx(tx, {
+        actor,
+        action: "GATE_PASS_ISSUED",
+        entityType: "DISPATCH",
+        entityId: created.id,
+        details: `${gatePassNumber} · ${wo.woNumber} · ${created.dispatchedQty} pcs · ${vehicleNumber} / ${driverName} · e-way ${ewayBillNo}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, dispatch }, { status: 201 });

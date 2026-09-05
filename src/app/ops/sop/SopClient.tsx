@@ -109,6 +109,17 @@ export default function SopClient() {
     fetchAll();
   }, [fetchAll]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (decideFor) setDecideFor(null);
+        if (windowOpen) setWindowOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [decideFor, windowOpen]);
+
   const act = async (action: string, payload: any) => {
     setMsg("");
     setBusy(true);
@@ -419,15 +430,26 @@ export default function SopClient() {
 
       {/* Decision modal */}
       {decideFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sop-decision-modal-title"
+          onClick={() => setDecideFor(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white">
+              <h3 id="sop-decision-modal-title" className="font-bold text-white">
                 Capacity decision — week of {decideFor.label}
               </h3>
               <button
+                type="button"
                 onClick={() => setDecideFor(null)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close dialog"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -520,13 +542,24 @@ export default function SopClient() {
 
       {/* Maintenance window modal */}
       {windowOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sop-window-modal-title"
+          onClick={() => setWindowOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white">Book maintenance window</h3>
+              <h3 id="sop-window-modal-title" className="font-bold text-white">Book maintenance window</h3>
               <button
+                type="button"
                 onClick={() => setWindowOpen(false)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Close dialog"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>

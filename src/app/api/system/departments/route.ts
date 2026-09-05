@@ -1,7 +1,9 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DEPARTMENTS } from "@/lib/departments";
+import { headers } from "next/headers";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,12 @@ async function getStoredDepartments() {
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const departments = await getStoredDepartments();
     return NextResponse.json({ success: true, departments });
   } catch (error: any) {
@@ -48,8 +56,17 @@ export async function GET() {
 
 // Create new custom department
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "DEPARTMENTS_CONFIG_UPDATED", entityType: "Setting", details: "Updated active system departments" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor = user.name || "Admin";
+
     const { title, short, desc, hub, functions } = await req.json();
     if (!title || !short) {
       return NextResponse.json({ success: false, error: "Title and short name are required." }, { status: 400 });
@@ -73,10 +90,19 @@ export async function POST(req: Request) {
 
     const updated = [...current, newDept];
 
-    await prisma.setting.upsert({
-      where: { key: "custom_departments_v2" },
-      update: { value: JSON.stringify(updated) },
-      create: { key: "custom_departments_v2", value: JSON.stringify(updated) },
+    await prisma.$transaction(async (tx) => {
+      await tx.setting.upsert({
+        where: { key: "custom_departments_v2" },
+        update: { value: JSON.stringify(updated) },
+        create: { key: "custom_departments_v2", value: JSON.stringify(updated) },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "DEPARTMENTS_CONFIG_UPDATED",
+        entityType: "Setting",
+        details: `Created custom department "${title}" (${short})`,
+      });
     });
 
     return NextResponse.json({ success: true, department: newDept, departments: updated });
@@ -87,8 +113,17 @@ export async function POST(req: Request) {
 
 // Update / Rename / Edit functions of an existing department
 export async function PUT(req: Request) {
-    await logAudit({ actor: "system", action: "DEPARTMENTS_CONFIG_UPDATED", entityType: "Setting", details: "Updated active system departments" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor = user.name || "Admin";
+
     const { id, title, short, desc, hub, functions } = await req.json();
     if (!id) {
       return NextResponse.json({ success: false, error: "Department ID is required" }, { status: 400 });
@@ -109,10 +144,19 @@ export async function PUT(req: Request) {
       functions: Array.isArray(functions) ? functions : current[index].functions,
     };
 
-    await prisma.setting.upsert({
-      where: { key: "custom_departments_v2" },
-      update: { value: JSON.stringify(current) },
-      create: { key: "custom_departments_v2", value: JSON.stringify(current) },
+    await prisma.$transaction(async (tx) => {
+      await tx.setting.upsert({
+        where: { key: "custom_departments_v2" },
+        update: { value: JSON.stringify(current) },
+        create: { key: "custom_departments_v2", value: JSON.stringify(current) },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "DEPARTMENTS_CONFIG_UPDATED",
+        entityType: "Setting",
+        details: `Updated custom department "${current[index].title}"`,
+      });
     });
 
     return NextResponse.json({ success: true, department: current[index], departments: current });
@@ -123,8 +167,17 @@ export async function PUT(req: Request) {
 
 // Delete / Remove department
 export async function DELETE(req: Request) {
-    await logAudit({ actor: "system", action: "DEPARTMENTS_CONFIG_UPDATED", entityType: "Setting", details: "Updated active system departments" });
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "system.edit")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor = user.name || "Admin";
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {
@@ -134,10 +187,20 @@ export async function DELETE(req: Request) {
     const current = await getStoredDepartments();
     const filtered = current.filter((d: any) => d.id !== id);
 
-    await prisma.setting.upsert({
-      where: { key: "custom_departments_v2" },
-      update: { value: JSON.stringify(filtered) },
-      create: { key: "custom_departments_v2", value: JSON.stringify(filtered) },
+    await prisma.$transaction(async (tx) => {
+      await tx.setting.upsert({
+        where: { key: "custom_departments_v2" },
+        update: { value: JSON.stringify(filtered) },
+        create: { key: "custom_departments_v2", value: JSON.stringify(filtered) },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "DEPARTMENTS_CONFIG_UPDATED",
+        entityType: "Setting",
+        details: `Deleted custom department ${id}`,
+        severity: "WARN",
+      });
     });
 
     return NextResponse.json({ success: true, departments: filtered });

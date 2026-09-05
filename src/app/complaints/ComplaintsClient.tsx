@@ -478,6 +478,14 @@ function NewComplaintModal({
 }) {
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -508,13 +516,24 @@ function NewComplaintModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-complaint-modal-title"
+        className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/60">
-          <h2 className="text-lg font-bold">New Complaint</h2>
+          <h2 id="new-complaint-modal-title" className="text-lg font-bold">New Complaint</h2>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-slate-200 hover:bg-slate-800/90 rounded-lg"
+            aria-label="Close dialog"
+            className="p-2 hover:bg-slate-200 hover:bg-slate-800/90 rounded-lg cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

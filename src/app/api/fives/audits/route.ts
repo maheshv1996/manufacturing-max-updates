@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["quality.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -26,36 +39,41 @@ export async function POST(request: Request) {
     const totalPct = Number(
       ((totalPoints / maxPossiblePoints) * 100).toFixed(1),
     );
+    const actor = user.name || auditorName || "Auditor";
 
-    const audit = await prisma.fiveSAudit.create({
-      data: {
-        area: area.trim(),
-        auditorName: auditorName.trim(),
-        date: new Date(),
-        totalPct,
-        notes: notes ? notes.trim() : null,
-        scores: {
-          createMany: {
-            data: scores.map((s: any) => ({
-              itemId: s.itemId,
-              score: Number(s.score),
-            })),
+    const audit = await prisma.$transaction(async (tx) => {
+      const created = await tx.fiveSAudit.create({
+        data: {
+          area: area.trim(),
+          auditorName: auditorName.trim(),
+          date: new Date(),
+          totalPct,
+          notes: notes ? notes.trim() : null,
+          scores: {
+            createMany: {
+              data: scores.map((s: any) => ({
+                itemId: s.itemId,
+                score: Number(s.score),
+              })),
+            },
           },
         },
-      },
-      include: {
-        scores: {
-          include: { item: true },
+        include: {
+          scores: {
+            include: { item: true },
+          },
         },
-      },
-    });
+      });
 
-    await logAudit({
-      actor: "system",
-      action: "5S_AUDIT_CREATED",
-      entityType: "FiveSAudit",
-      entityId: audit.id,
-      details: `${area} · ${auditorName} · ${totalPct}%`,
+      await logAuditTx(tx, {
+        actor,
+        action: "5S_AUDIT_CREATED",
+        entityType: "FiveSAudit",
+        entityId: created.id,
+        details: `${area} · ${auditorName} · ${totalPct}%`,
+      });
+
+      return created;
     });
 
     return NextResponse.json(audit);

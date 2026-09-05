@@ -138,6 +138,14 @@ function EditModal({ wo, machines, onClose, onSave }: EditModalProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   const handleSave = async () => {
     setError(null);
     if (new Date(endDate) <= new Date(startDate)) {
@@ -169,11 +177,20 @@ function EditModal({ wo, machines, onClose, onSave }: EditModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="bg-surface-1 border border-border rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-5">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="schedule-modal-title"
+    >
+      <div
+        className="bg-surface-1 border border-border rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
-            <h2 className="text-xl font-bold text-text-1 flex items-center gap-2">
+            <h2 id="schedule-modal-title" className="text-xl font-bold text-text-1 flex items-center gap-2">
               <span>Schedule Work Order</span>
               <span className="text-accent font-mono">{wo.woNumber}</span>
             </h2>
@@ -184,8 +201,10 @@ function EditModal({ wo, machines, onClose, onSave }: EditModalProps) {
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-surface-3 text-text-3 hover:text-text-1 cursor-pointer"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>

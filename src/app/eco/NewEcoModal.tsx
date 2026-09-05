@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 import { logClientError } from "@/lib/clientLogger";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 
@@ -15,6 +15,15 @@ export default function NewEcoModal() {
     effectivityType: "DATE",
     effectivityValue: "",
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -43,21 +52,33 @@ export default function NewEcoModal() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm cursor-pointer"
       >
         <Plus className="w-4 h-4" />
         New ECO
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md border border-slate-700 flex flex-col">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-eco-dialog-title"
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md border border-slate-700 flex flex-col"
+          >
             <div className="flex items-center justify-between p-5 border-b border-slate-700">
-              <h2 className="text-lg font-bold">Raise New ECO</h2>
+              <h2 id="new-eco-dialog-title" className="text-lg font-bold">Raise New ECO</h2>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-full hover:bg-slate-800/90"
+                aria-label="Close raise new ECO dialog"
+                className="p-1 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-full hover:bg-slate-800/90 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

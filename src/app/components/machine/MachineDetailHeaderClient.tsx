@@ -2,7 +2,7 @@
 
 
 import { logClientError } from "@/lib/clientLogger";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Plus, RefreshCw, X } from "lucide-react";
 import { Machine } from "@/lib/data";
@@ -77,6 +77,17 @@ export default function MachineDetailHeaderClient({ machine }: Props) {
       setIsModalOpen(false);
     }
   };
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !submitting) {
+        closeModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen, submitting]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,18 +165,25 @@ export default function MachineDetailHeaderClient({ machine }: Props) {
 
       {/* LOG DOWNTIME MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="machine-downtime-modal-title"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-700 pb-4">
               <div className="flex items-center gap-2">
                 <Plus className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="machine-downtime-modal-title" className="text-lg font-bold text-white">
                   Log Downtime for {machine.name}
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={closeModal}
                 disabled={submitting}
+                aria-label="Close log downtime modal"
                 className="text-slate-400 hover:text-slate-600 hover:text-slate-200 p-1 disabled:opacity-50"
               >
                 <X className="w-5 h-5" />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { headers } from "next/headers";
 
 export async function GET(_request: Request) {
@@ -28,6 +29,15 @@ export async function GET(_request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["quality.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -43,8 +53,7 @@ export async function POST(request: Request) {
       severity,
       description,
     } = body;
-    const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
+    const userName = user.name || headerList.get("x-user-name") || "Quality Tech";
 
     const ncrNo = `NCR-${new Date().getFullYear()}-${Math.floor(
       Math.random() * 10000,
@@ -52,28 +61,32 @@ export async function POST(request: Request) {
       .toString()
       .padStart(4, "0")}`;
 
-    const ncr = await (prisma as any).ncrReport.create({
-      data: {
-        ncrNumber: ncrNo,
-        quarantineId,
-        workOrderId,
-        serialUnitId,
-        productId,
-        quantity: quantity ? parseFloat(String(quantity)) : 0,
-        defectCodeId,
-        severity: severity || "MEDIUM",
-        description: description || "Manually raised NCR",
-        status: "OPEN",
-        raisedBy: userName,
-      },
-    });
+    const ncr = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).ncrReport.create({
+        data: {
+          ncrNumber: ncrNo,
+          quarantineId,
+          workOrderId,
+          serialUnitId,
+          productId,
+          quantity: quantity ? parseFloat(String(quantity)) : 0,
+          defectCodeId,
+          severity: severity || "MEDIUM",
+          description: description || "Manually raised NCR",
+          status: "OPEN",
+          raisedBy: userName,
+        },
+      });
 
-    await logAudit({
-      actor: userName,
-      action: "NCR_RAISED",
-      entityType: "NCR",
-      entityId: ncr.id,
-      details: `Raised NCR ${ncrNo} for quantity ${quantity}`,
+      await logAuditTx(tx, {
+        actor: userName,
+        action: "NCR_RAISED",
+        entityType: "NCR",
+        entityId: created.id,
+        details: `Raised NCR ${ncrNo} for quantity ${quantity}`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, item: ncr });

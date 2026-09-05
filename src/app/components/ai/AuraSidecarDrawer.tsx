@@ -22,16 +22,13 @@ export default function AuraSidecarDrawer() {
   const pathname = usePathname();
   const router = useRouter();
 
-  if (
+  const isExcludedRoute =
     pathname === "/" ||
     pathname === "/onboarding" ||
     pathname?.startsWith("/onboarding/") ||
     pathname === "/login" ||
     pathname === "/landing" ||
-    pathname === "/terminal"
-  ) {
-    return null;
-  }
+    pathname === "/terminal";
 
   const getContextAdvice = () => {
     if (pathname?.includes("/quality") || pathname?.includes("/fai")) {
@@ -86,6 +83,7 @@ export default function AuraSidecarDrawer() {
   const context = getContextAdvice();
 
   useEffect(() => {
+    if (isExcludedRoute) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.code === "Space") {
         e.preventDefault();
@@ -97,7 +95,7 @@ export default function AuraSidecarDrawer() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
+  }, [isOpen, isExcludedRoute]);
 
   useEffect(() => {
     setMessages([
@@ -150,14 +148,23 @@ export default function AuraSidecarDrawer() {
     }
   };
 
+  if (isExcludedRoute) {
+    return null;
+  }
+
   return (
     <>
       <div className="fixed bottom-6 right-6 z-50">
         <button
+          type="button"
           onClick={() => {
             setIsOpen(!isOpen);
             soundFx.playClick();
           }}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          aria-controls="aura-copilot-drawer"
+          aria-label="Open AURA Co-Pilot AI Assistant"
           className="group px-4 py-2.5 rounded-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-extrabold text-xs shadow-2xl shadow-cyan-500/30 hover:shadow-cyan-500/50 hover:scale-105 active:scale-95 transition-all flex items-center gap-2.5 border border-cyan-400/40 cursor-pointer backdrop-blur-md"
         >
           <div className="relative w-4 h-4 flex items-center justify-center">
@@ -183,11 +190,16 @@ export default function AuraSidecarDrawer() {
             />
 
             <motion.div
+              id="aura-copilot-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="AURA Co-Pilot AI Assistant"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               className="fixed top-0 right-0 h-full w-full max-w-md bg-[#070913] border-l border-cyan-500/30 shadow-2xl z-50 flex flex-col justify-between overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="p-5 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
                 <div className="flex items-center gap-3">
@@ -207,26 +219,32 @@ export default function AuraSidecarDrawer() {
 
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => {
                       setIsOpen(false);
                       router.push("/system/ai");
                     }}
                     className="p-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 text-white/70 hover:text-cyan-300 transition-all cursor-pointer border border-white/10 hover:border-cyan-400/40"
                     title="Open AI Settings (Gemini, Groq, Ollama)"
+                    aria-label="Open AI Settings"
                   >
                     <Settings className="w-4 h-4" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setVoiceActive(!voiceActive)}
                     className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all cursor-pointer border border-white/10"
                     title={voiceActive ? "Mute voice" : "Unmute voice"}
+                    aria-label={voiceActive ? "Mute voice" : "Unmute voice"}
                   >
                     {voiceActive ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-white/40" />}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setIsOpen(false)}
                     className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all cursor-pointer border border-white/10"
                     title="Close"
+                    aria-label="Close AURA Co-Pilot"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -256,6 +274,7 @@ export default function AuraSidecarDrawer() {
                       {m.role === "aura" && m.text.includes("AI Settings") && (
                         <div className="mt-3 pt-2.5 border-t border-white/10">
                           <button
+                            type="button"
                             onClick={() => {
                               setIsOpen(false);
                               router.push("/system/ai");
@@ -277,6 +296,7 @@ export default function AuraSidecarDrawer() {
                       Suggested Co-Pilot Prompts:
                     </span>
                     <button
+                      type="button"
                       onClick={() => {
                         setIsOpen(false);
                         router.push("/system/ai");
@@ -292,6 +312,7 @@ export default function AuraSidecarDrawer() {
                     {context.quickActions.map((qa, i) => (
                       <button
                         key={i}
+                        type="button"
                         onClick={() => {
                           setInput(qa);
                           soundFx.playClick();

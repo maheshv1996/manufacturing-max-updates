@@ -17,8 +17,8 @@ class Watchdog {
   constructor({
     name = "process",
     command,
-    args = [],
-    cwd,
+    args = /** @type {string[]} */ ([]),
+    cwd = process.cwd(),
     env = {},
     restartDelayMs = 5000,
     maxTries = 3,
@@ -52,12 +52,16 @@ class Watchdog {
 
   stop() {
     this.stopped = true;
-    if (this.restartTimer) clearTimeout(this.restartTimer);
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (this.child && !this.child.killed) {
       try {
         this.child.kill();
       } catch {}
     }
+    this.child = null;
   }
 
   get alive() {
@@ -84,13 +88,20 @@ class Watchdog {
     this.child.stdout?.on("data", (d) => this.log(`[${this.name}] ${String(d).trimEnd()}`));
     this.child.stderr?.on("data", (d) => this.log(`[${this.name}:err] ${String(d).trimEnd()}`));
 
+    let deathHandled = false;
+    const onDead = (info) => {
+      if (deathHandled) return;
+      deathHandled = true;
+      this.handleDeath(info);
+    };
+
     this.child.on("exit", (code, signal) => {
       this.log(`[watchdog:${this.name}] exited (code=${code} signal=${signal})`);
-      this.handleDeath({ code, signal });
+      onDead({ code, signal });
     });
     this.child.on("error", (err) => {
       this.log(`[watchdog:${this.name}] error: ${err.message}`);
-      this.handleDeath(err);
+      onDead(err);
     });
   }
 

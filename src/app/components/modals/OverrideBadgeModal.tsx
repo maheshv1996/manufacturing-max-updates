@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Edit2, RotateCcw, X, Loader2, Check } from "lucide-react";
 
 interface OverrideBadgeModalProps {
@@ -40,6 +40,15 @@ export default function OverrideBadgeModal({
     existingOverride?.note || "",
   );
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
 
   const isOverridden = Boolean(existingOverride);
 
@@ -117,7 +126,9 @@ export default function OverrideBadgeModal({
               setNoteInput(existingOverride?.note || "");
               setIsOpen(true);
             }}
+            type="button"
             title="Manual Override (Admin)"
+            aria-label={`Manual override ${fieldLabel} (Admin)`}
             className="p-1 text-slate-400 hover:text-blue-500 hover:text-blue-400 rounded-lg hover:bg-slate-800/90 transition-colors cursor-pointer"
           >
             <Edit2 className="w-3.5 h-3.5" />
@@ -128,18 +139,26 @@ export default function OverrideBadgeModal({
       {/* Modal */}
       {isOpen && (
         <div
-          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="override-modal-title"
+          onClick={() => setIsOpen(false)}
           className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
         >
-          <div className="bg-slate-800/60 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 text-left text-white">
+          <div
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            className="bg-slate-800/60 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 text-left text-white"
+          >
             <div className="flex items-center justify-between border-b border-slate-700 pb-3">
-              <h3 className="text-lg font-black flex items-center gap-2">
+              <h3 id="override-modal-title" className="text-lg font-black flex items-center gap-2">
                 <Edit2 className="w-5 h-5 text-blue-500" />
                 Manual Override: {fieldLabel}
               </h3>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-slate-600 hover:text-white p-1"
+                aria-label="Close override modal"
+                className="text-slate-400 hover:text-slate-600 hover:text-white p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -195,6 +214,7 @@ export default function OverrideBadgeModal({
             <div className="flex items-center gap-3 pt-3 border-t border-slate-700">
               {isOverridden && (
                 <button
+                  type="button"
                   onClick={handleClear}
                   disabled={submitting}
                   className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -206,12 +226,14 @@ export default function OverrideBadgeModal({
 
               <div className="flex-1 flex gap-2 justify-end">
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
                   className="px-4 py-2.5 bg-slate-100 hover:bg-slate-800/60 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={submitting || valueInput === ""}
                   className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer transition-all"

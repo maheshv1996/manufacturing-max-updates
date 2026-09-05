@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -27,6 +36,13 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
+    const isSelf = user.id === operatorId;
+    const canManage = user.isOwner || canAny(user, ["ops.edit", "people.edit", "system.edit"]);
+    if (!isSelf && !canManage) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actor = user.name || user.email || user.id;
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -105,14 +121,12 @@ export async function POST(req: Request) {
           include: { shift: true, user: true },
         });
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor: "system",
-            action: "CLOCK_IN",
-            entityType: "AttendanceLog",
-            entityId: created.id,
-            details: `operator ${operatorId} · shift ${resolvedShiftId} · ${statusTx}`,
-          },
+        await logAuditTx(tx as any, {
+          actor,
+          action: "CLOCK_IN",
+          entityType: "AttendanceLog",
+          entityId: created.id,
+          details: `operator ${operatorId} · shift ${resolvedShiftId} · ${statusTx}`,
         });
         return created;
       }).catch((e: any) => {
@@ -156,8 +170,12 @@ export async function POST(req: Request) {
           data: { clockOut: new Date() },
           include: { shift: true, user: true },
         });
-        await (tx as any).auditLog.create({
-          data: { actor: "system", action: "CLOCK_OUT", entityType: "AttendanceLog", entityId: updated.id, details: `operator ${operatorId}` },
+        await logAuditTx(tx as any, {
+          actor,
+          action: "CLOCK_OUT",
+          entityType: "AttendanceLog",
+          entityId: updated.id,
+          details: `operator ${operatorId}`,
         });
         return updated;
       });

@@ -1,4 +1,3 @@
-import { logAudit } from "@/lib/audit";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
@@ -24,7 +23,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    await logAudit({ actor: "system", action: "OVERRIDE_RECORDED", entityType: "SupervisorOverride", details: "Supervisor override recorded" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
@@ -93,7 +91,6 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-    await logAudit({ actor: "system", action: "OVERRIDE_RECORDED", entityType: "SupervisorOverride", details: "Supervisor override recorded" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);

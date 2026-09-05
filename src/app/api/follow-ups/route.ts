@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { WIN_LOSS_REASONS } from "@/lib/winLoss";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
   const user = getUserFromHeaders(headersList);
   if (!user.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await canAny(user, ["commercial.edit"])))
+  if (!user.isOwner && !canAny(user, ["commercial.edit", "system.edit"]))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
@@ -120,16 +120,19 @@ export async function POST(req: Request) {
     if (action === "log") {
       if (!note)
         return NextResponse.json({ error: "note required" }, { status: 400 });
-      const updated = await prisma.quotation.update({
-        where: { id },
-        data: { lastFollowUpAt: new Date(), followUps: [...fups, entry] },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "FOLLOW_UP_LOGGED",
-        entityType: "QUOTATION",
-        entityId: id,
-        details: `${quote.quoteNumber} — ${note.slice(0, 80)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.quotation.update({
+          where: { id },
+          data: { lastFollowUpAt: new Date(), followUps: [...fups, entry] },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "FOLLOW_UP_LOGGED",
+          entityType: "QUOTATION",
+          entityId: id,
+          details: `${quote.quoteNumber} — ${note.slice(0, 80)}`,
+        });
+        return rec;
       });
       return NextResponse.json({ quotation: updated });
     }
@@ -140,16 +143,19 @@ export async function POST(req: Request) {
           { error: "valid lostReason required" },
           { status: 400 },
         );
-      const updated = await prisma.quotation.update({
-        where: { id },
-        data: { status: "LOST", lostReason, followUps: [...fups, entry] },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "ENQUIRY_LOST",
-        entityType: "QUOTATION",
-        entityId: id,
-        details: `${quote.quoteNumber} — lost: ${lostReason}${note ? ` (${note.slice(0, 60)})` : ""}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.quotation.update({
+          where: { id },
+          data: { status: "LOST", lostReason, followUps: [...fups, entry] },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "ENQUIRY_LOST",
+          entityType: "QUOTATION",
+          entityId: id,
+          details: `${quote.quoteNumber} — lost: ${lostReason}${note ? ` (${note.slice(0, 60)})` : ""}`,
+        });
+        return rec;
       });
       return NextResponse.json({ quotation: updated });
     }
@@ -172,16 +178,19 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      const updated = await prisma.quotation.update({
-        where: { id },
-        data: { status: "WON", wonReason, followUps: [...fups, entry] },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "ENQUIRY_WON",
-        entityType: "QUOTATION",
-        entityId: id,
-        details: `${quote.quoteNumber} — won: ${wonReason}${note ? ` (${note.slice(0, 60)})` : ""}${quote.discountPct > 5 ? ` · discount ${quote.discountPct}%` : ""}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const rec = await tx.quotation.update({
+          where: { id },
+          data: { status: "WON", wonReason, followUps: [...fups, entry] },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "ENQUIRY_WON",
+          entityType: "QUOTATION",
+          entityId: id,
+          details: `${quote.quoteNumber} — won: ${wonReason}${note ? ` (${note.slice(0, 60)})` : ""}${quote.discountPct > 5 ? ` · discount ${quote.discountPct}%` : ""}`,
+        });
+        return rec;
       });
       return NextResponse.json({ quotation: updated });
     }

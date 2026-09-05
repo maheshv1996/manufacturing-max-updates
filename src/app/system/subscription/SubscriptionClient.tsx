@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   CreditCard,
   History,
@@ -25,6 +25,16 @@ export default function SubscriptionClient({
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualAmount, setManualAmount] = useState("");
   const [manualRef, setManualRef] = useState("");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showManualModal) {
+        setShowManualModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showManualModal]);
 
   const daysRemaining = differenceInDays(
     new Date(license.nextDueDate),
@@ -232,9 +242,18 @@ export default function SubscriptionClient({
       </div>
 
       {showManualModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-            <h2 className="text-xl font-bold text-white mb-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowManualModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-payment-modal-title"
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="manual-payment-modal-title" className="text-xl font-bold text-white mb-6">
               Record Manual Payment
             </h2>
 

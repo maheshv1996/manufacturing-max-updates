@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { normalizeMrbDisposition, normalizeMrbAuthority } from "@/lib/mrbPolicy";
 
 export async function PUT(
@@ -28,7 +29,15 @@ export async function PUT(
     } = body;
 
     const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const canEdit = user.isOwner || canAny(user, ["quality.edit", "ops.edit", "system.edit"]);
+    if (!canEdit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const userName = user.name || user.email || "System";
 
     const report = await (prisma as any).ncrReport.findUnique({
       where: { id },
@@ -92,71 +101,73 @@ export async function PUT(
       status: status !== undefined ? status : report.status,
     };
 
-    if (action === "DISPOSE" && disposition) {
-      updateData.status = "DISPOSITIONED";
-      if (disposition === "REWORK" && report.quarantineId) {
-        // Find a machine for the rework order (fallback to first active machine)
-        const machine = await prisma.machine.findFirst({
-          where: { isActive: true },
-        });
-        if (machine) {
-          await prisma.reworkOrder.create({
-            data: {
-              quarantineId: report.quarantineId,
-              targetMachineId: machine.id,
-              routingSteps: "Rework based on MRB Disposition",
-              extraLaborHours: 1.0,
-              status: "PENDING",
-              adjustmentHistory: [
-                {
-                  action: "CREATED_FROM_MRB",
-                  by: userName,
-                  at: new Date().toISOString(),
-                  from: `MRB disposition of NCR ${report.ncrNumber}`,
-                },
-              ],
-            },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (action === "DISPOSE" && disposition) {
+        updateData.status = "DISPOSITIONED";
+        if (disposition === "REWORK" && report.quarantineId) {
+          // Find a machine for the rework order (fallback to first active machine)
+          const machine = await tx.machine.findFirst({
+            where: { isActive: true },
           });
+          if (machine) {
+            await tx.reworkOrder.create({
+              data: {
+                quarantineId: report.quarantineId,
+                targetMachineId: machine.id,
+                routingSteps: "Rework based on MRB Disposition",
+                extraLaborHours: 1.0,
+                status: "PENDING",
+                adjustmentHistory: [
+                  {
+                    action: "CREATED_FROM_MRB",
+                    by: userName,
+                    at: new Date().toISOString(),
+                    from: `MRB disposition of NCR ${report.ncrNumber}`,
+                  },
+                ],
+              },
+            });
+          }
         }
       }
-    }
 
-    if (action === "CLOSE") {
-      updateData.status = "CLOSED";
-      updateData.closedAt = new Date();
-      // Wait, we need an approver. The user closing it is the approver.
-      // But we need the User ID for approvedById. We'll use a hardcoded fallback or look it up.
-      const user = await prisma.user.findFirst({ where: { name: userName } });
-      if (user) {
-        updateData.approvedById = user.id;
-        updateData.approvedAt = new Date();
+      if (action === "CLOSE") {
+        updateData.status = "CLOSED";
+        updateData.closedAt = new Date();
+        const approver = await tx.user.findFirst({ where: { name: userName } });
+        if (approver) {
+          updateData.approvedById = approver.id;
+          updateData.approvedAt = new Date();
+        }
       }
-    }
 
-    const updated = await (prisma as any).ncrReport.update({
-      where: { id },
-      data: updateData,
+      const res = await (tx as any).ncrReport.update({
+        where: { id },
+        data: updateData,
+      });
+
+      if (action === "DISPOSE") {
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "NCR_DISPOSITIONED",
+          entityType: "NCR",
+          entityId: id,
+          details: `Dispositioned NCR ${report.ncrNumber} as ${disposition}`,
+        });
+      }
+
+      if (action === "CLOSE") {
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "NCR_CLOSED",
+          entityType: "NCR",
+          entityId: id,
+          details: `Closed NCR ${report.ncrNumber}`,
+        });
+      }
+
+      return res;
     });
-
-    if (action === "DISPOSE") {
-      await logAudit({
-        actor: userName,
-        action: "NCR_DISPOSITIONED",
-        entityType: "NCR",
-        entityId: id,
-        details: `Dispositioned NCR ${report.ncrNumber} as ${disposition}`,
-      });
-    }
-
-    if (action === "CLOSE") {
-      await logAudit({
-        actor: userName,
-        action: "NCR_CLOSED",
-        entityType: "NCR",
-        entityId: id,
-        details: `Closed NCR ${report.ncrNumber}`,
-      });
-    }
 
     return NextResponse.json({ success: true, item: updated });
   } catch (error: any) {

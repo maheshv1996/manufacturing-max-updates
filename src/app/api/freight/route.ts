@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +115,9 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const actor = user.name || "Admin";
     const canEdit =
       user.isOwner ||
@@ -160,32 +163,38 @@ export async function POST(req: Request) {
           { error: "Vendor not found" },
           { status: 404 },
         );
-      const year = new Date().getFullYear();
-      const count = await prisma.freightDispatch.count();
-      const dispatchNumber = `FD-${year}-${String(count + 1).padStart(3, "0")}`;
 
-      const dispatch = await prisma.freightDispatch.create({
-        data: {
-          dispatchNumber,
-          vendorId,
-          reference: reference || null,
-          route: route || null,
-          vehicleNumber: vehicleNumber || null,
-          pickupDate: pickupDate ? new Date(pickupDate) : null,
-          promisedDate: new Date(promisedDate),
-          charges: parseFloat(charges || "0"),
-          notes: notes || null,
-        },
-        include: { vendor: true },
+      const dispatch = await prisma.$transaction(async (tx) => {
+        const year = new Date().getFullYear();
+        const count = await tx.freightDispatch.count();
+        const dispatchNumber = `FD-${year}-${String(count + 1).padStart(3, "0")}`;
+
+        const created = await tx.freightDispatch.create({
+          data: {
+            dispatchNumber,
+            vendorId,
+            reference: reference || null,
+            route: route || null,
+            vehicleNumber: vehicleNumber || null,
+            pickupDate: pickupDate ? new Date(pickupDate) : null,
+            promisedDate: new Date(promisedDate),
+            charges: parseFloat(charges || "0"),
+            notes: notes || null,
+          },
+          include: { vendor: true },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: "FREIGHT_DISPATCH_SCHEDULED",
+          entityType: "FREIGHT_DISPATCH",
+          entityId: created.id,
+          details: `${dispatchNumber} — ${vendor.name}${route ? ` · ${route}` : ""}, promised ${new Date(promisedDate).toLocaleDateString()}`,
+        });
+
+        return created;
       });
 
-      await logAudit({
-        actor,
-        action: "FREIGHT_DISPATCH_SCHEDULED",
-        entityType: "FREIGHT_DISPATCH",
-        entityId: dispatch.id,
-        details: `${dispatchNumber} — ${vendor.name}${route ? ` · ${route}` : ""}, promised ${new Date(promisedDate).toLocaleDateString()}`,
-      });
       return NextResponse.json({ success: true, dispatch });
     }
 
@@ -209,35 +218,40 @@ export async function POST(req: Request) {
       if (!allowed.includes(status)) {
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       }
-      const dispatch = await prisma.freightDispatch.findUnique({
+      const existing = await prisma.freightDispatch.findUnique({
         where: { id: dispatchId },
         include: { vendor: true },
       });
-      if (!dispatch)
+      if (!existing)
         return NextResponse.json(
           { error: "Dispatch not found" },
           { status: 404 },
         );
 
-      const updated = await prisma.freightDispatch.update({
-        where: { id: dispatchId },
-        data: {
-          status: status as string,
-          actualDate:
-            status === "DELIVERED"
-              ? dispatch.actualDate || new Date()
-              : dispatch.actualDate,
-        },
-        include: { vendor: true },
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.freightDispatch.update({
+          where: { id: dispatchId },
+          data: {
+            status: status as string,
+            actualDate:
+              status === "DELIVERED"
+                ? existing.actualDate || new Date()
+                : existing.actualDate,
+          },
+          include: { vendor: true },
+        });
+
+        await logAuditTx(tx, {
+          actor,
+          action: `FREIGHT_DISPATCH_${status}`,
+          entityType: "FREIGHT_DISPATCH",
+          entityId: existing.id,
+          details: `${existing.dispatchNumber} (${existing.vendor.name}) → ${status}${status === "DELIVERED" ? " on " + new Date(res.actualDate || Date.now()).toLocaleDateString() : ""}`,
+        });
+
+        return res;
       });
 
-      await logAudit({
-        actor,
-        action: `FREIGHT_DISPATCH_${status}`,
-        entityType: "FREIGHT_DISPATCH",
-        entityId: dispatch.id,
-        details: `${dispatch.dispatchNumber} (${dispatch.vendor.name}) → ${status}${status === "DELIVERED" ? " on " + new Date(updated.actualDate || Date.now()).toLocaleDateString() : ""}`,
-      });
       return NextResponse.json({ success: true, dispatch: updated });
     }
 

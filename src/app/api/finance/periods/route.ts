@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -12,7 +12,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -44,7 +47,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -75,22 +81,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const period = await prisma.fiscalPeriod.create({
-      data: {
-        code: parsed.data.code,
-        label: parsed.data.label || null,
-        startDate: start,
-        endDate: end,
-        status: "OPEN",
-      },
-    });
+    const period = await prisma.$transaction(async (tx) => {
+      const per = await tx.fiscalPeriod.create({
+        data: {
+          code: parsed.data.code,
+          label: parsed.data.label || null,
+          startDate: start,
+          endDate: end,
+          status: "OPEN",
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "FISCAL_PERIOD_OPENED",
-      entityType: "FiscalPeriod",
-      entityId: period.id,
-      details: `Opened fiscal period ${period.code} (${start.toISOString().slice(0, 10)} → ${end.toISOString().slice(0, 10)})`,
+      await logAuditTx(tx, {
+        actor,
+        action: "FISCAL_PERIOD_OPENED",
+        entityType: "FiscalPeriod",
+        entityId: per.id,
+        details: `Opened fiscal period ${per.code} (${start.toISOString().slice(0, 10)} → ${end.toISOString().slice(0, 10)})`,
+      });
+      return per;
     });
 
     return NextResponse.json({ success: true, period });

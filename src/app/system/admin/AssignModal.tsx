@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, UserCheck, Calendar } from "lucide-react";
 
 export default function AssignModal({
@@ -21,6 +21,14 @@ export default function AssignModal({
   const [validTo, setValidTo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,11 +63,20 @@ export default function AssignModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-6">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="assign-modal-title"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-6"
+      >
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <h3 id="assign-modal-title" className="text-xl font-bold text-white flex items-center gap-2">
               <UserCheck className="w-5 h-5 text-blue-400" />
               Assign Operator
             </h3>
@@ -70,8 +87,10 @@ export default function AssignModal({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1"
+            aria-label="Close assign operator dialog"
+            className="text-slate-400 hover:text-white p-1 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

@@ -62,10 +62,23 @@ export default function CollectionsClient() {
   const [busy, setBusy] = useState(false);
 
   const [noteFor, setNoteFor] = useState<Account | null>(null);
+
   const [note, setNote] = useState("");
   const [assignFor, setAssignFor] = useState<Account | null>(null);
   const [collectorId, setCollectorId] = useState("");
   const [assignReason, setAssignReason] = useState("");
+
+  useEffect(() => {
+    if (!noteFor && !assignFor) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNoteFor(null);
+        setAssignFor(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [noteFor, assignFor]);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -322,9 +335,15 @@ export default function CollectionsClient() {
 
       {/* Follow-up modal */}
       {noteFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setNoteFor(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="collection-followup-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="collection-followup-title" className="font-bold text-white">
               Weekly follow-up — {noteFor.invoiceNumber} ({noteFor.customerName}
               )
             </h3>
@@ -354,6 +373,7 @@ export default function CollectionsClient() {
               placeholder="What happened this week — call / mail / promise to pay?"
             />
             <Button
+              type="button"
               disabled={busy || !note}
               onClick={() =>
                 act("log-followup", { id: noteFor.id, note }).then(() =>
@@ -375,9 +395,15 @@ export default function CollectionsClient() {
 
       {/* Assign modal */}
       {assignFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4">
-            <h3 className="font-bold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setAssignFor(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="collection-assign-title"
+            className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="collection-assign-title" className="font-bold text-white">
               Assign collector — {assignFor.invoiceNumber}
             </h3>
             <div>
@@ -404,6 +430,7 @@ export default function CollectionsClient() {
               placeholder="Reason (required — manager only)"
             />
             <Button
+              type="button"
               disabled={busy || !collectorId || !assignReason}
               onClick={() =>
                 act("assign", {

@@ -56,6 +56,15 @@ export default function FiveSClient() {
   // Audit Detail Modal
   const [selectedAudit, setSelectedAudit] = useState<any | null>(null);
 
+  useEffect(() => {
+    if (!selectedAudit) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedAudit(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedAudit]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -508,11 +517,17 @@ export default function FiveSClient() {
 
       {/* AUDIT DETAILS INSPECTION MODAL */}
       {selectedAudit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setSelectedAudit(null)}>
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fives-modal-title"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <h3 id="fives-modal-title" className="text-xl font-bold text-white flex items-center gap-2">
                   📍 {selectedAudit.area} 5S Audit
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
@@ -524,6 +539,8 @@ export default function FiveSClient() {
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setSelectedAudit(null)}
                 className="text-slate-400 hover:text-white p-1"
               >

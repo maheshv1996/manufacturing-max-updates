@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, can } from "@/lib/permissions";
 
 export async function GET(_request: Request) {
   try {
@@ -48,14 +49,19 @@ export async function GET(_request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const headerList = await headers();
+    const user = getUserFromHeaders(headerList);
+    if (!user.id || (!user.isOwner && !can(user, "ops.edit") && !can(user, "records.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const body = await request.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const { logId, type, data } = body;
-    const headerList = await headers();
-    const actorName = headerList.get("x-user-name") || "Supervisor";
+    const actorName = user.name || headerList.get("x-user-name") || "Supervisor";
 
     if (!logId || !type || !data) {
       return NextResponse.json(
@@ -83,21 +89,23 @@ export async function PUT(request: Request) {
         date: new Date().toISOString(),
       });
 
-      await prisma.productionLog.update({
-        where: { id: logId },
-        data: {
-          goodQuantity: data.goodQuantity,
-          scrapQuantity: data.scrapQuantity,
-          adjustmentHistory: history,
-        },
-      });
+      await prisma.$transaction(async (tx) => {
+        await tx.productionLog.update({
+          where: { id: logId },
+          data: {
+            goodQuantity: data.goodQuantity,
+            scrapQuantity: data.scrapQuantity,
+            adjustmentHistory: history,
+          },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "RECONCILE_EDIT_LOG",
-        entityType: "PRODUCTION_LOG",
-        entityId: logId,
-        details: `Supervisor edited production log quantities`,
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "RECONCILE_EDIT_LOG",
+          entityType: "PRODUCTION_LOG",
+          entityId: logId,
+          details: `Supervisor edited production log quantities`,
+        });
       });
 
       return NextResponse.json({ success: true });
@@ -138,25 +146,27 @@ export async function PUT(request: Request) {
         date: new Date().toISOString(),
       });
 
-      await prisma.downtimeLog.update({
-        where: { id: logId },
-        data: {
-          reasonId: data.reasonId !== undefined ? data.reasonId : log.reasonId,
-          notes: data.notes !== undefined ? data.notes : log.notes,
-          durationMinutes:
-            data.durationMinutes !== undefined
-              ? data.durationMinutes
-              : log.durationMinutes,
-          adjustmentHistory: history,
-        },
-      });
+      await prisma.$transaction(async (tx) => {
+        await tx.downtimeLog.update({
+          where: { id: logId },
+          data: {
+            reasonId: data.reasonId !== undefined ? data.reasonId : log.reasonId,
+            notes: data.notes !== undefined ? data.notes : log.notes,
+            durationMinutes:
+              data.durationMinutes !== undefined
+                ? data.durationMinutes
+                : log.durationMinutes,
+            adjustmentHistory: history,
+          },
+        });
 
-      await logAudit({
-        actor: actorName,
-        action: "RECONCILE_EDIT_LOG",
-        entityType: "DOWNTIME_LOG",
-        entityId: logId,
-        details: `Supervisor edited downtime log`,
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "RECONCILE_EDIT_LOG",
+          entityType: "DOWNTIME_LOG",
+          entityId: logId,
+          details: `Supervisor edited downtime log`,
+        });
       });
 
       return NextResponse.json({ success: true });
@@ -171,44 +181,51 @@ export async function PUT(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
     const headerList = await headers();
-    const actorName = headerList.get("x-user-name") || "Supervisor";
+    const user = getUserFromHeaders(headerList);
+    if (!user.id || (!user.isOwner && !can(user, "ops.edit") && !can(user, "records.edit") && !can(user, "system.edit"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const actorName = user.name || headerList.get("x-user-name") || "Supervisor";
     const { logIds, type } = body;
 
     if (!logIds || !Array.isArray(logIds)) {
       return NextResponse.json({ error: "Invalid logIds" }, { status: 400 });
     }
 
-    if (type === "PRODUCTION") {
-      await prisma.productionLog.updateMany({
-        where: { id: { in: logIds } },
-        data: { status: "FINALIZED" },
-      });
-    } else if (type === "DOWNTIME") {
-      await prisma.downtimeLog.updateMany({
-        where: { id: { in: logIds } },
-        data: { status: "FINALIZED" },
-      });
-    } else if (type === "ALL") {
-      await prisma.productionLog.updateMany({
-        where: { status: "DRAFT" },
-        data: { status: "FINALIZED" },
-      });
-      await prisma.downtimeLog.updateMany({
-        where: { status: "DRAFT" },
-        data: { status: "FINALIZED" },
-      });
-    }
+    await prisma.$transaction(async (tx) => {
+      if (type === "PRODUCTION") {
+        await tx.productionLog.updateMany({
+          where: { id: { in: logIds } },
+          data: { status: "FINALIZED" },
+        });
+      } else if (type === "DOWNTIME") {
+        await tx.downtimeLog.updateMany({
+          where: { id: { in: logIds } },
+          data: { status: "FINALIZED" },
+        });
+      } else if (type === "ALL") {
+        await tx.productionLog.updateMany({
+          where: { status: "DRAFT" },
+          data: { status: "FINALIZED" },
+        });
+        await tx.downtimeLog.updateMany({
+          where: { status: "DRAFT" },
+          data: { status: "FINALIZED" },
+        });
+      }
 
-    await logAudit({
-      actor: actorName,
-      action: "RECONCILE_FINALIZED",
-      entityType: type === "DOWNTIME" ? "DowntimeLog" : "ProductionLog",
-      details:
-        type === "ALL"
-          ? `Finalized all DRAFT production and downtime logs`
-          : `Finalized ${logIds.length} ${type} log(s)`,
+      await logAuditTx(tx, {
+        actor: actorName,
+        action: "RECONCILE_FINALIZED",
+        entityType: type === "DOWNTIME" ? "DowntimeLog" : "ProductionLog",
+        details:
+          type === "ALL"
+            ? `Finalized all DRAFT production and downtime logs`
+            : `Finalized ${logIds.length} ${type} log(s)`,
+      });
     });
 
     return NextResponse.json({ success: true });

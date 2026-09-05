@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export async function GET(
   _request: Request,
@@ -44,7 +45,15 @@ export async function PUT(
     const body = await request.json();
     const { action, characteristics, status, notes } = body;
     const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const canEdit = user.isOwner || canAny(user, ["quality.edit", "system.edit"]);
+    if (!canEdit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const userName = user.name || user.email || "System";
 
     const report = await prisma.faiReport.findUnique({
       where: { id },
@@ -71,61 +80,67 @@ export async function PUT(
         report.characteristics.map((c) => c.charNo),
       );
 
-      let importedCount = 0;
-      for (const qc of qcParams) {
-        if (!existingCharNos.has(qc.charNo)) {
-          await prisma.faiCharacteristic.create({
-            data: {
-              faiReportId: report.id,
-              charNo: qc.charNo,
-              description: qc.description,
-              target: qc.target,
-              lsl: qc.lsl,
-              usl: qc.usl,
-              method: qc.method,
-            },
-          });
-          importedCount++;
+      const importedCount = await prisma.$transaction(async (tx) => {
+        let count = 0;
+        for (const qc of qcParams) {
+          if (!existingCharNos.has(qc.charNo)) {
+            await tx.faiCharacteristic.create({
+              data: {
+                faiReportId: report.id,
+                charNo: qc.charNo,
+                description: qc.description,
+                target: qc.target,
+                lsl: qc.lsl,
+                usl: qc.usl,
+                method: qc.method,
+              },
+            });
+            count++;
+          }
         }
-      }
 
-      await logAudit({
-        actor: userName,
-        action: "FAI_UPDATED",
-        entityType: "FAI_REPORT",
-        entityId: report.id,
-        details: `Imported ${importedCount} QC parameters`,
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "FAI_UPDATED",
+          entityType: "FAI_REPORT",
+          entityId: report.id,
+          details: `Imported ${count} QC parameters`,
+        });
+
+        return count;
       });
 
       return NextResponse.json({ success: true, importedCount });
     }
 
     if (action === "UPDATE_CHARS") {
-      for (const char of characteristics) {
-        // Auto compute PASS/FAIL if actual is provided and there are limits
-        let calcStatus = char.status || "PENDING";
-        if (char.actual !== undefined && char.actual !== null) {
-          if (char.lsl !== null && char.actual < char.lsl) calcStatus = "FAIL";
-          else if (char.usl !== null && char.actual > char.usl)
-            calcStatus = "FAIL";
-          else calcStatus = "PASS";
+      await prisma.$transaction(async (tx) => {
+        for (const char of characteristics) {
+          // Auto compute PASS/FAIL if actual is provided and there are limits
+          let calcStatus = char.status || "PENDING";
+          if (char.actual !== undefined && char.actual !== null) {
+            if (char.lsl !== null && char.actual < char.lsl) calcStatus = "FAIL";
+            else if (char.usl !== null && char.actual > char.usl)
+              calcStatus = "FAIL";
+            else calcStatus = "PASS";
+          }
+
+          await tx.faiCharacteristic.update({
+            where: { id: char.id },
+            data: {
+              actual: char.actual,
+              status: calcStatus,
+            },
+          });
         }
 
-        await prisma.faiCharacteristic.update({
-          where: { id: char.id },
-          data: {
-            actual: char.actual,
-            status: calcStatus,
-          },
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "FAI_UPDATED",
+          entityType: "FAI_REPORT",
+          entityId: report.id,
+          details: "Updated characteristics actuals",
         });
-      }
-
-      await logAudit({
-        actor: userName,
-        action: "FAI_UPDATED",
-        entityType: "FAI_REPORT",
-        entityId: report.id,
-        details: "Updated characteristics actuals",
       });
 
       return NextResponse.json({ success: true });
@@ -165,17 +180,21 @@ export async function PUT(
         updateData.approvedAt = new Date();
       }
 
-      const updated = await prisma.faiReport.update({
-        where: { id: report.id },
-        data: updateData,
-      });
+      const updated = await prisma.$transaction(async (tx) => {
+        const res = await tx.faiReport.update({
+          where: { id: report.id },
+          data: updateData,
+        });
 
-      await logAudit({
-        actor: userName,
-        action: `FAI_${status}`,
-        entityType: "FAI_REPORT",
-        entityId: report.id,
-        details: `FAI Report marked as ${status}`,
+        await logAuditTx(tx, {
+          actor: userName,
+          action: `FAI_${status}`,
+          entityType: "FAI_REPORT",
+          entityId: report.id,
+          details: `FAI Report marked as ${status}`,
+        });
+
+        return res;
       });
 
       return NextResponse.json(updated);

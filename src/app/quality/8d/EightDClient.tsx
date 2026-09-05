@@ -125,6 +125,29 @@ export default function EightDClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (modal) setModal(null);
+        else if (detail) setDetail(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modal, detail]);
+
+  useEffect(() => {
+    if (!detail && !modal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (modal) setModal(null);
+        else if (detail) setDetail(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [detail, modal]);
+
   const api = async (payload: any) => {
     setSaving(true);
     try {
@@ -421,11 +444,20 @@ export default function EightDClient() {
 
       {/* DETAIL DRAWER */}
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/50">
-          <div className="w-full max-w-3xl h-full bg-slate-800/60 overflow-y-auto shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-end bg-black/50"
+          onClick={() => setDetail(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="eightd-detail-title"
+        >
+          <div
+            className="w-full max-w-3xl h-full bg-slate-800/60 overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="sticky top-0 bg-slate-800/80 border-b border-slate-700 backdrop-blur-sm px-6 py-4 flex items-center justify-between z-10">
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="eightd-detail-title" className="text-lg font-bold text-white">
                   {detail.reportNumber} — {detail.title}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -446,8 +478,10 @@ export default function EightDClient() {
                   {STATUS_META[detail.status]?.label || detail.status}
                 </span>
                 <button
+                  type="button"
                   onClick={() => setDetail(null)}
                   className="p-2 rounded-lg hover:bg-slate-800/90"
+                  aria-label="Close detail drawer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -713,17 +747,28 @@ export default function EightDClient() {
 
       {/* CREATE/EDIT MODAL */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl bg-slate-800/60 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setModal(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="eightd-modal-title"
+        >
+          <div
+            className="w-full max-w-2xl bg-slate-800/60 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between sticky top-0 bg-slate-800/60 z-10">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="eightd-modal-title" className="text-lg font-bold text-white">
                 {modal.mode === "create"
                   ? "New 8D Report"
                   : `Edit ${modal.row?.reportNumber}`}
               </h3>
               <button
+                type="button"
                 onClick={() => setModal(null)}
                 className="p-2 rounded-lg hover:bg-slate-800/90"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

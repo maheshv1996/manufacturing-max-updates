@@ -65,12 +65,29 @@ function MrbDrawer({
 
   const isClosed = selectedReport.status === "CLOSED";
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mrb-drawer-title"
+        className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950">
           <div>
-            <h2 className="text-xl font-black text-white flex items-center gap-2">
+            <h2 id="mrb-drawer-title" className="text-xl font-black text-white flex items-center gap-2">
               <FileText className="w-6 h-6 text-blue-500" />
               {selectedReport.ncrNumber}
             </h2>
@@ -80,8 +97,10 @@ function MrbDrawer({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-500 hover:text-white"
+            aria-label="Close MRB drawer"
+            className="text-slate-500 hover:text-white cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>

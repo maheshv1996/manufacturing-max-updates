@@ -7,7 +7,7 @@ import {
   round2,
   nextSalesOrderNumber,
 } from "@/lib/salesOrders";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
@@ -20,7 +20,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"]))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["commercial.view", "finance.view", "ops.view", "system.view"])) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -89,7 +92,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !canAny(user, WRITE_GATE))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, WRITE_GATE)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -203,7 +209,7 @@ export async function POST(req: Request) {
         };
       });
 
-      return tx.salesOrder.create({
+      const createdOrder = await tx.salesOrder.create({
         data: {
           orderNumber,
           customerId: customer.id,
@@ -225,18 +231,20 @@ export async function POST(req: Request) {
         },
         include: { lines: true },
       });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "SALES_ORDER_CREATED",
+        entityType: "SalesOrder",
+        entityId: createdOrder.id,
+        details: `${createdOrder.orderNumber} for ${customer.name} — ${createdOrder.lines.length} line(s), ${createdOrder.grandTotal.toFixed(2)} ${createdOrder.currency}${d.quotationId ? " (from quotation)" : ""}`,
+      });
+
+      return createdOrder;
     });
 
     const payload = { success: true, order };
     if (clientId) await completeIdempotency(clientId, payload);
-
-    await logAudit({
-      actor,
-      action: "SALES_ORDER_CREATED",
-      entityType: "SalesOrder",
-      entityId: order.id,
-      details: `${order.orderNumber} for ${customer.name} — ${order.lines.length} line(s), ${order.grandTotal.toFixed(2)} ${order.currency}${d.quotationId ? " (from quotation)" : ""}`,
-    });
 
     return NextResponse.json(payload);
   } catch (error: any) {

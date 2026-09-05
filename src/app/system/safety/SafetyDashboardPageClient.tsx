@@ -61,6 +61,18 @@ export default function SafetyDashboardPageClient() {
   const [reporterInput, setReporterInput] = useState("Operator");
   const [logging, setLogging] = useState(false);
 
+  useEffect(() => {
+    if (!selectedIncident && !showLogModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedIncident(null);
+        setShowLogModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedIncident, showLogModal]);
+
   const fetchSafetyData = async () => {
     try {
       setLoading(true);
@@ -474,13 +486,17 @@ export default function SafetyDashboardPageClient() {
 
       {/* CAPA & 5-WHY MODAL */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4" onClick={() => setSelectedIncident(null)}>
           <form
             onSubmit={handleSaveCapa}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capa-modal-title"
             className="bg-slate-900 border-2 border-blue-500/50 rounded-3xl w-full max-w-lg p-6 space-y-5 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <h3 id="capa-modal-title" className="text-lg font-black text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-400" />
                 Assign CAPA &amp; 5-Why Root Cause
               </h3>

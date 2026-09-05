@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSequence } from "@/lib/sequence";
 import { autoPostToGL } from "@/lib/glPosting";
 import { toPaise, fromPaise, fromPaiseRow, fromPaiseRows } from "@/lib/money";
@@ -27,7 +27,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const claims = await (prisma as any).expenseClaim.findMany({
@@ -132,34 +135,37 @@ export async function POST(req: Request) {
       const total = round2(rows.reduce((s, r) => s + r.amount, 0));
       const claimNumber = await nextSequence("EXP", 4);
       const primary = rows[0].category;
-      const claim = await prisma.expenseClaim.create({
-        data: {
-          claimNumber,
-          claimantName: displayName,
-          claimantCode: displayCode || null,
-          claimantUserId,
-          totalAmount: toPaise(total),
-          category: primary,
-          expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
-          submittedBy: user.name || user.id,
-          notes: notes ? String(notes).slice(0, 2000) : null,
-          items: {
-            create: rows.map((r) => ({
-              category: r.category,
-              description: r.description,
-              amount: toPaise(r.amount),
-              expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
-            })),
+      const claim = await prisma.$transaction(async (tx) => {
+        const c = await tx.expenseClaim.create({
+          data: {
+            claimNumber,
+            claimantName: displayName,
+            claimantCode: displayCode || null,
+            claimantUserId,
+            totalAmount: toPaise(total),
+            category: primary,
+            expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+            submittedBy: user.name || user.id,
+            notes: notes ? String(notes).slice(0, 2000) : null,
+            items: {
+              create: rows.map((r) => ({
+                category: r.category,
+                description: r.description,
+                amount: toPaise(r.amount),
+                expenseDate: r.expenseDate ? new Date(r.expenseDate) : new Date(),
+              })),
+            },
           },
-        },
-        include: { items: true },
-      });
-      await logAudit({
-        actor: user.name || user.id,
-        action: "EXPENSE_CLAIM_SUBMITTED",
-        entityType: "EXPENSE_CLAIM",
-        entityId: claim.id,
-        details: `Claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
+          include: { items: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || user.id,
+          action: "EXPENSE_CLAIM_SUBMITTED",
+          entityType: "EXPENSE_CLAIM",
+          entityId: c.id,
+          details: `Claim ${claimNumber} (${claimantName}) for ${total} — ${rows.length} item(s)`,
+        });
+        return c;
       });
       return NextResponse.json(
         {
@@ -186,17 +192,20 @@ export async function POST(req: Request) {
       if (claim.status !== "SUBMITTED") {
         return NextResponse.json({ error: `Claim is ${claim.status} — only SUBMITTED claims can be approved` }, { status: 400 });
       }
-      const updated = await prisma.expenseClaim.update({
-        where: { id },
-        data: { status: "APPROVED", approvedBy: user.name || "System", approvedAt: new Date() },
-        include: { items: true },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "EXPENSE_CLAIM_APPROVED",
-        entityType: "EXPENSE_CLAIM",
-        entityId: claim.id,
-        details: `${claim.claimNumber} (${claim.claimantName}) ${claim.totalAmount} approved — ${(reason || "").slice(0, 80)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.expenseClaim.update({
+          where: { id },
+          data: { status: "APPROVED", approvedBy: user.name || "System", approvedAt: new Date() },
+          include: { items: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "EXPENSE_CLAIM_APPROVED",
+          entityType: "EXPENSE_CLAIM",
+          entityId: claim.id,
+          details: `${claim.claimNumber} (${claim.claimantName}) ${claim.totalAmount} approved — ${(reason || "").slice(0, 80)}`,
+        });
+        return u;
       });
       return NextResponse.json({ claim: claimToRupees(updated) });
     }
@@ -211,22 +220,25 @@ export async function POST(req: Request) {
       if (claim.status !== "SUBMITTED" && claim.status !== "APPROVED") {
         return NextResponse.json({ error: `Claim is ${claim.status} — cannot reject` }, { status: 400 });
       }
-      const updated = await prisma.expenseClaim.update({
-        where: { id },
-        data: {
-          status: "REJECTED",
-          rejectedBy: user.name || "System",
-          rejectedAt: new Date(),
-          rejectionReason: String(reason).slice(0, 500),
-        },
-        include: { items: true },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "EXPENSE_CLAIM_REJECTED",
-        entityType: "EXPENSE_CLAIM",
-        entityId: claim.id,
-        details: `${claim.claimNumber} rejected — ${String(reason).slice(0, 80)}`,
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.expenseClaim.update({
+          where: { id },
+          data: {
+            status: "REJECTED",
+            rejectedBy: user.name || "System",
+            rejectedAt: new Date(),
+            rejectionReason: String(reason).slice(0, 500),
+          },
+          include: { items: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "EXPENSE_CLAIM_REJECTED",
+          entityType: "EXPENSE_CLAIM",
+          entityId: claim.id,
+          details: `${claim.claimNumber} rejected — ${String(reason).slice(0, 80)}`,
+        });
+        return u;
       });
       return NextResponse.json({ claim: claimToRupees(updated) });
     }
@@ -242,33 +254,36 @@ export async function POST(req: Request) {
       if (totalPaise <= 0) return NextResponse.json({ error: "Nothing to pay" }, { status: 400 });
       const total = fromPaise(totalPaise); // rupee view for GL/audit
       const payMethod = method ? String(method).slice(0, 50) : "Bank";
-      const treasury = await prisma.treasuryTransaction.create({
-        data: {
-          type: "OUTFLOW",
-          account: "Main",
-          amount: totalPaise,
-          reference: claim.claimNumber,
-          category: "Expense Reimbursement",
-          notes: `${claim.claimantName} — ${(reason || "").slice(0, 160)}`,
-        },
-      });
-      const paid = await prisma.expenseClaim.update({
-        where: { id },
-        data: {
-          status: "PAID",
-          paidBy: user.name || "System",
-          paidAt: new Date(),
-          paymentMethod: payMethod,
-          treasuryRef: treasury.id,
-        },
-        include: { items: true },
-      });
-      await logAudit({
-        actor: user.name || "System",
-        action: "EXPENSE_CLAIM_PAID",
-        entityType: "EXPENSE_CLAIM",
-        entityId: claim.id,
-        details: `${claim.claimNumber} reimbursed ${total} via ${payMethod}${(reason ? " — " + String(reason).slice(0, 80) : "")}`,
+      const { treasury, paid } = await prisma.$transaction(async (tx) => {
+        const tr = await tx.treasuryTransaction.create({
+          data: {
+            type: "OUTFLOW",
+            account: "Main",
+            amount: totalPaise,
+            reference: claim.claimNumber,
+            category: "Expense Reimbursement",
+            notes: `${claim.claimantName} — ${(reason || "").slice(0, 160)}`,
+          },
+        });
+        const p = await tx.expenseClaim.update({
+          where: { id },
+          data: {
+            status: "PAID",
+            paidBy: user.name || "System",
+            paidAt: new Date(),
+            paymentMethod: payMethod,
+            treasuryRef: tr.id,
+          },
+          include: { items: true },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "System",
+          action: "EXPENSE_CLAIM_PAID",
+          entityType: "EXPENSE_CLAIM",
+          entityId: claim.id,
+          details: `${claim.claimNumber} reimbursed ${total} via ${payMethod}${(reason ? " — " + String(reason).slice(0, 80) : "")}`,
+        });
+        return { treasury: tr, paid: p };
       });
 
       // GL auto-post: Dr expense account(s) by item category, Cr Bank — item

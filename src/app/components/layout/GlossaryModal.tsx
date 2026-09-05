@@ -75,9 +75,18 @@ export default function GlossaryModal() {
 
   useEffect(() => {
     const handleOpen = () => setIsOpen(true);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        setIsOpen(false);
+      }
+    };
     window.addEventListener("open-glossary-modal", handleOpen);
-    return () => window.removeEventListener("open-glossary-modal", handleOpen);
-  }, []);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("open-glossary-modal", handleOpen);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -90,8 +99,14 @@ export default function GlossaryModal() {
   );
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsOpen(false)}
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="glossary-dialog-title"
         className="bg-surface-1 rounded-3xl shadow-2xl w-full max-w-2xl border border-border overflow-hidden flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -102,7 +117,7 @@ export default function GlossaryModal() {
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-sm text-text-1">
+              <h3 id="glossary-dialog-title" className="font-extrabold text-sm text-text-1">
                 Industrial & Aerospace Glossary
               </h3>
               <p className="text-[11px] text-text-3 font-mono">
@@ -111,7 +126,9 @@ export default function GlossaryModal() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setIsOpen(false)}
+            aria-label="Close glossary dialog"
             className="p-1.5 rounded-xl hover:bg-surface-3 text-text-3 hover:text-text-1 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -126,13 +143,15 @@ export default function GlossaryModal() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search terms, standards, or acronyms (e.g. AS9102, OEE, Sparkplug)..."
+            aria-label="Search industrial and aerospace glossary terms"
             className="flex-1 bg-transparent border-none outline-none text-xs text-text-1 placeholder:text-text-3"
             autoFocus
           />
           {query && (
             <button
+              type="button"
               onClick={() => setQuery("")}
-              className="text-text-3 hover:text-text-1 text-xs"
+              className="text-text-3 hover:text-text-1 text-xs cursor-pointer"
             >
               Clear
             </button>

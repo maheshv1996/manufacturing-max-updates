@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { headers } from "next/headers";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { nextSequenceTx } from "@/lib/sequence";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -297,7 +298,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const headerList = await headers();
-    const userName = headerList.get("x-user-name") || "System";
+    const user = getUserFromHeaders(headerList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userName = user.name || user.email || headerList.get("x-user-name") || "System";
     const headerClientId = headerList.get("x-client-id");
     const bodyClientId = (body as any)?.clientId || (body as any)?.data?.clientId;
     const clientId: string | null = (bodyClientId ? String(bodyClientId).trim() : null) || (headerClientId ? String(headerClientId).trim() : null);
@@ -312,6 +317,9 @@ export async function POST(request: Request) {
 
     // ---- Goods Receipt Note: receives stock, updates PO + inventory (ATOMIC) ----
     if (body.entity === "grn") {
+      if (!user.isOwner && !canAny(user, ["supply.edit", "ops.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const { poId, receivedQty, batchNo, notes, poLineId } = body.data || {};
       if (!poId || receivedQty == null)
         return NextResponse.json(
@@ -440,14 +448,12 @@ export async function POST(request: Request) {
           data: { receivedQty: newReceived, receivedAt: new Date(), status: poStatus },
         });
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor: userName,
-            action: "GRN_CREATED",
-            entityType: "GRN",
-            entityId: grn.id,
-            details: `GRN ${grnNumber}: received ${qty} ${shownUnit} of ${shownName} against ${po.poNumber} (line ${line.lineNo || 1})`,
-          },
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "GRN_CREATED",
+          entityType: "GRN",
+          entityId: grn.id,
+          details: `GRN ${grnNumber}: received ${qty} ${shownUnit} of ${shownName} against ${po.poNumber} (line ${line.lineNo || 1})`,
         });
 
         return grn;
@@ -460,6 +466,9 @@ export async function POST(request: Request) {
 
     // ---- Supplier Invoice: creates invoice (+ line items), runs 3-way match ----
     if (body.entity === "invoice") {
+      if (!user.isOwner && !canAny(user, ["finance.edit", "supply.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const {
         supplierId,
         poId,
@@ -546,7 +555,7 @@ export async function POST(request: Request) {
       }
       const tax = taxAmount ? Number(taxAmount) : 0;
 
-      const created = await prisma.$transaction(async (tx) => {
+      const { created } = await prisma.$transaction(async (tx) => {
         const inv = await (tx as any).supplierInvoice.create({
           data: toPaiseRow("SupplierInvoice", {
             invoiceNumber,
@@ -575,55 +584,64 @@ export async function POST(request: Request) {
             ),
           });
         }
-        return inv;
-      });
 
-      // Link to the latest GRN for the PO (if any) and run 3-way match
-      let matchStatus = "UNMATCHED";
-      if (poId) {
-        const grn = await prisma.goodsReceiptNote.findFirst({
-          where: { poId, supplierInvoice: { is: null } },
-          orderBy: { receivedAt: "desc" },
-        });
-        if (grn) {
-          const po = await prisma.purchaseOrder.findUnique({
-            where: { id: poId },
-            include: { lines: true },
+        // Link to the latest GRN for the PO (if any) and run 3-way match
+        let localMatchStatus = "UNMATCHED";
+        if (poId) {
+          const grn = await (tx as any).goodsReceiptNote.findFirst({
+            where: { poId, supplierInvoice: { is: null } },
+            orderBy: { receivedAt: "desc" },
           });
-          await prisma.supplierInvoice.update({
-            where: { id: created.id },
-            data: { grnId: grn.id },
-          });
-          matchStatus = po
-            ? computeMatch(grn, po, {
-                amount: netAmount,
-                taxAmount: tax,
-                totalAmount: netAmount + tax,
-                lines: poRows.map((r: any) => ({
-                  lineNo: r.lineNo,
-                  poLineId: r.poLineId || null,
-                  qty: r.qty,
-                  unitCost: r.unitCost,
-                  amount: r.amount,
-                })),
-              })
-            : "UNMATCHED";
-          await prisma.goodsReceiptNote.update({
-            where: { id: grn.id },
-            data: { matchStatus: matchStatus as any },
-          });
+          if (grn) {
+            const po = await (tx as any).purchaseOrder.findUnique({
+              where: { id: poId },
+              include: { lines: true },
+            });
+            await (tx as any).supplierInvoice.update({
+              where: { id: inv.id },
+              data: { grnId: grn.id },
+            });
+            localMatchStatus = po
+              ? computeMatch(grn, po, {
+                  amount: netAmount,
+                  taxAmount: tax,
+                  totalAmount: netAmount + tax,
+                  lines: poRows.map((r: any) => ({
+                    lineNo: r.lineNo,
+                    poLineId: r.poLineId || null,
+                    qty: r.qty,
+                    unitCost: r.unitCost,
+                    amount: r.amount,
+                  })),
+                })
+              : "UNMATCHED";
+            await (tx as any).goodsReceiptNote.update({
+              where: { id: grn.id },
+              data: { matchStatus: localMatchStatus as any },
+            });
+          }
         }
-      }
-      const finalInv = await prisma.supplierInvoice.update({
-        where: { id: created.id },
-        data: {
-          status:
-            matchStatus === "MATCHED"
-              ? "MATCHED"
-              : matchStatus === "MISMATCHED"
-                ? "MISMATCHED"
-                : "UNPAID",
-        },
+        const finalInv = await (tx as any).supplierInvoice.update({
+          where: { id: inv.id },
+          data: {
+            status:
+              localMatchStatus === "MATCHED"
+                ? "MATCHED"
+                : localMatchStatus === "MISMATCHED"
+                  ? "MISMATCHED"
+                  : "UNPAID",
+          },
+        });
+
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "SUPPLIER_INVOICE_CREATED",
+          entityType: "SUPPLIER_INVOICE",
+          entityId: inv.id,
+          details: `Invoice ${invoiceNumber} (${netAmount + tax}) — 3-way match: ${localMatchStatus}${poRows.length > 0 ? `, ${poRows.length} line item(s)` : ""}`,
+        });
+
+        return { created: finalInv };
       });
 
       // GL auto-post: purchase voucher — Dr Inventory (net), Dr GST ITC (tax),
@@ -663,23 +681,18 @@ export async function POST(request: Request) {
         });
       }
 
-      await logAudit({
-        actor: userName,
-        action: "SUPPLIER_INVOICE_CREATED",
-        entityType: "SUPPLIER_INVOICE",
-        entityId: created.id,
-        details: `Invoice ${invoiceNumber} (${netAmount + tax}) — 3-way match: ${matchStatus}${poRows.length > 0 ? `, ${poRows.length} line item(s)` : ""}`,
-      });
-
       const withLines = await prisma.supplierInvoice.findUnique({
         where: { id: created.id },
         include: { lines: true },
       });
-      return NextResponse.json({ success: true, item: withLines || finalInv });
+      return NextResponse.json({ success: true, item: withLines || created });
     }
 
     // ---- Inspection decision on a GRN (M6 — IQC AQL) — ATOMIC ----
     if (body.entity === "inspect") {
+      if (!user.isOwner && !canAny(user, ["quality.edit", "supply.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const { id, inspectionStatus, inspector, notes } = body.data || {};
       if (!["PASSED", "REJECTED"].includes(inspectionStatus)) {
         return NextResponse.json(
@@ -724,14 +737,12 @@ export async function POST(request: Request) {
               },
             });
             ncrId = ncr.id;
-            await (tx as any).auditLog.create({
-              data: {
-                actor: inspector || userName,
-                action: "NCR_RAISED",
-                entityType: "NCR",
-                entityId: ncr.id,
-                details: `Auto-raised supplier NCR ${ncrNumber} from IQC rejection of GRN ${existing.grnNumber}`,
-              },
+            await logAuditTx(tx, {
+              actor: inspector || userName,
+              action: "NCR_RAISED",
+              entityType: "NCR",
+              entityId: ncr.id,
+              details: `Auto-raised supplier NCR ${ncrNumber} from IQC rejection of GRN ${existing.grnNumber}`,
             });
           }
         }
@@ -749,14 +760,12 @@ export async function POST(request: Request) {
           },
         });
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor: userName,
-            action: "GRN_INSPECTED",
-            entityType: "GRN",
-            entityId: grn.id,
-            details: `GRN ${grn.grnNumber} — ${inspectionStatus}${lotHeld ? " · LOT HELD + supplier NCR draft" : ""} (AQL ${aqlSampleSize ?? "n/a"} pcs)`,
-          },
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "GRN_INSPECTED",
+          entityType: "GRN",
+          entityId: grn.id,
+          details: `GRN ${grn.grnNumber} — ${inspectionStatus}${lotHeld ? " · LOT HELD + supplier NCR draft" : ""} (AQL ${aqlSampleSize ?? "n/a"} pcs)`,
         });
 
         return { grn, aqlSampleSize, lotHeld, ncrId };
@@ -771,6 +780,9 @@ export async function POST(request: Request) {
 
     // ---- M6 — AQL plan upsert (sampling table per material class) ----
     if (body.entity === "aql-plan") {
+      if (!user.isOwner && !canAny(user, ["quality.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const {
         materialClass,
         aqlLevel,
@@ -797,36 +809,42 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const plan = await prisma.aqlPlan.upsert({
-        where: { materialClass },
-        update: {
-          aqlLevel: aqlLevel || "II",
-          sampleSize: sample,
-          acceptanceNumber: ac,
-          rejectionNumber: re,
-          description: description || null,
-        },
-        create: {
-          materialClass,
-          aqlLevel: aqlLevel || "II",
-          sampleSize: sample,
-          acceptanceNumber: ac,
-          rejectionNumber: re,
-          description: description || null,
-        },
-      });
-      await logAudit({
-        actor: userName,
-        action: "AQL_PLAN_UPDATED",
-        entityType: "AQL_PLAN",
-        entityId: plan.id,
-        details: `AQL class ${materialClass} — sample ${sample}, Ac ${ac}/Re ${re}`,
+      const plan = await prisma.$transaction(async (tx) => {
+        const p = await (tx as any).aqlPlan.upsert({
+          where: { materialClass },
+          update: {
+            aqlLevel: aqlLevel || "II",
+            sampleSize: sample,
+            acceptanceNumber: ac,
+            rejectionNumber: re,
+            description: description || null,
+          },
+          create: {
+            materialClass,
+            aqlLevel: aqlLevel || "II",
+            sampleSize: sample,
+            acceptanceNumber: ac,
+            rejectionNumber: re,
+            description: description || null,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "AQL_PLAN_UPDATED",
+          entityType: "AQL_PLAN",
+          entityId: p.id,
+          details: `AQL class ${materialClass} — sample ${sample}, Ac ${ac}/Re ${re}`,
+        });
+        return p;
       });
       return NextResponse.json({ success: true, item: plan });
     }
 
     // ---- Payment against a matched supplier invoice (ATOMIC) ----
     if (body.entity === "pay") {
+      if (!user.isOwner && !canAny(user, ["finance.edit", "system.edit"])) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       const { id, amount, method, reference } = body.data || {};
       const inv = await prisma.supplierInvoice.findUnique({
         where: { id },
@@ -882,14 +900,12 @@ export async function POST(request: Request) {
           },
         });
         treasuryId = tt.id;
-        await (tx as any).auditLog.create({
-          data: {
-            actor: userName,
-            action: "SUPPLIER_PAYMENT",
-            entityType: "SUPPLIER_INVOICE",
-            entityId: freshInv.id,
-            details: `Paid ${freshInv.invoiceNumber} ${payAmount} (3-way matched)`,
-          },
+        await logAuditTx(tx, {
+          actor: userName,
+          action: "SUPPLIER_PAYMENT",
+          entityType: "SUPPLIER_INVOICE",
+          entityId: freshInv.id,
+          details: `Paid ${freshInv.invoiceNumber} ${payAmount} (3-way matched)`,
         });
         return u;
       });

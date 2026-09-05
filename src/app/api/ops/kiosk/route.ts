@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { logAudit } from "@/lib/audit";
+import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +22,35 @@ const workstationState = {
 };
 
 export async function GET() {
-  return NextResponse.json({
-    kiosk: workstationState,
-  });
+  try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.view", "terminal.use", "system.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      kiosk: workstationState,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["ops.edit", "terminal.use", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -44,12 +69,14 @@ export async function POST(req: Request) {
 
     workstationState.lastClockTime = new Date().toISOString();
 
-    await logAudit({
-      actor: workstationState.operatorName,
-      action: `KIOSK_${action}`,
-      entityType: "WorkOrder",
-      entityId: workstationState.activeWoNumber,
-      details: `Operator clocked ${action} (Good: ${workstationState.goodPieces}, Scrap: ${workstationState.scrapPieces}, Reason: ${reason || "N/A"})`,
+    await prisma.$transaction(async (tx) => {
+      await logAuditTx(tx, {
+        actor: user.name || workstationState.operatorName,
+        action: `KIOSK_${action}`,
+        entityType: "WorkOrder",
+        entityId: workstationState.activeWoNumber,
+        details: `Operator clocked ${action} (Good: ${workstationState.goodPieces}, Scrap: ${workstationState.scrapPieces}, Reason: ${reason || "N/A"})`,
+      });
     });
 
     return NextResponse.json({

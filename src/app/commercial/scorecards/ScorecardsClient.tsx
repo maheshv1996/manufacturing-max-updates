@@ -46,6 +46,15 @@ export default function ScorecardsClient() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!show) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShow(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [show]);
+
   const api = async (body: any) => {
     setSaving(true);
     try {
@@ -240,12 +249,25 @@ export default function ScorecardsClient() {
           onClick={() => setShow(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scorecard-title"
             className="rounded-2xl bg-slate-800 border border-slate-700 p-6 w-full max-w-md space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="font-semibold text-white">
-              Record customer scorecard
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 id="scorecard-title" className="font-semibold text-white">
+                Record customer scorecard
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShow(false)}
+                className="text-slate-400 hover:text-white"
+                aria-label="Close dialog"
+              >
+                ✕
+              </button>
+            </div>
             <input
               placeholder="Customer name"
               value={form.customerName}
@@ -297,6 +319,7 @@ export default function ScorecardsClient() {
             />
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={async () => {
                   const ok = await api({
                     action: "create-scorecard",
@@ -317,13 +340,14 @@ export default function ScorecardsClient() {
                   }
                 }}
                 disabled={saving || !form.customerName || !form.period}
-                className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
               >
                 Save
               </button>
               <button
+                type="button"
                 onClick={() => setShow(false)}
-                className="rounded-xl bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm text-white"
+                className="rounded-xl bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm text-white cursor-pointer"
               >
                 Cancel
               </button>

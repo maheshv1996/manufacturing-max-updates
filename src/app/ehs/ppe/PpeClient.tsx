@@ -27,6 +27,15 @@ export default function PpeClient() {
     notes: "",
   });
 
+  useEffect(() => {
+    if (!show) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShow(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [show]);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/ppe");
@@ -238,8 +247,11 @@ export default function PpeClient() {
           <div
             className="rounded-2xl bg-slate-800 border border-slate-700 p-6 w-full max-w-md space-y-3"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ppe-modal-title"
           >
-            <h2 className="font-semibold text-white">Issue PPE</h2>
+            <h2 id="ppe-modal-title" className="font-semibold text-white">Issue PPE</h2>
             <select
               value={form.userId}
               onChange={(e) => setForm({ ...form, userId: e.target.value })}
@@ -291,6 +303,7 @@ export default function PpeClient() {
             />
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={async () => {
                   const ok = await api({ action: "create-issue", data: form });
                   if (ok) {
@@ -311,6 +324,7 @@ export default function PpeClient() {
                 Issue
               </button>
               <button
+                type="button"
                 onClick={() => setShow(false)}
                 className="rounded-xl bg-slate-700 hover:bg-slate-600 px-4 py-2 text-sm text-white"
               >

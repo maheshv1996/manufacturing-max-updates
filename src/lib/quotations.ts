@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { logAuditTx } from "@/lib/audit";
 
 export async function generateQuoteNumber(date: Date = new Date()): Promise<string> {
   const safeDate = date instanceof Date && !isNaN(date.getTime()) ? date : new Date();
@@ -63,53 +64,53 @@ export async function convertQuoteToWorkOrders(
     throw new Error("Quotation has no line items to convert");
   }
 
-  const createdWorkOrders: any[] = [];
+  return await prisma.$transaction(async (tx) => {
+    const createdWorkOrders: any[] = [];
 
-  for (let i = 0; i < quote.lines.length; i++) {
-    const line = quote.lines[i];
-    const seqSuffix = quote.lines.length > 1 ? `-${i + 1}` : "";
-    const woNumber = `WO-${quote.quoteNumber.replace("QT-", "")}${seqSuffix}`;
+    for (let i = 0; i < quote.lines.length; i++) {
+      const line = quote.lines[i];
+      const seqSuffix = quote.lines.length > 1 ? `-${i + 1}` : "";
+      const woNumber = `WO-${quote.quoteNumber.replace("QT-", "")}${seqSuffix}`;
 
-    const startDate = new Date();
-    const parsedValidUntil = quote.validUntil ? new Date(quote.validUntil) : null;
-    const endDate =
-      parsedValidUntil && !isNaN(parsedValidUntil.getTime())
-        ? parsedValidUntil
-        : new Date(Date.now() + 14 * 86400000);
+      const startDate = new Date();
+      const parsedValidUntil = quote.validUntil ? new Date(quote.validUntil) : null;
+      const endDate =
+        parsedValidUntil && !isNaN(parsedValidUntil.getTime())
+          ? parsedValidUntil
+          : new Date(Date.now() + 14 * 86400000);
 
-    const wo = await prisma.workOrder.create({
+      const wo = await tx.workOrder.create({
+        data: {
+          woNumber,
+          productId: line.productId,
+          plannedQuantity: Math.max(1, Math.round(Number(line.plannedQty) || 1)),
+          status: "PLANNED",
+          plannedStartDate: startDate,
+          plannedEndDate: endDate,
+          setupTimeMinutes: 15,
+          cycleTimeSeconds: line.product?.targetCycleTimeSeconds || 60,
+          customerName: quote.customerName,
+          customerEmail: quote.customerContact || null,
+          quotedPrice: line.subtotal > 0 ? line.subtotal : quote.quotedPrice,
+        },
+      });
+
+      createdWorkOrders.push(wo);
+    }
+
+    const primaryWoId = createdWorkOrders[0]?.id || null;
+
+    // Update Quotation status to CONVERTED and link primary workOrderId
+    const updatedQuote = await tx.quotation.update({
+      where: { id: quotationId },
       data: {
-        woNumber,
-        productId: line.productId,
-        plannedQuantity: Math.max(1, Math.round(Number(line.plannedQty) || 1)),
-        status: "PLANNED",
-        plannedStartDate: startDate,
-        plannedEndDate: endDate,
-        setupTimeMinutes: 15,
-        cycleTimeSeconds: line.product?.targetCycleTimeSeconds || 60,
-        customerName: quote.customerName,
-        customerEmail: quote.customerContact || null,
-        quotedPrice: line.subtotal > 0 ? line.subtotal : quote.quotedPrice,
+        status: "CONVERTED",
+        workOrderId: primaryWoId,
       },
     });
 
-    createdWorkOrders.push(wo);
-  }
-
-  const primaryWoId = createdWorkOrders[0]?.id || null;
-
-  // Update Quotation status to CONVERTED and link primary workOrderId
-  const updatedQuote = await prisma.quotation.update({
-    where: { id: quotationId },
-    data: {
-      status: "CONVERTED",
-      workOrderId: primaryWoId,
-    },
-  });
-
-  // Audit log
-  await prisma.auditLog.create({
-    data: {
+    // Transactional audit log
+    await logAuditTx(tx, {
       actor: actorName,
       action: "CONVERTED_QUOTATION",
       entityType: "Quotation",
@@ -119,11 +120,11 @@ export async function convertQuoteToWorkOrders(
         customerName: quote.customerName,
         workOrdersCreated: createdWorkOrders.map((w) => w.woNumber),
       }),
-    },
-  });
+    });
 
-  return {
-    quotation: updatedQuote,
-    workOrders: createdWorkOrders,
-  };
+    return {
+      quotation: updatedQuote,
+      workOrders: createdWorkOrders,
+    };
+  });
 }

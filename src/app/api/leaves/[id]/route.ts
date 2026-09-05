@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -6,14 +6,12 @@ import { headers } from "next/headers";
 import {
   requireManagerLevel,
   validateReason,
-  auditDecision,
 } from "@/lib/managerGate";
 
 export async function PATCH(
   request: Request,
   props: { params: Promise<{ id: string }> },
 ) {
-    await logAudit({ actor: "system", action: "LEAVE_STATUS_UPDATED", entityType: "LeaveRequest", details: "Leave request status updated" });
   try {
     const { id } = await props.params;
     const headersList = await headers();
@@ -124,35 +122,37 @@ export async function PATCH(
       }
     }
 
-    const leave = await prisma.leaveRequest.update({
-      where: { id },
-      data: {
-        status,
-        approvedAt: status === "APPROVED" ? new Date() : null,
-        approvedById: status === "APPROVED" ? user.id : null,
-        note,
-      },
-    });
-
-    if (status === "APPROVED") {
-      await auditDecision({
-        actor: user.name,
-        action: "LEAVE",
-        entityType: "LeaveRequest",
-        entityId: leave.id,
-        reason: note || "",
-      });
-    } else if (status === "REJECTED") {
-      await prisma.auditLog.create({
+    const leave = await prisma.$transaction(async (tx) => {
+      const updated = await tx.leaveRequest.update({
+        where: { id },
         data: {
-          action: "LEAVE_REJECTED",
-          entityType: "LeaveRequest",
-          entityId: leave.id,
-          details: note || "",
-          actor: user.name,
+          status,
+          approvedAt: status === "APPROVED" ? new Date() : null,
+          approvedById: status === "APPROVED" ? user.id : null,
+          note,
         },
       });
-    }
+
+      if (status === "APPROVED") {
+        await logAuditTx(tx, {
+          actor: user.name,
+          action: "LEAVE_APPROVED",
+          entityType: "LeaveRequest",
+          entityId: updated.id,
+          details: note || "Leave approved",
+        });
+      } else if (status === "REJECTED") {
+        await logAuditTx(tx, {
+          actor: user.name,
+          action: "LEAVE_REJECTED",
+          entityType: "LeaveRequest",
+          entityId: updated.id,
+          details: note || "Leave rejected",
+        });
+      }
+
+      return updated;
+    });
 
     return NextResponse.json(leave);
   } catch (error) {

@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserFromHeaders, can } from "@/lib/permissions";
@@ -107,7 +107,6 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "SUPPLIER_PAYMENT_RECORDED", entityType: "SupplierPayment", details: "Supplier payment recorded" });
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
@@ -130,27 +129,29 @@ export async function POST(req: Request) {
       paymentDate,
     } = body;
 
-    const payment = await prisma.supplierPayment.create({
-      data: {
-        supplierId,
-        amount: parseFloat(amount),
-        method,
-        reference,
-        notes,
-        purchaseOrderId: purchaseOrderId || null,
-        actorName: user.name,
-        paymentDate: paymentDate ? new Date(paymentDate) : undefined,
-      },
-    });
+    const payment = await prisma.$transaction(async (tx) => {
+      const p = await tx.supplierPayment.create({
+        data: {
+          supplierId,
+          amount: parseFloat(amount),
+          method,
+          reference,
+          notes,
+          purchaseOrderId: purchaseOrderId || null,
+          actorName: user.name,
+          paymentDate: paymentDate ? new Date(paymentDate) : undefined,
+        },
+      });
 
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         action: "SUPPLIER_PAYMENT_RECORDED",
         actor: user.name,
         entityType: "SupplierPayment",
-        entityId: payment.id,
+        entityId: p.id,
         details: `Recorded ₹${amount} payment via ${method} to supplier ${supplierId}`,
-      },
+      });
+
+      return p;
     });
 
     return NextResponse.json(payment);

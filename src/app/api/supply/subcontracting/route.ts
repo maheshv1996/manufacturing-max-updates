@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +71,15 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["supply.edit", "ops.edit", "quality.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
+
     const body = await req.json();
     // @ts-ignore - body is any from req.json()
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -94,33 +105,38 @@ export async function POST(req: Request) {
       );
     }
 
+    const actor = user.name || headersList.get("x-user-name") || "Storekeeper";
     const challanNumber = `DC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const challan = await (prisma as any).subcontractChallan.create({
-      data: {
-        challanNumber,
-        workOrderId,
-        vendorName,
-        processType,
-        dispatchedQty: parseInt(dispatchedQty, 10),
-        expectedReturn: expectedReturn ? new Date(expectedReturn) : null,
-        vehicleNumber: vehicleNumber || null,
-        remarks: remarks || null,
-        status: "DISPATCHED",
-      },
-      include: {
-        workOrder: {
-          include: { product: true },
+    const challan = await prisma.$transaction(async (tx) => {
+      const created = await (tx as any).subcontractChallan.create({
+        data: {
+          challanNumber,
+          workOrderId,
+          vendorName,
+          processType,
+          dispatchedQty: parseInt(dispatchedQty, 10),
+          expectedReturn: expectedReturn ? new Date(expectedReturn) : null,
+          vehicleNumber: vehicleNumber || null,
+          remarks: remarks || null,
+          status: "DISPATCHED",
         },
-      },
-    });
+        include: {
+          workOrder: {
+            include: { product: true },
+          },
+        },
+      });
 
-    await logAudit({
-      actor: "system",
-      action: "SUBCONTRACT_CHALLAN_CREATED",
-      entityType: "SubcontractChallan",
-      entityId: challan.id,
-      details: `Dispatched ${dispatchedQty} pcs of ${challan.workOrder.product.name} to ${vendorName} for ${processType} (Challan: ${challanNumber})`,
+      await logAuditTx(tx, {
+        actor,
+        action: "SUBCONTRACT_CHALLAN_CREATED",
+        entityType: "SubcontractChallan",
+        entityId: created.id,
+        details: `Dispatched ${dispatchedQty} pcs of ${created.workOrder.product.name} to ${vendorName} for ${processType} (Challan: ${challanNumber})`,
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, challan });

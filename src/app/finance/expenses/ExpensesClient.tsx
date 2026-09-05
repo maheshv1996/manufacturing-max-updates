@@ -87,6 +87,15 @@ export default function ExpensesClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState(false);
+
+  useEffect(() => {
+    if (!modal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModal(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modal]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [form, setForm] = useState({
     claimantName: "",
@@ -354,11 +363,17 @@ export default function ExpensesClient() {
 
       {/* CREATE MODAL */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 rounded-2xl border border-white/10 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expense-claim-modal-title"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 rounded-2xl border border-white/10 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">New Expense Claim</h3>
-              <button onClick={() => setModal(false)} className="p-2 rounded-lg hover:bg-white/5">
+              <h3 id="expense-claim-modal-title" className="text-lg font-bold text-white">New Expense Claim</h3>
+              <button type="button" onClick={() => setModal(false)} className="p-2 rounded-lg hover:bg-white/5" aria-label="Close modal">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -402,6 +417,7 @@ export default function ExpensesClient() {
                     Line Items
                   </label>
                   <Button
+                    type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() =>
@@ -453,6 +469,7 @@ export default function ExpensesClient() {
                         placeholder="₹"
                       />
                       <button
+                        type="button"
                         onClick={() => setItems(items.filter((_, i) => i !== idx))}
                         disabled={items.length === 1}
                         className="p-2 rounded-lg text-slate-500 hover:text-rose-400 disabled:opacity-30"
@@ -482,10 +499,10 @@ export default function ExpensesClient() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setModal(false)}>
+                <Button type="button" variant="ghost" onClick={() => setModal(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" isLoading={saving} onClick={submit}>
+                <Button type="button" variant="primary" isLoading={saving} onClick={submit}>
                   <CheckCircle2 className="size-4" /> Submit Claim
                 </Button>
               </div>

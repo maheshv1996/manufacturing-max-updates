@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 // Route entity keys -> Prisma model names (client exposes camelCase model names only).
 const ENTITY_MODELS: Record<string, string> = {
@@ -54,7 +54,13 @@ function coerce(fields: string[], data: any): any {
 export async function GET() {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  if (!user.isOwner && !canAny(user, ["system.view", "ops.view"])) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (
+    !user.isOwner &&
+    !canAny(user, ["quality.view", "system.view", "ops.view"])
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -83,7 +89,13 @@ export async function GET() {
 export async function POST(req: Request) {
   const headersList = await headers();
   const user = getUserFromHeaders(headersList);
-  if (!user.isOwner && !canAny(user, ["system.edit", "ops.edit"])) {
+  if (!user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (
+    !user.isOwner &&
+    !canAny(user, ["quality.edit", "system.edit", "ops.edit"])
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -101,57 +113,67 @@ export async function POST(req: Request) {
       );
     }
 
-    let result: any;
-
-    if (action === "completeAudit") {
-      result = await prisma.qmsAudit.update({
-        where: { id: data.id },
-        data: {
-          status: "COMPLETED",
-          result: data.result || null,
-          completedAt: new Date(),
-          notes: data.notes !== undefined ? data.notes : undefined,
-        },
-      });
-    } else {
-      if (!ENTITY_FIELDS[entity] || !ENTITY_MODELS[entity]) {
-        return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
-      }
-      const model = (prisma as any)[ENTITY_MODELS[entity]];
-      if (action === "create") {
-        const payload = coerce(ENTITY_FIELDS[entity], data);
-        if (entity === "audits" && !payload.auditNumber) {
-          const count = await prisma.qmsAudit.count();
-          const year = new Date().getFullYear();
-          payload.auditNumber = `AUD-${year}-${String(count + 1).padStart(3, "0")}`;
-        }
-        result = await model.create({ data: payload });
-      } else if (action === "update") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.update({
+    const result = await prisma.$transaction(async (tx) => {
+      let res: any;
+      if (action === "completeAudit") {
+        res = await tx.qmsAudit.update({
           where: { id: data.id },
-          data: coerce(ENTITY_FIELDS[entity], data),
+          data: {
+            status: "COMPLETED",
+            result: data.result || null,
+            completedAt: new Date(),
+            notes: data.notes !== undefined ? data.notes : undefined,
+          },
         });
-      } else if (action === "delete") {
-        if (!data.id)
-          return NextResponse.json({ error: "Missing id" }, { status: 400 });
-        result = await model.delete({ where: { id: data.id } });
       } else {
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+        if (!ENTITY_FIELDS[entity] || !ENTITY_MODELS[entity]) {
+          throw new Error("UNKNOWN_ENTITY");
+        }
+        const model = (tx as any)[ENTITY_MODELS[entity]];
+        if (action === "create") {
+          const payload = coerce(ENTITY_FIELDS[entity], data);
+          if (entity === "audits" && !payload.auditNumber) {
+            const count = await tx.qmsAudit.count();
+            const year = new Date().getFullYear();
+            payload.auditNumber = `AUD-${year}-${String(count + 1).padStart(3, "0")}`;
+          }
+          res = await model.create({ data: payload });
+        } else if (action === "update") {
+          if (!data.id) throw new Error("MISSING_ID");
+          res = await model.update({
+            where: { id: data.id },
+            data: coerce(ENTITY_FIELDS[entity], data),
+          });
+        } else if (action === "delete") {
+          if (!data.id) throw new Error("MISSING_ID");
+          res = await model.delete({ where: { id: data.id } });
+        } else {
+          throw new Error("INVALID_ACTION");
+        }
       }
-    }
 
-    await logAudit({
-      actor: user.name || "Admin",
-      action: `${action.toUpperCase()}_${entity.toUpperCase()}`,
-      entityType: entity.toUpperCase(),
-      entityId: result?.id || data?.id || "unknown",
-      details: `${user.name || "Admin"} ${action} on ${entity}`,
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
+        action: `${action.toUpperCase()}_${entity.toUpperCase()}`,
+        entityType: entity.toUpperCase(),
+        entityId: res?.id || data?.id || "unknown",
+        details: `${user.name || "Admin"} ${action} on ${entity}`,
+      });
+
+      return res;
     });
 
     return NextResponse.json({ success: true, record: result });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === "UNKNOWN_ENTITY") {
+      return NextResponse.json({ error: "Unknown entity" }, { status: 400 });
+    }
+    if (error?.message === "MISSING_ID") {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+    if (error?.message === "INVALID_ACTION") {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    }
     console.error("POST /api/qms error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
+import { headers } from "next/headers";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { TestResult } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +13,16 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.isOwner && !canAny(user, ["engineering.edit", "quality.edit", "ops.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { actual, notes } = body;
 
     const record = await prisma.testRecord.findUnique({ where: { id } });
@@ -22,13 +34,13 @@ export async function PATCH(
     }
 
     // Evaluate PASS/FAIL if actual is provided
-    let result = record.result;
+    let result: TestResult = record.result;
     let actualToSave = record.actual;
 
     if (actual !== undefined) {
       if (actual === null || actual === "") {
         actualToSave = null;
-        result = "PENDING";
+        result = TestResult.PENDING;
       } else {
         const actualVal = parseFloat(actual);
         if (!isNaN(actualVal)) {
@@ -36,10 +48,10 @@ export async function PATCH(
           if (record.min !== null && record.max !== null) {
             result =
               actualVal >= record.min && actualVal <= record.max
-                ? "PASS"
-                : "FAIL";
+                ? TestResult.PASS
+                : TestResult.FAIL;
           } else if (record.target !== null) {
-            result = actualVal === record.target ? "PASS" : "FAIL";
+            result = actualVal === record.target ? TestResult.PASS : TestResult.FAIL;
           } else {
             // If no bounds provided, keep current result or let user manually override
           }
@@ -48,25 +60,31 @@ export async function PATCH(
     }
 
     // Allow manual result override if passed in body
-    if (body.result && ["PASS", "FAIL", "PENDING"].includes(body.result)) {
-      result = body.result;
+    if (body.result && Object.values(TestResult).includes(body.result)) {
+      result = body.result as TestResult;
     }
 
-    const updatedRecord = await prisma.testRecord.update({
-      where: { id },
-      data: {
-        actual: actualToSave,
-        result: result as any,
-        notes: notes !== undefined ? notes : record.notes,
-      },
-    });
+    const actor = user.name || user.id || "Operator";
 
-    await logAudit({
-      actor: "system",
-      action: "RND_TEST_RECORD_UPDATED",
-      entityType: "TestRecord",
-      entityId: id,
-      details: `result → ${result} · actual=${actualToSave}`,
+    const updatedRecord = await prisma.$transaction(async (tx) => {
+      const updated = await tx.testRecord.update({
+        where: { id },
+        data: {
+          actual: actualToSave,
+          result,
+          notes: notes !== undefined ? notes : record.notes,
+        },
+      });
+
+      await logAuditTx(tx, {
+        actor,
+        action: "RND_TEST_RECORD_UPDATED",
+        entityType: "TestRecord",
+        entityId: id,
+        details: `result → ${result} · actual=${actualToSave}`,
+      });
+
+      return updated;
     });
 
     return NextResponse.json({ success: true, record: updatedRecord });

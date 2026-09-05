@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
 import { ensureChartOfAccounts } from "@/lib/glEngine";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -13,7 +13,10 @@ export async function GET() {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.view"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.view")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -78,7 +81,10 @@ export async function POST(req: Request) {
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -98,24 +104,28 @@ export async function POST(req: Request) {
       );
     }
 
-    const account = await prisma.glAccount.create({
-      data: {
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        group: data.group || null,
-        normalBalance: data.normalBalance,
-        description: data.description || null,
-        createdBy: actor,
-      },
-    });
+    const account = await prisma.$transaction(async (tx) => {
+      const acc = await tx.glAccount.create({
+        data: {
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          group: data.group || null,
+          normalBalance: data.normalBalance,
+          description: data.description || null,
+          createdBy: actor,
+        },
+      });
 
-    await logAudit({
-      actor,
-      action: "GL_ACCOUNT_CREATED",
-      entityType: "GlAccount",
-      entityId: account.id,
-      details: `Created GL account ${account.code} ${account.name} (${account.type})`,
+      await logAuditTx(tx, {
+        actor,
+        action: "GL_ACCOUNT_CREATED",
+        entityType: "GlAccount",
+        entityId: acc.id,
+        details: `Created GL account ${acc.code} ${acc.name} (${acc.type})`,
+      });
+
+      return acc;
     });
 
     return NextResponse.json({ success: true, account });

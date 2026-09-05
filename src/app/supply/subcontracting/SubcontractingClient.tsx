@@ -139,6 +139,18 @@ export default function SubcontractingClient() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!showCreateModal && !showInwardModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showCreateModal) setShowCreateModal(false);
+        if (showInwardModal) setShowInwardModal(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showCreateModal, showInwardModal]);
+
   const handleCreateChallan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formWoId || !formVendor || !formProcess || !formQty) return;
@@ -471,16 +483,27 @@ export default function SubcontractingClient() {
 
       {/* Create Delivery Challan Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-1 border border-border rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowCreateModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-challan-title"
+        >
+          <div
+            className="bg-surface-1 border border-border rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-extrabold text-text-1 text-base flex items-center gap-2">
+              <h3 id="create-challan-title" className="font-extrabold text-text-1 text-base flex items-center gap-2">
                 <Truck className="w-5 h-5 text-accent" />
                 Dispatch Delivery Challan (DC)
               </h3>
               <button
+                type="button"
                 onClick={() => setShowCreateModal(false)}
                 className="p-1 rounded-lg hover:bg-surface-3 text-text-3 hover:text-text-1"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -611,11 +634,20 @@ export default function SubcontractingClient() {
 
       {/* Inward QC Receipt Modal */}
       {showInwardModal && selectedChallan && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowInwardModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="inward-qc-title"
+        >
+          <div
+            className="bg-surface-1 border border-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div>
-                <h3 className="font-extrabold text-text-1 text-base flex items-center gap-2">
+                <h3 id="inward-qc-title" className="font-extrabold text-text-1 text-base flex items-center gap-2">
                   <PackageCheck className="w-5 h-5 text-emerald-400" />
                   Inward Receipt & QC Signoff
                 </h3>
@@ -625,8 +657,10 @@ export default function SubcontractingClient() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowInwardModal(false)}
                 className="p-1 rounded-lg hover:bg-surface-3 text-text-3 hover:text-text-1"
+                aria-label="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>

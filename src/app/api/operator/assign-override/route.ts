@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const headersList = await headers();
@@ -51,21 +51,24 @@ export async function POST(req: Request) {
         deduped: true,
       });
 
-    const record = await prisma.assignmentOverride.create({
-      data: {
-        workOrderId,
-        operatorId,
-        machineId: machineId ?? null,
-        assignedBy: user.name ?? "Manager",
-        reason: reasonCheck.reason ?? "",
-      },
-    });
-    await logAudit({
-      actor: user.name || "Admin",
-      action: "ASSIGN_OVERRIDE",
-      entityType: "WORK_ORDER",
-      entityId: wo.id,
-      details: `${wo.woNumber} → ${operator.name} (skill override: ${reasonCheck.reason})`,
+    const record = await prisma.$transaction(async (tx) => {
+      const rec = await tx.assignmentOverride.create({
+        data: {
+          workOrderId,
+          operatorId,
+          machineId: machineId ?? null,
+          assignedBy: user.name ?? "Manager",
+          reason: reasonCheck.reason ?? "",
+        },
+      });
+      await logAuditTx(tx, {
+        actor: user.name || "Admin",
+        action: "ASSIGN_OVERRIDE",
+        entityType: "WORK_ORDER",
+        entityId: wo.id,
+        details: `${wo.woNumber} → ${operator.name} (skill override: ${reasonCheck.reason})`,
+      });
+      return rec;
     });
     return NextResponse.json({ success: true, record });
   } catch (error) {

@@ -39,9 +39,18 @@ export default function InvestorDemoModal() {
       setIsOpen(true);
       soundFx.playSuccess();
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        setIsOpen(false);
+      }
+    };
     window.addEventListener("open-investor-modal", handleOpen);
-    return () => window.removeEventListener("open-investor-modal", handleOpen);
-  }, []);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("open-investor-modal", handleOpen);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -61,31 +70,39 @@ export default function InvestorDemoModal() {
       tag: "Agentic Swarm",
     },
     {
-      title: "3. ISA-95 UNS & Edge Automation",
-      desc: "Unified Namespace (UMH), Node-RED visual flows, and MQTT Sparkplug B protocol.",
-      href: "/iot/uns",
-      color: "from-cyan-500 to-teal-600",
-      tag: "UMH + Sparkplug",
+      title: "3. Factory Command Center",
+      desc: "Real-time plant metrics, OEE gauges, active work order status, and anomaly alerts.",
+      href: "/command",
+      color: "from-emerald-500 to-teal-600",
+      tag: "Live Cockpit",
     },
     {
-      title: "4. Aerospace Quality & 360° Genealogy",
-      desc: "Heat lot traceability, AS9102 First Article Inspection, and visual ECO approvals.",
+      title: "4. Full Traceability & Genealogy",
+      desc: "AS9100 / ISO 27001 complete audit logs, mill test reports, and serialized cradle-to-grave tracking.",
       href: "/quality/genealogy",
-      color: "from-emerald-500 to-green-600",
-      tag: "AS9102 Trace",
+      color: "from-amber-500 to-orange-600",
+      tag: "Aerospace QA",
     },
   ];
 
   const triggerShockSimulation = () => {
-    soundFx.playWarning();
-    toast.warning(
-      "⚡ SIMULATED EVENT: Spindle Bearing Temperature Spike detected on CNC-02 (44.2°C). Automated Node-RED Edge Rule dispatched priority maintenance.",
-    );
+    soundFx.playAlert();
+    toast.error("THERMAL SHOCK ALERT: Spindle #3 bearing temp exceeded 145°C!");
+    setTimeout(() => {
+      setIsOpen(false);
+      router.push("/digital-twin/cell");
+    }, 1200);
   };
 
   return (
-    <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
+      onClick={() => setIsOpen(false)}
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="investor-modal-title"
         className="bg-surface-1 rounded-3xl shadow-2xl w-full max-w-4xl border-2 border-cyan-500/40 overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -104,13 +121,15 @@ export default function InvestorDemoModal() {
                   HOT MVP LIVE
                 </span>
               </div>
-              <h2 className="text-xl font-black text-white">
+              <h2 id="investor-modal-title" className="text-xl font-black text-white">
                 Apex Smart Manufacturing Enterprise Max
               </h2>
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setIsOpen(false)}
+            aria-label="Close investor deck modal"
             className="p-2 rounded-xl hover:bg-surface-2 text-text-3 hover:text-text-1 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -211,6 +230,11 @@ export default function InvestorDemoModal() {
                   type="range"
                   min="4"
                   max="50"
+                  aria-label="CNC Fleet Units"
+                  aria-valuemin={4}
+                  aria-valuemax={50}
+                  aria-valuenow={machinesCount}
+                  aria-valuetext={`${machinesCount} Units`}
                   value={machinesCount}
                   onChange={(e) => setMachinesCount(Number(e.target.value))}
                   className="w-full accent-cyan-400 cursor-pointer"
@@ -228,6 +252,11 @@ export default function InvestorDemoModal() {
                   type="range"
                   min="8"
                   max="60"
+                  aria-label="Monthly Downtime Hours"
+                  aria-valuemin={8}
+                  aria-valuemax={60}
+                  aria-valuenow={downtimeHoursPerMonth}
+                  aria-valuetext={`${downtimeHoursPerMonth} hours`}
                   value={downtimeHoursPerMonth}
                   onChange={(e) =>
                     setDowntimeHoursPerMonth(Number(e.target.value))
@@ -248,6 +277,11 @@ export default function InvestorDemoModal() {
                   min="100"
                   max="500"
                   step="25"
+                  aria-label="Hourly Downtime Cost"
+                  aria-valuemin={100}
+                  aria-valuemax={500}
+                  aria-valuenow={hourlyDowntimeCost}
+                  aria-valuetext={`$${hourlyDowntimeCost} per hour`}
                   value={hourlyDowntimeCost}
                   onChange={(e) =>
                     setHourlyDowntimeCost(Number(e.target.value))
@@ -268,6 +302,11 @@ export default function InvestorDemoModal() {
                   min="2000"
                   max="50000"
                   step="1000"
+                  aria-label="Monthly Scrap Cost"
+                  aria-valuemin={2000}
+                  aria-valuemax={50000}
+                  aria-valuenow={scrapCostMonthly}
+                  aria-valuetext={`$${scrapCostMonthly.toLocaleString()}`}
                   value={scrapCostMonthly}
                   onChange={(e) => setScrapCostMonthly(Number(e.target.value))}
                   className="w-full accent-cyan-400 cursor-pointer"
@@ -283,6 +322,7 @@ export default function InvestorDemoModal() {
                 Interactive 1-Click Guided Demo Tours
               </h3>
               <button
+                type="button"
                 onClick={triggerShockSimulation}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition-all cursor-pointer"
               >
@@ -294,6 +334,7 @@ export default function InvestorDemoModal() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {demoTours.map((tour, idx) => (
                 <button
+                  type="button"
                   key={idx}
                   onClick={() => {
                     setIsOpen(false);
@@ -330,6 +371,7 @@ export default function InvestorDemoModal() {
         <div className="px-8 py-4 border-t border-border/80 bg-slate-950 text-xs text-text-3 flex items-center justify-between font-mono">
           <span>Enterprise Aerospace MES & IIoT Platform</span>
           <button
+            type="button"
             onClick={() => setIsOpen(false)}
             className="px-4 py-1.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-border text-white text-xs font-bold transition-colors cursor-pointer"
           >

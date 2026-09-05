@@ -73,6 +73,17 @@ export default function VouchersClient() {
     fetchAll();
   }, [fetchAll]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showNew) setShowNew(false);
+        if (actionFor) setActionFor(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showNew, actionFor]);
+
   const create = async () => {
     setMsg("");
     if (
@@ -342,9 +353,18 @@ export default function VouchersClient() {
 
       {/* New voucher modal (maker) */}
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-white flex items-center gap-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setShowNew(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-voucher-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl"
+          >
+            <h3 id="new-voucher-modal-title" className="font-bold text-white flex items-center gap-2">
               <FileText className="h-4 w-4 text-indigo-400" /> Enter voucher
               (maker)
             </h3>
@@ -427,12 +447,14 @@ export default function VouchersClient() {
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
+                type="button"
                 onClick={() => setShowNew(false)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={create}
                 disabled={busy}
                 className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2"
@@ -447,9 +469,18 @@ export default function VouchersClient() {
 
       {/* Decide modal (manager) */}
       {actionFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-white flex items-center gap-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setActionFor(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="action-voucher-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl"
+          >
+            <h3 id="action-voucher-modal-title" className="font-bold text-white flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-400" />
               Review {actionFor.voucherNumber}
             </h3>
@@ -486,12 +517,14 @@ export default function VouchersClient() {
             />
             <div className="flex justify-end gap-3">
               <button
+                type="button"
                 onClick={() => setActionFor(null)}
                 className="px-4 py-2 text-sm font-bold text-slate-400 hover:bg-slate-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => decide("reject")}
                 disabled={busy || !rejectReason.trim()}
                 className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl shadow-sm transition-all"
@@ -499,6 +532,7 @@ export default function VouchersClient() {
                 Reject
               </button>
               <button
+                type="button"
                 onClick={() => decide("check-post")}
                 disabled={busy}
                 className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-sm transition-all flex items-center gap-2"

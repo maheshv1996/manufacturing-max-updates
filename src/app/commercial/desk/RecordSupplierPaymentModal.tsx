@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
 export default function RecordSupplierPaymentModal({
@@ -21,6 +21,14 @@ export default function RecordSupplierPaymentModal({
   const [method, setMethod] = useState("BANK_TRANSFER");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,15 +63,26 @@ export default function RecordSupplierPaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-slate-700">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="record-payment-title"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-slate-700"
+      >
         <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800/60">
-          <h2 className="text-lg font-bold text-white">
+          <h2 id="record-payment-title" className="text-lg font-bold text-white">
             Record Payment to {supplier.name}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-lg hover:bg-slate-200 hover:bg-slate-800/90 transition-colors"
+            aria-label="Close record payment dialog"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:text-slate-300 rounded-lg hover:bg-slate-200 hover:bg-slate-800/90 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders } from "@/lib/permissions";
 import { requireManagerLevel, validateReason } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 
 export const maxDuration = 60;
 
@@ -71,21 +71,24 @@ export async function POST(req: Request) {
           { error: "hours must be between 0 and 24" },
           { status: 400 },
         );
-      result = await prisma.overtimeRequest.create({
-        data: {
-          userId: user.id,
-          date: new Date(date),
-          hours: h,
-          reason,
-          status: "PENDING",
-        },
-      });
-      await logAudit({
-        actor: user.name || "Operator",
-        action: "OT_REQUESTED",
-        entityType: "OVERTIME",
-        entityId: result.id,
-        details: `${h}h on ${date} — ${reason.slice(0, 80)}`,
+      result = await prisma.$transaction(async (tx) => {
+        const created = await tx.overtimeRequest.create({
+          data: {
+            userId: user.id,
+            date: new Date(date),
+            hours: h,
+            reason,
+            status: "PENDING",
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Operator",
+          action: "OT_REQUESTED",
+          entityType: "OVERTIME",
+          entityId: created.id,
+          details: `${h}h on ${date} — ${reason.slice(0, 80)}`,
+        });
+        return created;
       });
     } else if (action === "approve" || action === "reject") {
       const gate = await requireManagerLevel(user);
@@ -108,21 +111,24 @@ export async function POST(req: Request) {
           { error: "Request already decided" },
           { status: 400 },
         );
-      result = await prisma.overtimeRequest.update({
-        where: { id: data.id },
-        data: {
-          status: action === "approve" ? "APPROVED" : "REJECTED",
-          approvedByName: user.name || "Manager",
-          approvedAt: new Date(),
-          note: reason.reason,
-        },
-      });
-      await logAudit({
-        actor: user.name || "Admin",
-        action: action === "approve" ? "OT_APPROVED" : "OT_REJECTED",
-        entityType: "OVERTIME",
-        entityId: ot.id,
-        details: `${ot.user?.name || ot.userId}: ${ot.hours}h on ${ot.date.toISOString().slice(0, 10)} (${reason.reason})`,
+      result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.overtimeRequest.update({
+          where: { id: data.id },
+          data: {
+            status: action === "approve" ? "APPROVED" : "REJECTED",
+            approvedByName: user.name || "Manager",
+            approvedAt: new Date(),
+            note: reason.reason,
+          },
+        });
+        await logAuditTx(tx, {
+          actor: user.name || "Admin",
+          action: action === "approve" ? "OT_APPROVED" : "OT_REJECTED",
+          entityType: "OVERTIME",
+          entityId: ot.id,
+          details: `${ot.user?.name || ot.userId}: ${ot.hours}h on ${ot.date.toISOString().slice(0, 10)} (${reason.reason})`,
+        });
+        return updated;
       });
     } else {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });

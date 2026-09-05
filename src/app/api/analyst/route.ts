@@ -1,4 +1,4 @@
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +9,6 @@ import { cookies } from "next/headers";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-    await logAudit({ actor: "system", action: "ANALYST_QUERY", entityType: "Analyst", details: "AI Analyst report generated" });
   try {
     const cookieStore = await cookies();
     const tokenStr = cookieStore.get("app_session")?.value;
@@ -33,23 +32,22 @@ export async function POST(req: Request) {
     // Analyze question
     const answer = await analyzeQuery(question, plantId, token.id);
 
-    // Save history
-    await prisma.analystQuery.create({
-      data: {
-        userId: token.id,
-        question,
-        answerTitle: answer.title,
-      },
-    });
+    // Save history and audit log atomically
+    await prisma.$transaction(async (tx) => {
+      await tx.analystQuery.create({
+        data: {
+          userId: token.id,
+          question,
+          answerTitle: answer.title,
+        },
+      });
 
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
+      await logAuditTx(tx, {
         actor: token.id,
         action: "ANALYST_QUERY",
         entityType: "AI_ANALYST",
         details: `Asked: "${question}" (Answered: ${answer.title})`,
-      },
+      });
     });
 
     return NextResponse.json({ answer });

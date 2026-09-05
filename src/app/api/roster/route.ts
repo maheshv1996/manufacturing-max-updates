@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { getSettings } from "@/lib/settings";
 import { startOfWeek, addDays, format, isSameDay } from "date-fns";
 
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
       if (existing) {
         roster = await prisma.$transaction(async (tx) => {
           await tx.rosterEntry.deleteMany({ where: { rosterId: existing.id } });
-          return tx.shiftRoster.update({
+          const updated = await tx.shiftRoster.update({
             where: { id: existing.id },
             data: {
               status: "PUBLISHED",
@@ -179,26 +179,37 @@ export async function POST(req: Request) {
             },
             include: { entries: true },
           });
+          await logAuditTx(tx, {
+            actor: user.name || "System",
+            action: "ROSTER_PUBLISHED",
+            entityType: "SHIFT_ROSTER",
+            entityId: updated.id,
+            details: `Week of ${format(ws, "dd MMM yyyy")} — ${updated.entries.length} entry(ies)`,
+          });
+          return updated;
         });
       } else {
-        roster = await prisma.shiftRoster.create({
-          data: {
-            weekStart: ws,
-            status: "PUBLISHED",
-            publishedBy: user.name || "System",
-            notes: notes || null,
-            entries: { create: entries },
-          },
-          include: { entries: true },
+        roster = await prisma.$transaction(async (tx) => {
+          const created = await tx.shiftRoster.create({
+            data: {
+              weekStart: ws,
+              status: "PUBLISHED",
+              publishedBy: user.name || "System",
+              notes: notes || null,
+              entries: { create: entries },
+            },
+            include: { entries: true },
+          });
+          await logAuditTx(tx, {
+            actor: user.name || "System",
+            action: "ROSTER_PUBLISHED",
+            entityType: "SHIFT_ROSTER",
+            entityId: created.id,
+            details: `Week of ${format(ws, "dd MMM yyyy")} — ${created.entries.length} entry(ies)`,
+          });
+          return created;
         });
       }
-      await logAudit({
-        actor: user.name || "System",
-        action: "ROSTER_PUBLISHED",
-        entityType: "SHIFT_ROSTER",
-        entityId: roster.id,
-        details: `Week of ${format(ws, "dd MMM yyyy")} — ${roster.entries.length} entry(ies)`,
-      });
       return NextResponse.json({ roster }, { status: 201 });
     }
 

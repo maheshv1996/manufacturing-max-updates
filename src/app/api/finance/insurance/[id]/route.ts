@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, can } from "@/lib/permissions";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { z } from "zod";
 import { parseOr400 } from "@/lib/validate";
 
@@ -28,7 +28,10 @@ export async function PATCH(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -48,14 +51,16 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const policy = await prisma.insurancePolicy.update({ where: { id }, data });
-
-    await logAudit({
-      actor,
-      action: "INSURANCE_POLICY_UPDATED",
-      entityType: "InsurancePolicy",
-      entityId: id,
-      details: `Updated policy ${policy.policyNumber}: ${Object.keys(data).join(", ")}`,
+    const policy = await prisma.$transaction(async (tx) => {
+      const pol = await tx.insurancePolicy.update({ where: { id }, data });
+      await logAuditTx(tx, {
+        actor,
+        action: "INSURANCE_POLICY_UPDATED",
+        entityType: "InsurancePolicy",
+        entityId: id,
+        details: `Updated policy ${pol.policyNumber}: ${Object.keys(data).join(", ")}`,
+      });
+      return pol;
     });
 
     return NextResponse.json({ success: true, policy });
@@ -79,7 +84,10 @@ export async function POST(
   try {
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
-    if (!user.id || (!user.isOwner && !can(user, "finance.edit"))) {
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !can(user, "finance.edit")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const actor = user.name || user.id || "Admin";
@@ -96,30 +104,35 @@ export async function POST(
     }
 
     if (a === "delete") {
-      await prisma.insurancePolicy.delete({ where: { id } });
-      await logAudit({
-        actor,
-        action: "INSURANCE_POLICY_DELETED",
-        entityType: "InsurancePolicy",
-        entityId: id,
-        details: `Deleted policy ${existing.policyNumber}`,
-        severity: "WARN",
+      await prisma.$transaction(async (tx) => {
+        await tx.insurancePolicy.delete({ where: { id } });
+        await logAuditTx(tx, {
+          actor,
+          action: "INSURANCE_POLICY_DELETED",
+          entityType: "InsurancePolicy",
+          entityId: id,
+          details: `Deleted policy ${existing.policyNumber}`,
+          severity: "WARN",
+        });
       });
       return NextResponse.json({ success: true });
     }
 
-    const policy = await prisma.insurancePolicy.update({
-      where: { id },
-      data: { status: a === "cancel" ? "CANCELLED" : "ACTIVE" },
-    });
+    const policy = await prisma.$transaction(async (tx) => {
+      const pol = await tx.insurancePolicy.update({
+        where: { id },
+        data: { status: a === "cancel" ? "CANCELLED" : "ACTIVE" },
+      });
 
-    await logAudit({
-      actor,
-      action: a === "cancel" ? "INSURANCE_POLICY_CANCELLED" : "INSURANCE_POLICY_ACTIVATED",
-      entityType: "InsurancePolicy",
-      entityId: id,
-      details: `${a === "cancel" ? "Cancelled" : "Activated"} policy ${existing.policyNumber}`,
-      severity: a === "cancel" ? "WARN" : "INFO",
+      await logAuditTx(tx, {
+        actor,
+        action: a === "cancel" ? "INSURANCE_POLICY_CANCELLED" : "INSURANCE_POLICY_ACTIVATED",
+        entityType: "InsurancePolicy",
+        entityId: id,
+        details: `${a === "cancel" ? "Cancelled" : "Activated"} policy ${existing.policyNumber}`,
+        severity: a === "cancel" ? "WARN" : "INFO",
+      });
+      return pol;
     });
 
     return NextResponse.json({ success: true, policy });

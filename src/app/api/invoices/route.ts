@@ -6,7 +6,8 @@ import { nextSequenceTx } from "@/lib/sequence";
 import { checkIdempotency, reserveIdempotency, completeIdempotency } from "@/lib/idempotency";
 import { z } from "zod";
 import { headers } from "next/headers";
-import { getUserFromHeaders } from "@/lib/permissions";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 import { autoPostToGL } from "@/lib/glPosting";
 import { computeSalesOrderFulfilment } from "@/lib/salesOrders";
 import { toPaiseRow, fromPaiseRow, fromPaiseRows } from "@/lib/money";
@@ -104,6 +105,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["finance.edit", "commercial.edit", "system.edit"])) {
+      return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+    }
     const actor = user.name || user.id || "System";
     const headerClientId = headersList.get("x-client-id");
     const clientId: string | null =
@@ -301,15 +308,7 @@ export async function POST(req: Request) {
                 where: { id: so.id },
                 data: { status: "INVOICED" },
               });
-              await (tx as any).auditLog.create({
-                data: {
-                  actor,
-                  action: "SO_INVOICED",
-                  entityType: "SalesOrder",
-                  entityId: so.id,
-                  details: `Sales order ${so.orderNumber} fully invoiced — dispatch ${dispatchRecordTx?.challanNumber || "work order"} billed`,
-                },
-              });
+              await logAuditTx(tx, { actor, action: "SO_INVOICED", entityType: "SalesOrder", entityId: so.id, details: `Sales order ${so.orderNumber} fully invoiced — dispatch ${dispatchRecordTx?.challanNumber || "work order"} billed` });
             }
           }
 
@@ -381,15 +380,7 @@ export async function POST(req: Request) {
                 where: { id: so.id },
                 data: { status: "INVOICED" },
               });
-              await (tx as any).auditLog.create({
-                data: {
-                  actor,
-                  action: "SO_INVOICED",
-                  entityType: "SalesOrder",
-                  entityId: so.id,
-                  details: `Sales order ${so.orderNumber} — all lines were already fully invoiced; status healed to INVOICED`,
-                },
-              });
+              await logAuditTx(tx, { actor, action: "SO_INVOICED", entityType: "SalesOrder", entityId: so.id, details: `Sales order ${so.orderNumber} — all lines were already fully invoiced; status healed to INVOICED` });
             }
             if (allInvoiced && healable) {
               return {
@@ -500,32 +491,16 @@ export async function POST(req: Request) {
               where: { id: so.id },
               data: { status: nextStatus },
             });
-            await (tx as any).auditLog.create({
-              data: {
-                actor,
-                action: nextStatus === "INVOICED" ? "SO_INVOICED" : "SO_PARTIALLY_INVOICED",
-                entityType: "SalesOrder",
-                entityId: so.id,
-                details: `Sales order ${so.orderNumber} — billed ${lines.length} line(s) on ${invoiceNumber} (₹${round2(totals.totalValue).toLocaleString("en-IN")}) → ${nextStatus}`,
-              },
-            });
+            await logAuditTx(tx, { actor, action: nextStatus === "INVOICED" ? "SO_INVOICED" : "SO_PARTIALLY_INVOICED", entityType: "SalesOrder", entityId: so.id, details: `Sales order ${so.orderNumber} — billed ${lines.length} line(s) on ${invoiceNumber} (₹${round2(totals.totalValue).toLocaleString("en-IN")}) → ${nextStatus}` });
           }
         }
 
-        await (tx as any).auditLog.create({
-          data: {
-            actor,
-            action: "CREATED_INVOICE",
-            entityType: "Invoice",
-            entityId: created.id,
-            details: JSON.stringify({
+        await logAuditTx(tx, { actor, action: "CREATED_INVOICE", entityType: "Invoice", entityId: created.id, details: JSON.stringify({
               invoiceNumber,
               customerName: created.customerName,
               totalValue: created.totalValue,
               lineItems: lines.length,
-            }),
-          },
-        });
+            }) });
 
         return {
           invoice: {

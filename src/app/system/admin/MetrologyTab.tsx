@@ -205,6 +205,30 @@ export default function MetrologyTab() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (toolModal.open) {
+          setToolModal({ open: false, form: emptyToolForm() });
+        }
+        if (vendorModal.open) {
+          setVendorModal({ open: false, form: emptyVendorForm() });
+        }
+        if (issueModal.open) {
+          setIssueModal({
+            open: false,
+            tool: null,
+            issuedToName: "",
+            expectedReturnAt: "",
+            notes: "",
+          });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toolModal.open, vendorModal.open, issueModal.open]);
+
   const saveEntity = async (
     entity: "calibratedTools" | "specialProcessVendors",
     action: "create" | "update",
@@ -792,19 +816,32 @@ export default function MetrologyTab() {
 
       {/* ── TOOL MODAL ── */}
       {toolModal.open && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tool-modal-title"
+          onClick={() =>
+            setToolModal({ open: false, form: emptyToolForm() })
+          }
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="tool-modal-title" className="text-lg font-bold text-white">
                 {toolModal.form.id
                   ? "Edit Calibrated Tool"
                   : "Register Calibrated Tool"}
               </h3>
               <button
+                type="button"
                 onClick={() =>
                   setToolModal({ open: false, form: emptyToolForm() })
                 }
-                className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
+                aria-label="Close tool dialog"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1026,19 +1063,32 @@ export default function MetrologyTab() {
 
       {/* ── VENDOR MODAL ── */}
       {vendorModal.open && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vendor-modal-title"
+          onClick={() =>
+            setVendorModal({ open: false, form: emptyVendorForm() })
+          }
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">
+              <h3 id="vendor-modal-title" className="text-lg font-bold text-white">
                 {vendorModal.form.id
                   ? "Edit Special Process Vendor"
                   : "Add Special Process Vendor"}
               </h3>
               <button
+                type="button"
                 onClick={() =>
                   setVendorModal({ open: false, form: emptyVendorForm() })
                 }
-                className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
+                aria-label="Close vendor dialog"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1159,11 +1209,29 @@ export default function MetrologyTab() {
 
       {/* ── ISSUE MODAL ── */}
       {issueModal.open && issueModal.tool && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="issue-modal-title"
+          onClick={() =>
+            setIssueModal({
+              open: false,
+              tool: null,
+              issuedToName: "",
+              expectedReturnAt: "",
+              notes: "",
+            })
+          }
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-800/60 rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+          >
             <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white">Issue Instrument</h3>
+              <h3 id="issue-modal-title" className="text-lg font-bold text-white">Issue Instrument</h3>
               <button
+                type="button"
                 onClick={() =>
                   setIssueModal({
                     open: false,
@@ -1173,7 +1241,8 @@ export default function MetrologyTab() {
                     notes: "",
                   })
                 }
-                className="text-slate-400 hover:text-slate-600 hover:text-slate-200"
+                aria-label="Close issue dialog"
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

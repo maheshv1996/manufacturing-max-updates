@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { getUserFromHeaders, canAny } from "@/lib/permissions";
 import { requireManagerLevel } from "@/lib/managerGate";
-import { logAudit } from "@/lib/audit";
+import { logAuditTx } from "@/lib/audit";
 import { nextSeqNumber } from "@/lib/seqNumbers";
 
 export const maxDuration = 60;
@@ -130,20 +130,23 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: mgr.error }, { status: 403 });
     }
     const number = await nextSeqNumber("grievance", "grievanceNumber", "GRV");
-    const record = await prisma.grievance.create({
-      data: {
-        grievanceNumber: number,
-        userId: targetId,
-        category,
-        description: description.trim(),
-      },
-    });
-    await logAudit({
-      actor,
-      action: "GRIEVANCE_RAISED",
-      entityType: "GRIEVANCE",
-      entityId: record.id,
-      details: `${number} · ${category} · ${target.name}`,
+    const record = await prisma.$transaction(async (tx) => {
+      const created = await tx.grievance.create({
+        data: {
+          grievanceNumber: number,
+          userId: targetId,
+          category,
+          description: description.trim(),
+        },
+      });
+      await logAuditTx(tx, {
+        actor,
+        action: "GRIEVANCE_RAISED",
+        entityType: "GRIEVANCE",
+        entityId: created.id,
+        details: `${number} · ${category} · ${target.name}`,
+      });
+      return created;
     });
     return NextResponse.json({ success: true, record });
   } catch (error) {

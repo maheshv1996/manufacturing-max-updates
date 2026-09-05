@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { logAudit } from "@/lib/audit";
+import { getUserFromHeaders, canAny } from "@/lib/permissions";
+import { logAuditTx } from "@/lib/audit";
 
 export async function GET() {
   try {
+    const headersList = await headers();
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["system.view", "system.edit", "quality.view", "ops.view"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const db = prisma as any;
     const documents = await db.document.findMany({
       select: {
@@ -42,7 +52,14 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const headersList = await headers();
-    const actorName = headersList.get("x-user-name") || "Admin";
+    const user = getUserFromHeaders(headersList);
+    if (!user.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!user.isOwner && !canAny(user, ["system.edit", "quality.edit", "ops.edit"])) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const actorName = user.name || headersList.get("x-user-name") || "Admin";
     const db = prisma as any;
 
     const contentType = req.headers.get("content-type") || "";
@@ -69,17 +86,21 @@ export async function POST(req: Request) {
           );
         }
 
-        const updatedDoc = await db.document.update({
-          where: { id: documentId },
-          data: { status: "ARCHIVED" },
-        });
+        const updatedDoc = await prisma.$transaction(async (tx: any) => {
+          const res = await tx.document.update({
+            where: { id: documentId },
+            data: { status: "ARCHIVED" },
+          });
 
-        await logAudit({
-          actor: actorName,
-          action: "DOCUMENT_ARCHIVED",
-          entityType: "DOCUMENT",
-          entityId: documentId,
-          details: `Manually archived document '${doc.title}' (REV ${doc.version}) for product ${doc.product?.name}`,
+          await logAuditTx(tx, {
+            actor: actorName,
+            action: "DOCUMENT_ARCHIVED",
+            entityType: "DOCUMENT",
+            entityId: documentId,
+            details: `Manually archived document '${doc.title}' (REV ${doc.version}) for product ${doc.product?.name}`,
+          });
+
+          return res;
         });
 
         return NextResponse.json({ success: true, document: updatedDoc });
@@ -140,61 +161,65 @@ export async function POST(req: Request) {
       include: { product: true },
     });
 
-    let version = 1;
+    const newDoc = await prisma.$transaction(async (tx: any) => {
+      let version = 1;
 
-    if (existingCurrentDoc) {
-      version = existingCurrentDoc.version + 1;
+      if (existingCurrentDoc) {
+        version = existingCurrentDoc.version + 1;
 
-      await db.document.update({
-        where: { id: existingCurrentDoc.id },
-        data: { status: "ARCHIVED" },
+        await tx.document.update({
+          where: { id: existingCurrentDoc.id },
+          data: { status: "ARCHIVED" },
+        });
+
+        await logAuditTx(tx, {
+          actor: actorName,
+          action: "DOCUMENT_ARCHIVED",
+          entityType: "DOCUMENT",
+          entityId: existingCurrentDoc.id,
+          details: `Auto-archived REV ${existingCurrentDoc.version} of '${existingCurrentDoc.title}' upon upload of new REV ${version}`,
+        });
+      }
+
+      const created = await tx.document.create({
+        data: {
+          title,
+          productId,
+          operationId: opId,
+          version,
+          mimeType,
+          fileData: fileBuffer,
+          sizeKb,
+          status: "CURRENT",
+          uploadedBy: actorName,
+          notes: notes || null,
+        },
+        select: {
+          id: true,
+          title: true,
+          productId: true,
+          operationId: true,
+          version: true,
+          mimeType: true,
+          sizeKb: true,
+          status: true,
+          uploadedBy: true,
+          uploadedAt: true,
+          notes: true,
+          product: { select: { id: true, name: true, sku: true } },
+          operation: { select: { id: true, name: true, code: true } },
+        },
       });
 
-      await logAudit({
+      await logAuditTx(tx, {
         actor: actorName,
-        action: "DOCUMENT_ARCHIVED",
+        action: "DOCUMENT_UPLOADED",
         entityType: "DOCUMENT",
-        entityId: existingCurrentDoc.id,
-        details: `Auto-archived REV ${existingCurrentDoc.version} of '${existingCurrentDoc.title}' upon upload of new REV ${version}`,
+        entityId: created.id,
+        details: `Uploaded '${created.title}' (REV ${version}) for product ${created.product?.name}`,
       });
-    }
 
-    const newDoc = await db.document.create({
-      data: {
-        title,
-        productId,
-        operationId: opId,
-        version,
-        mimeType,
-        fileData: fileBuffer,
-        sizeKb,
-        status: "CURRENT",
-        uploadedBy: actorName,
-        notes: notes || null,
-      },
-      select: {
-        id: true,
-        title: true,
-        productId: true,
-        operationId: true,
-        version: true,
-        mimeType: true,
-        sizeKb: true,
-        status: true,
-        uploadedBy: true,
-        uploadedAt: true,
-        notes: true,
-        product: { select: { id: true, name: true, sku: true } },
-        operation: { select: { id: true, name: true, code: true } },
-      },
-    });
-
-    await logAudit({
-      actor: actorName,
-      action: "DOCUMENT_UPLOADED",
-      entityType: "DOCUMENT",
-      entityId: newDoc.id,
-      details: `Uploaded '${newDoc.title}' (REV ${version}) for product ${newDoc.product?.name}`,
+      return created;
     });
 
     return NextResponse.json({ success: true, document: newDoc });
