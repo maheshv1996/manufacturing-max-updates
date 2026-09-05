@@ -36,8 +36,26 @@ npm run dev          # http://localhost:3000
 | C6 | Commercial & Finance Core | **Done** |
 | C7 | People & Payroll Core | **Done** |
 | C8 | Maintenance, Tooling & Calibration | **Done** |
+| C9 | EHS, Lean & Continuous Improvement | **Done** |
 
-## C6 Current State (2026-09-05)
+## C9 Current State (2026-09-05) — COMPLETE
+
+- **Engines (TDD, 17 tests across 5 suites):**
+  - `src/lib/ehs/safety.ts`: Safety incident machine (`OPEN → IN_INVESTIGATION → CLOSED`), F10 closure evidence guard (`rootCause` or `fiveWhyReason` AND `actionTaken`), P27 near-miss observation quota engine.
+  - `src/lib/lean/projects.ts`: DMAIC project machine (`DEFINE → MEASURE → ANALYZE → IMPROVE → CONTROL`), reversible hold/resume, F11 completion evidence (`rootCause` present AND all action items `DONE`).
+  - `src/lib/lean/fiveS.ts`: 5S audit scoring formula `round1(Σ / (items × 5) × 100)`.
+  - `src/lib/lean/ideas.ts`: Idea pipeline (`SUBMITTED → IN_REVIEW → IMPLEMENTED`), additive upvote counter.
+- **Adapters:**
+  - `src/lib/ehs/ehsTx.ts`: `reportIncidentTx`, `incidentActionTx`, `nearMissQuotaTx`.
+  - `src/lib/lean/leanTx.ts`: `createProjectTx`, `projectActionTx`, `recordRcaTx`, `addActionItemTx`, `markActionItemDoneTx`, `recordFiveSAuditTx`, `submitIdeaTx`, `upvoteIdeaTx`, `transitionIdeaTx`.
+- **Routes:**
+  - `/api/v2/ehs/{incidents,incidents/[id]/action,quota}`
+  - `/api/v2/lean/{projects,projects/[id]/action,projects/[id]/rca,projects/[id]/action-items,five-s,ideas,ideas/[id]/action}`
+- **Verification:**
+  - Unit tests: **608/608 pass across 24 suites**.
+  - Real-DB smoke: `scripts/v2-smoke-ehs-lean.mjs` (`npm run test:c9-9`) — **20/20 PASS** on `mfgmax_v2_test`.
+  - TypeScript: `tsc --noEmit` exit 0, zero `as any` casts.
+  - Census: synchronized to 369 API routes (`scripts/verify-counts.mjs` passes).
 
 ### Completed
 - Fixed 3 pre-existing TS errors in C6 engine files

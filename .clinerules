@@ -1,0 +1,9 @@
+﻿# Skills and Agents Ecosystem Integration
+
+You have direct access to 1,667 modular skills and 290 specialized agent personas linked directly to your environment:
+
+- **Skills Directory:** .cline/skills/ (and global ~/.cline/skills/)
+  Each skill contains a SKILL.md with expert instructions, scripts, and workflows. When a user request matches a domain (e.g., Docker, Firebase, Next.js, Flutter, security, performance, databases, testing), read and follow the matching SKILL.md.
+
+- **Agent Personas:** .cline/agents/ (and global ~/.cline/agents/)
+  Contains 290 specialized role prompts (e.g., software architect, backend engineer, security auditor, frontend designer). Reference or adopt these specialized personas when performing deep design, review, or implementation work.

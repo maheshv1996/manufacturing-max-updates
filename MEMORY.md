@@ -1,9 +1,18 @@
 # System Memory & State
 
 The company brain. Every module listed below was verified against the codebase on this audit:
-274 pages, 359 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
+274 pages, 369 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
 
 ## Completed Modules (newest first)
+- **C9 EHS, LEAN & CONTINUOUS IMPROVEMENT (v2, 2026-09-05):** completed C9 typed-core module —
+  - **(1) Safety Incident Machine & F10 Closure Evidence:** `src/lib/ehs/safety.ts` + `reportIncidentTx`/`incidentActionTx` + routes `/api/v2/ehs/incidents` and `/api/v2/ehs/incidents/[id]/action` — validates type/severity/location/description; `START_INVESTIGATION` mandates `capaOwner`; `CLOSE` refuses without `actionTaken` plus either `rootCause` or `fiveWhyReason` (stamps `closedAt`/`closedBy`). Append/transition-only, zero deletion.
+  - **(2) P27 Near-Miss Quota:** `observationQuotaRows` + `nearMissQuotaTx` + route `/api/v2/ehs/quota` — projects monthly manager quota performance from `NEAR_MISS`, `HAZARD`, `PPE_VIOLATION` incidents against `ehsObservationQuota` setting (default 4).
+  - **(3) DMAIC Project Machine & F11 Completion Evidence:** `src/lib/lean/projects.ts` + `createProjectTx`/`projectActionTx` + routes `/api/v2/lean/projects` and `/api/v2/lean/projects/[id]/action` — strictly sequential phase advance (`DEFINE → MEASURE → ANALYZE → IMPROVE → CONTROL`); reversible `HOLD`/`RESUME`; `COMPLETE` refuses unless RCA `rootCause` is present AND all action items are `DONE`.
+  - **(4) RCA Records & Action Items:** `recordRcaTx` + route `/api/v2/lean/projects/[id]/rca` (5-Why + Fishbone); `addActionItemTx`/`markActionItemDoneTx` + route `/api/v2/lean/projects/[id]/action-items`.
+  - **(5) 5S Audit Scoring:** `src/lib/lean/fiveS.ts` + `recordFiveSAuditTx` + route `/api/v2/lean/five-s` — 0–5 integer scoring per item, `totalPct = round1(Σ / (items × 5) × 100)`.
+  - **(6) Idea Pipeline:** `src/lib/lean/ideas.ts` + `submitIdeaTx`/`upvoteIdeaTx`/`transitionIdeaTx` + routes `/api/v2/lean/ideas` and `/api/v2/lean/ideas/[id]/action` — `SUBMITTED → IN_REVIEW → IMPLEMENTED` with additive upvotes.
+  - Gates: suite **608/608 across 24 suites**, `tsc --noEmit` clean (0 errors), zero `as any` casts, real-DB smoke `test:c9-9` **20/20 PASS** on `mfgmax_v2_test`. Census: 274 pages, 369 API routes, 214 models, 106 enums.
+
 - **C8-9 MAINTENANCE COMPLETION (v2, 2026-09-05):** closed the three workflow-critical C8 gaps —
   - **(1) Production tool wear (W11 core):** pure projection `src/lib/maintenance/productionWear.ts` (reuses C8 `recordCycles`/`consumeUnits`) + adapter `applyProductionToolWearTx` wired into shopfloor `applyJobAction` LOG_GOOD — cycle tools warn at threshold → RETIRE at max life; unit dies consume → NEEDS_REGRIND with the CONSUME alert firing exactly once on the crossing (no per-LOG_GOOD log spam). Audited `MACHINE:TOOL_WEAR`.
   - **(2) G-4 at measurement time:** `src/lib/quality/inspectionGate.ts` + `createInspectionTx` + route `/api/v2/quality/inspections` — expired/quarantined/retired gauges refuse to record an inspection (nothing persists); counter arithmetic validated (passed+failed ≤ total).

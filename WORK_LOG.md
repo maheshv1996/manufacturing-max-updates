@@ -90,6 +90,15 @@ Continue C6 (Commercial & Finance Core) on the `v2` branch: wire remaining C6-5 
 - Scope: employee master, attendance engine, leave state machine, payroll computation, session rotation, typed adapters + `/api/v2/people/*` routes
 - Next: execute C7-1 (people pure engines TDD)
 
+### C9 Completion — EHS, Lean & Continuous Improvement (2026-09-05)
+- **Engines (TDD, 17 tests):** `src/lib/ehs/safety.ts`, `src/lib/lean/{projects,fiveS,ideas}.ts` — safety incident machine with F10 closure evidence, P27 near-miss manager quota, DMAIC project sequential phase progression with F11 completion evidence, 5S scoring, continuous improvement idea pipeline.
+- **Adapters & Routes:** `src/lib/ehs/ehsTx.ts` + `src/lib/lean/leanTx.ts` ($transaction, audit, idempotent); 10 route handlers:
+  - `/api/v2/ehs/{incidents,incidents/[id]/action,quota}`
+  - `/api/v2/lean/{projects,projects/[id]/action,projects/[id]/rca,projects/[id]/action-items,five-s,ideas,ideas/[id]/action}`
+- **Real-DB Smoke `npm run test:c9-9` (CI-wired): 20/20 PASS** on `mfgmax_v2_test` — incident lifecycle + F10 fail-closed, P27 manager quota, DMAIC phases + hold/resume, RCA + action items + F11 fail-closed, 5S audit scores + bounds, idea lifecycle + upvoting, audit log coverage.
+- **Gates:** `npm test` **608/608 across 24 suites**; `tsc --noEmit` exit 0; `as any` scan clean; census verified (274 pages, 369 API routes, 214 models, 106 enums); static assets verified (0 missing).
+- **Docs:** C9 plan marked COMPLETE; HANDOVER, MEMORY, WORK_LOG, and LOOP_LOG updated.
+
 ### C8 Completion — Maintenance, Tooling & Calibration (2026-09-05)
 - **Engines (TDD, 57 tests):** `src/lib/maintenance/{jobState,pm,toolLife,calibration,spares,permit}.ts` — job machine with P28 RCA/countermeasure gates, PM due (calendar + run-hour), tool regrind lifecycle + cycle-tool warn/retire, G-4 calibration gates (auto-quarantine, issue/measure refusal), spares/kit (no negatives, reorder, shortfall), 3-leg permit-to-work.
 - **Adapter + routes:** `maintenanceTx.ts` + `/api/v2/maintenance/*` (9 route files) — engine-first, in-tx audits, per-leg permit authz (EHS→ehs.approve). PM run-hours computed from RUNNING telemetry spans.
