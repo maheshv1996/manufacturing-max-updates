@@ -1,9 +1,17 @@
 # System Memory & State
 
 The company brain. Every module listed below was verified against the codebase on this audit:
-274 pages, 374 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
+274 pages, 378 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
 
 ## Completed Modules (newest first)
+- **C11 AI COPILOT FRAMEWORK (v2, 2026-09-05):** completed C11 typed-core module —
+  - **(1) Seat Context & Scope Trimmer (AI-3):** `src/lib/copilot/seatContext.ts` + `getSeatContextBundleTx` + route `/api/v2/copilot/seat-context` — pure seat-context bundle assembler (identity, language EN/TE/HI, terminal context, active seats, effective level rank, effective scope, acting coverage, reporting chain, plant context, and approval workload). Pure scope trimmer (`trimDataByScope`) filters record collections (`SELF`, `TEAM`, `UNIT`, `PLANT`, `ALL`) before data reaches any model. Pure tool authorization gate (`canInvokeTool`) checks permission key and level rank.
+  - **(2) Task Router & Hardware Tiering (AI-1):** `src/lib/copilot/taskRouter.ts` — hardware tier hierarchy (`TIER_A` -> `TIER_B` -> `TIER_C` -> `TIER_D`), task catalog mapping minimum tier requirements and fallback templates, automatic graceful degradation to Tier A with notification banner when model is offline or insufficient, multilingual system prompt generator with JSON seat facts injection, and sliding-window rate limiter.
+  - **(3) Tool Registry & Pure Formatters:** `src/lib/copilot/toolRegistry.ts` + `executeCopilotTaskTx` + route `/api/v2/copilot/chat` — authoritative tool catalog (`summarizeRecord`, `explainReadiness`, `draft8D`, `draftNcr`, `draftComplaintReply`, `draftIncidentNarrative`, `prepareApproval`, `proposeOverride`, `proposeRecordEdit`), pure explainers (readiness gates, multi-gate blockers), and draft builders with G-3 evidence enforcement.
+  - **(4) Approval Broker & Guardrails Engine (AI-2):** `src/lib/copilot/approvalBroker.ts` + `submitAiProposalTx`/`decideAiProposalTx` + routes `/api/v2/copilot/proposals` and `/api/v2/copilot/proposals/[id]/action` — validates guardrails G-1 through G-6 (FAI required, quality hold point signoff, 8D D8 closure evidence, calibration validity, ECO effectivity, and separation of duties / self-approval blockage). Formats tamper-evident in-tx audit payload (`initiator: AI (model, requestId)`, `approver: <seat>`).
+  - **(5) Deterministic Fusion (Principle 7):** `src/lib/copilot/fusion.ts` — pure deterministic fusion locking all costs, margins, OEE %, balances, and SLA hours to engine outputs; detects and overrides hallucinated numbers with authoritative engine data.
+  - Gates: suite **637/637 across 28 suites** (17 new copilot tests), `tsc --noEmit` clean (0 errors), zero `as any` casts, real-DB smoke `test:c11-11` **11/11 PASS** on `mfgmax_v2_test`. Census: 274 pages, 378 API routes, 214 models, 106 enums.
+
 - **C10 REPORTS, DIGEST & PRINT CENTER (v2, 2026-09-05):** completed C10 typed-core module —
   - **(1) Morning Digest & Anomaly Engine:** `src/lib/reports/digest.ts` + `getMorningDigestTx` + route `/api/v2/reports/digest` — timezone-aware (`plantTz` UTC+05:30) midnight-pinned calculations for plant/machine OEE (availability, performance, quality), previous-day delta, best/worst machine rankings, and automated overnight SLA breach detector (24h complaint ACK, 10d 8D CAPA, low stock below minStock, and critical safety incidents).
   - **(2) Production Register:** `src/lib/reports/registers.ts` + `getProductionRegisterTx` + route `/api/v2/reports/production` — aggregates production & downtime logs per work order/machine, computes good/scrap/rework quantities, planned vs actual completion %, and scrap %.

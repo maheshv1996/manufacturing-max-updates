@@ -24,7 +24,8 @@
     "test:c8-8": "node --import tsx scripts/v2-smoke-maintenance.mjs",
     "test:c9-9": "node --import tsx scripts/v2-smoke-ehs-lean.mjs",
     "test:c10-10": "node --import tsx scripts/v2-smoke-reports.mjs",
-    "ci": "node scripts/verify-counts.mjs && tsc --noEmit && npm run build && node scripts/verify-build.js && npm run test:c6-6 && npm run test:c6-6:http && npm run test:c7-6 && npm run test:c8-8 && npm run test:c9-9 && npm run test:c10-10 && node --import tsx --test desktop/tests/*.test.js tests/*.test.ts"
+    "test:c11-11": "node --import tsx scripts/v2-smoke-copilot.mjs",
+    "ci": "node scripts/verify-counts.mjs && tsc --noEmit && npm run build && node scripts/verify-build.js && npm run test:c6-6 && npm run test:c6-6:http && npm run test:c7-6 && npm run test:c8-8 && npm run test:c9-9 && npm run test:c10-10 && npm run test:c11-11 && node --import tsx --test desktop/tests/*.test.js tests/*.test.ts"
   },
   "build": {
     "appId": "com.mfgmax.desktop",

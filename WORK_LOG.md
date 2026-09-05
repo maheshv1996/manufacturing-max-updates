@@ -2,6 +2,28 @@
 
 ## Date: 2026-09-05
 
+### 🎯 Cycle 11: AI Copilot Framework (DEPTH_05) — COMPLETE
+- **Pure Engines**:
+  - `src/lib/copilot/seatContext.ts`: Assembles `SeatContextBundle` (identity, preferred language EN/TE/HI, terminal context, active seats, effective level rank, effective scope, acting coverage, reporting chain, plant context, and approval workload). Pure scope trimmer (`trimDataByScope`) filters record collections (`SELF`, `TEAM`, `UNIT`, `PLANT`, `ALL`) before data reaches any model. Pure tool authorization gate (`canInvokeTool`) checks permission key and level rank.
+  - `src/lib/copilot/taskRouter.ts`: Hardware tiering (`TIER_A` -> `TIER_B` -> `TIER_C` -> `TIER_D`), task catalog with minimum tier requirements and fallback templates, automatic graceful degradation to Tier A with notification banner, multilingual prompt generation, and sliding-window rate limiter.
+  - `src/lib/copilot/toolRegistry.ts`: Authoritative tool catalog (`summarizeRecord`, `explainReadiness`, `draft8D`, `draftNcr`, `draftComplaintReply`, `draftIncidentNarrative`, `prepareApproval`, `proposeOverride`, `proposeRecordEdit`) and pure explainers/draft builders.
+  - `src/lib/copilot/approvalBroker.ts`: Guardrail enforcement G-1 to G-6 (FAI required, quality hold point signoff, 8D D8 closure evidence, calibration validity, ECO effectivity, and separation of duties / self-approval blockage). Formats in-tx audit payload with AI initiator and human approver.
+  - `src/lib/copilot/fusion.ts`: Principle 7 pure deterministic fusion locking all costs, margins, OEE %, balances, and SLA hours to engine outputs; detects and overrides hallucinated numbers with authoritative engine data.
+- **Typed Adapters**:
+  - `src/lib/copilot/copilotTx.ts`: `getSeatContextBundleTx`, `submitAiProposalTx`, `decideAiProposalTx`, `getPendingProposalsTx`, `executeCopilotTaskTx` (with in-tx `AuditLog` for proposals and decisions). Zero `as any` casts.
+- **API Routes**:
+  - `/api/v2/copilot/seat-context`
+  - `/api/v2/copilot/chat`
+  - `/api/v2/copilot/proposals`
+  - `/api/v2/copilot/proposals/[id]/action`
+- **Verification Gates**:
+  - TDD unit tests: `tests/copilotSeatContext.test.ts`, `tests/copilotTaskRouter.test.ts`, `tests/copilotApprovalBroker.test.ts`, `tests/copilotFusion.test.ts` (17 tests passing, full suite **637/637 passing across 28 suites**).
+  - Real-DB smoke test: `scripts/v2-smoke-copilot.mjs` (`npm run test:c11-11`) — **11/11 PASS** against `mfgmax_v2_test`.
+  - TypeScript compilation: `tsc --noEmit` exit 0.
+  - Census: synchronized to **274 pages, 378 API routes, 214 models, 106 enums**.
+
+---
+
 ### 🎯 Cycle 10: Reports, Digest & Print Center (F1/F12) — COMPLETE
 - **Pure Engines**:
   - `src/lib/reports/digest.ts`: Timezone-aware (`plantTz` UTC+05:30) executive morning briefing, OEE Availability/Performance/Quality math, delta vs previous period, best/worst machine ranking, and overnight SLA breach detection (24h complaint ACK, 10d 8D CAPA, low stock below minStock, critical safety incidents).

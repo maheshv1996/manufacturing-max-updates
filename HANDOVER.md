@@ -38,26 +38,31 @@ npm run dev          # http://localhost:3000
 | C8 | Maintenance, Tooling & Calibration | **Done** |
 | C9 | EHS, Lean & Continuous Improvement | **Done** |
 | C10 | Reports, Digest & Print Center | **Done** |
+| C11 | AI Copilot Framework | **Done** |
 
-## C10 Current State (2026-09-05) — COMPLETE
+## C11 Current State (2026-09-05) — COMPLETE
 
-- **Engines (TDD, 12 tests across 3 suites):**
-  - `src/lib/reports/digest.ts`: Timezone-aware (`plantTz` UTC+05:30) executive morning briefing, OEE Availability/Performance/Quality math, previous-day delta, plant/machine ranking, and automated overnight SLA breach detection (24h complaint ACK, 10d 8D CAPA, low stock, critical incidents).
-  - `src/lib/reports/registers.ts`: Production Register (good, scrap, rework, completion %, scrap %), Stock Valuation Register (integer paise valuation, reorder alerts), Job Profitability Register (revenue, material, labor, overhead, scrap penalty, gross profit paise, margin %, status), Supplier Scorecards (OTD %, quality acceptance %), Sales & GST Register.
-  - `src/lib/reports/printTraveler.ts`: Physical shopfloor job traveler data package, sequential routing steps, quality hold point flags (G-2), AS9102 FAI badge (G-1), material heat/mill cert traceability, inspection dimensions, and tamper-evident SHA-256 verification hash.
+- **Engines (TDD, 17 tests across 4 suites):**
+  - `src/lib/copilot/seatContext.ts`: Assembles `SeatContextBundle` (identity, preferred language EN/TE/HI, terminal context, active seats, effective level rank, effective scope, acting coverage, reporting chain, plant context, and approval workload). Pure scope trimmer (`SELF`, `TEAM`, `UNIT`, `PLANT`, `ALL`) running before any data reaches model contexts. Permission and level gating for tool invocations.
+  - `src/lib/copilot/taskRouter.ts`: Hardware tiering (`TIER_A` -> `TIER_B` -> `TIER_C` -> `TIER_D`), task catalog with minimum tier requirements and fallback templates, automatic graceful degradation to Tier A with notification banner, multilingual prompt generation, and sliding-window rate limiter.
+  - `src/lib/copilot/toolRegistry.ts`: Authoritative tool catalog (`summarizeRecord`, `explainReadiness`, `draft8D`, `draftNcr`, `draftComplaintReply`, `draftIncidentNarrative`, `prepareApproval`, `proposeOverride`, `proposeRecordEdit`) and pure explainers/draft builders.
+  - `src/lib/copilot/approvalBroker.ts`: Guardrail enforcement G-1 to G-6 (FAI required, quality hold point signoff, 8D D8 closure evidence, calibration validity, ECO effectivity, and separation of duties / self-approval blockage). Formats in-tx audit payload with AI initiator and human approver.
+  - `src/lib/copilot/fusion.ts`: Principle 7 pure deterministic fusion locking all costs, margins, OEE %, balances, and SLA hours to engine outputs; detects and overrides hallucinated numbers with authoritative engine data.
 - **Adapters:**
-  - `src/lib/reports/reportsTx.ts`: `getMorningDigestTx`, `getProductionRegisterTx`, `getStockValuationRegisterTx`, `getJobProfitabilityRegisterTx`, `getJobTravelerPrintDataTx` (with in-tx `AuditLog` `EXPORT_TRAVELER`).
+  - `src/lib/copilot/copilotTx.ts`: `getSeatContextBundleTx`, `submitAiProposalTx`, `decideAiProposalTx`, `getPendingProposalsTx`, `executeCopilotTaskTx` (with in-tx `AuditLog` for proposals and decisions).
 - **Routes:**
-  - `/api/v2/reports/digest`
-  - `/api/v2/reports/production`
-  - `/api/v2/reports/stock-valuation`
-  - `/api/v2/reports/job-profitability`
-  - `/api/v2/reports/traveler/[id]`
+  - `/api/v2/copilot/seat-context`
+  - `/api/v2/copilot/chat`
+  - `/api/v2/copilot/proposals`
+  - `/api/v2/copilot/proposals/[id]/action`
 - **Verification:**
-  - Unit tests: **620/620 pass across 24 suites**.
-  - Real-DB smoke: `scripts/v2-smoke-reports.mjs` (`npm run test:c10-10`) — **11/11 PASS** on `mfgmax_v2_test`.
+  - Unit tests: **637/637 pass across 28 suites** (17 new copilot tests).
+  - Real-DB smoke: `scripts/v2-smoke-copilot.mjs` (`npm run test:c11-11`) — **11/11 PASS** on `mfgmax_v2_test`.
   - TypeScript: `tsc --noEmit` exit 0, zero `as any` casts.
-  - Census: synchronized to 374 API routes (`scripts/verify-counts.mjs` passes).
+  - Census: synchronized to 378 API routes (`scripts/verify-counts.mjs` passes).
+
+## Next Up
+- **C12: System, Admin & Config UI (Custom entities, org-chart/approval-chain admin)** per `DEPTH_02 §7`.
 
 - **Engines (TDD, 17 tests across 5 suites):**
   - `src/lib/ehs/safety.ts`: Safety incident machine (`OPEN → IN_INVESTIGATION → CLOSED`), F10 closure evidence guard (`rootCause` or `fiveWhyReason` AND `actionTaken`), P27 near-miss observation quota engine.
