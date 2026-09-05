@@ -7,6 +7,7 @@ import type { GlAccountType, GlAccountGroup, GlNormalBalance } from "./glCore";
 
 export interface GlAccountLike {
   code: string;
+  name?: string;
   type: GlAccountType;
   group: GlAccountGroup;
   normalBalance: GlNormalBalance;

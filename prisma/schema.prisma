@@ -2035,12 +2035,16 @@ enum LeaveType {
   CL
   SL
   PL
+  MATERNITY
+  PATERNITY
+  COMP_OFF
 }
 
 enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 model LeaveRequest {

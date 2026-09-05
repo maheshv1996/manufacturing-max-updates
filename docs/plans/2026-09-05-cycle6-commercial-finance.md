@@ -4,7 +4,7 @@
 
 **Goal (master plan C6):** Rebuild the commercial & finance **state core** from DEPTH_03 F6/F7, DEPTH_04 W1/W8/W9 — retiring the primary risk: **paise money end-to-end, balanced GL, quote→SO→dispatch→invoice integrity**. Pure engines first, then typed adapter + `/api/v2/commercial/*` + `/api/v2/finance/*` routes with a real-DB smoke.
 
-**Status (2026-09-05): PLANNED — implementation starts now.**
+**Status (2026-09-05): COMPLETE — C6-6 verification gate passed.**
 
 ---
 
@@ -130,11 +130,26 @@
 
 ---
 
-### Task C6-6: Cycle 6 verification gate
-1. All new suites green; whole repo `tsc --noEmit` exit 0; `grep -rn "as any" src/lib/commercial src/app/api/v2/commercial src/lib/finance src/app/api/v2/finance` → none.
-2. Parity checklist vs DEPTH_03 F6/F7 + DEPTH_04 W1/W8/W9 state machines + guardrails (paise integrity, balanced GL, reversals, audit).
-3. Real-DB smoke on scratch `mfgmax_v2_test`: create quote → SENT → WON → convert to SO → CONFIRMED → IN_PROGRESS → dispatch → invoice → payment; GL journal balanced; trial balance matches.
-4. Mark this plan COMPLETE with evidence + boundaries.
+### Task C6-6: Cycle 6 verification gate ✅ COMPLETE (2026-09-05)
+1. **TypeScript**: `tsc --noEmit` exit 0; `npm test` 479/479 passing.
+2. **`as any` scan**: clean across `src/lib/commercial`, `src/lib/finance`, `src/app/api/v2/commercial`, `src/app/api/v2/finance`.
+3. **Real-DB smoke** on `mfgmax_v2_test`:
+   - **Adapter smoke** (`npm run test:c6-6`): **11/11 pass**
+     - createQuotation → transitionQuotation SEND
+     - createSalesOrder → transitionSalesOrder CONFIRM
+     - createInvoice → transitionInvoice SEND → transitionInvoice MARK_PARTIAL
+     - createPayment
+     - postJournalEntryTx → reverseJournalEntryTx
+     - reconcileBankTx
+   - **HTTP smoke** (`npm run test:c6-6:http`): **10/10 pass**
+     - Full Next.js dev server against `mfgmax_v2_test`
+     - Login helper obtains `app_session` cookie via `/api/auth/login`
+     - Seeded Product, Customer, GLAccount
+     - Exercised `/api/v2/commercial/*` and `/api/v2/finance/*` routes end-to-end
+4. **CI wired**: `package.json` `ci` script now runs `test:c6-6` + `test:c6-6:http`.
+5. **Boundaries**:
+   - `reconcileBankTx` returns `ReconcileResult` without persisting `GstReconRun` (Option C).
+   - Dispatch transition and payment transition routes not yet exposed (non-blocking).
 
 ---
 

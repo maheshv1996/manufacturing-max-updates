@@ -3,7 +3,7 @@
  * Pure functions; no DB.
  */
 
-import { toPaise, fromPaise } from "../money";
+import { fromPaise } from "../money";
 
 export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "PARTIAL" | "OVERDUE";
 

@@ -21,6 +21,7 @@ import { runIdempotent } from "../core/integrityDb";
 import { buildAuditEvent, type AuditEventInput } from "../core/audit";
 import { transitionWoStatus } from "./woState";
 import { checkFixtureGate } from "../fixtureGate";
+import { applyProductionToolWearInTx } from "../maintenance/maintenanceTx";
 
 export type JobActionName =
   | "START_JOB"
@@ -167,12 +168,13 @@ export async function applyJobAction(db: PrismaClient, input: JobActionInput): P
         const workOrderId = String(input.workOrderId ?? "").trim();
         const machineId = String(input.machineId ?? "").trim();
         const qty = input.qty;
-        if (!workOrderId || !machineId || !Number.isInteger(qty) || (qty ?? 0) <= 0) {
+        if (!workOrderId || !machineId || typeof qty !== "number" || !Number.isInteger(qty) || qty <= 0) {
           throw validation("workOrderId, machineId and a positive integer qty are required");
         }
         if (input.action === "LOG_SCRAP" && !(input.defectCode?.trim() ?? "")) {
           throw validation("defectCode is required for LOG_SCRAP");
-        }          await db.$transaction(async (tx) => {
+        }
+        await db.$transaction(async (tx) => {
           await assertNoStateConflict(tx, machineId, input.clientTimestamp);
           if (input.action === "LOG_GOOD") await assertFaiGate(tx, workOrderId);
 
@@ -187,6 +189,17 @@ export async function applyJobAction(db: PrismaClient, input: JobActionInput): P
 
           if (input.action === "LOG_GOOD") {
             await tx.productionLog.update({ where: { id: log.id }, data: { goodQuantity: { increment: qty } } });
+            // W11 (C8-9a): production wears the machine's tooling — cycle-counted
+            // Tools advance via the engine (warn → RETIRE at max), unit-life
+            // MaintenanceTools consume rated life (crossing → NEEDS_REGRIND). This
+            // runs inside the same transaction so a worn tool can never be missed.
+            await applyProductionToolWearInTx(
+              tx,
+              { id: input.actorId, name: input.actorName },
+              machineId,
+              qty,
+              { workOrderId },
+            );
           } else if (input.action === "LOG_SCRAP") {
             await tx.productionLog.update({ where: { id: log.id }, data: { scrapQuantity: { increment: qty } } });
             await tx.scrapQuarantine.create({

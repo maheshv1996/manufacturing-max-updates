@@ -1,5 +1,112 @@
 # Engineering Work Log & Session History
 
+## Date: 2026-09-05
+
+### 🎯 Session Objectives
+Continue C6 (Commercial & Finance Core) on the `v2` branch: wire remaining C6-5 adapters not yet exposed via routes, run verification gates, create C7 plan, and update handover documentation.
+
+---
+
+### 🚀 Key Accomplishments & Deliverables
+
+#### C6-5 Typed Transaction Adapters & Routes
+- Created `src/lib/commercial/commercialTx.ts`:
+  - `createQuotation`, `transitionQuotationTx`
+  - `createSalesOrder`, `transitionSalesOrderTx`
+  - `createDispatch`
+  - `createInvoice`, `transitionInvoiceTx`
+  - `createPayment`
+  - All wrapped in `Prisma.$transaction` + `runIdempotent` + in-tx `auditLog.create`
+  - Enum mapping between Prisma DB enums and pure-engine enums (SalesOrder, Invoice)
+- Created `src/lib/finance/financeTx.ts`:
+  - `postJournalEntryTx` — GL posting with balanced entry validation
+  - `reverseJournalEntryTx` — reversal with mirrored lines
+  - `reconcileBankTx` — bank reconciliation (persistence TBD)
+  - `postDepreciationTx` — fixed asset depreciation
+- Created `/api/v2/commercial` routes:
+  - `quotations`, `quotations/[id]/action`
+  - `sales-orders`, `sales-orders/[id]/action`
+  - `invoices`, `invoices/[id]/action`
+  - `payments`
+- Created `/api/v2/finance` routes:
+  - `journal-entries`, `journal-entries/[id]/action`
+
+#### TypeScript Error Fixes
+- Fixed 3 pre-existing TS errors in C6 engine files
+- Fixed 7+ TS errors in new C6-5 adapters/routes:
+  - Unused imports cleaned up
+  - `JournalLine` type aligned to Prisma shape in `financeTx.ts`
+  - `period` made optional in `PostJournalEntryInput`
+  - Replaced all `as any` casts with typed Prisma enums (`Prisma.SalesOrderStatus`, `Prisma.InvoiceStatus`)
+
+#### Verification
+- `tsc --noEmit`: **0 errors**
+- `npm test`: **479/479 passing**
+- No `as any` casts remaining in `src/lib/commercial/` or `src/lib/finance/`
+
+---
+
+### ⚠️ Open Issues / Next Agent Actions
+
+1. **Bank reconciliation persistence decision** — `reconcileBankTx` currently writes to `GstReconRun` (wrong model). See HANDOVER.md for options A/B/C.
+2. **C6-6 verification gate** — run `grep -rn "as any"` scan across all C6 files, then real-DB smoke on `mfgmax_v2_test`.
+3. **Remaining C6-5 adapters** — dispatch transition, payment transition routes not yet exposed.
+4. **C7 planning** — after C6 passes verification.
+
+---
+
+### 🧪 Verification & Quality Summary
+- **TypeScript Compilation**: `tsc --noEmit` = 0 errors
+- **Test Suite**: 479/479 passing
+- **Branch**: `v2`
+
+---
+
+### C6-6 Verification Gate (2026-09-05)
+- **Adapter smoke test** (`npm run test:c6-6`): **11/11 pass**
+  - createQuotation, transitionQuotation SEND
+  - createSalesOrder, transitionSalesOrder CONFIRM
+  - createInvoice, transitionInvoice SEND, transitionInvoice MARK_PARTIAL
+  - createPayment
+  - postJournalEntryTx, reverseJournalEntryTx
+  - reconcileBankTx
+- **HTTP smoke test** (`npm run test:c6-6:http`): **10/10 pass**
+  - Full Next.js dev server spun up against `mfgmax_v2_test`
+  - Login helper obtained `app_session` cookie via `/api/auth/login`
+  - Seeded prerequisite records: Product, Customer, GLAccount
+  - Exercised `/api/v2/commercial/*` and `/api/v2/finance/*` routes end-to-end
+- **`as any` scan**: clean across `src/lib/commercial`, `src/lib/finance`, `src/app/api/v2/commercial`, `src/app/api/v2/finance`
+- **npm ci pipeline**: updated to include `test:c6-6` and `test:c6-6:http`
+
+### C6 Completion Summary
+- **Adapter smoke**: 11/11 pass
+- **HTTP smoke**: 10/10 pass against `mfgmax_v2_test`
+- **TypeScript**: `tsc --noEmit` exit 0; `npm test` all green
+- **`as any` scan**: clean across `src/lib/commercial`, `src/lib/finance`, `src/app/api/v2/commercial`, `src/app/api/v2/finance`
+- **CI wired**: `test:c6-6` and `test:c6-6:http` added to `package.json` `ci` script
+
+### C7 Start — People & Payroll Core
+- Created C7 plan: `docs/plans/2026-09-05-cycle7-people-payroll.md`
+- Scope: employee master, attendance engine, leave state machine, payroll computation, session rotation, typed adapters + `/api/v2/people/*` routes
+- Next: execute C7-1 (people pure engines TDD)
+
+### C8 Completion — Maintenance, Tooling & Calibration (2026-09-05)
+- **Engines (TDD, 57 tests):** `src/lib/maintenance/{jobState,pm,toolLife,calibration,spares,permit}.ts` — job machine with P28 RCA/countermeasure gates, PM due (calendar + run-hour), tool regrind lifecycle + cycle-tool warn/retire, G-4 calibration gates (auto-quarantine, issue/measure refusal), spares/kit (no negatives, reorder, shortfall), 3-leg permit-to-work.
+- **Adapter + routes:** `maintenanceTx.ts` + `/api/v2/maintenance/*` (9 route files) — engine-first, in-tx audits, per-leg permit authz (EHS→ehs.approve). PM run-hours computed from RUNNING telemetry spans.
+- **Real-DB smoke `npm run test:c8-8` (CI-wired): 15/15** on `mfgmax_v2_test` — full lifecycle incl. blocked paths (FINDINGS_REQUIRED, ROOT_CAUSE_REQUIRED, G-4 EXPIRED, ALREADY_ISSUED, INSUFFICIENT_STOCK, KIT_SHORTFALL, SCRAP_REQUIRED) + 16 audit types.
+- **Gate:** `npm test` **569/569 across 28 suites**; tsc exit 0; `as any` scan clean; verify-counts synced to 357 API routes.
+- **Docs:** C8 plan COMPLETE; DEPTH_03 F9 + DEPTH_04 W11 notes; HANDOVER updated.
+
+### C7 Completion — People & Payroll Core (2026-09-05)
+- **Defect sweep:** worktree had failed to compile (peopleTx unused import + `CANCELLED` outside `LeaveStatus` + phantom `row.lopDays`; leaves-route enum mismatch; unused route param). All fixed: schema `LeaveStatus` += CANCELLED, `LeaveType` += MATERNITY/PATERNITY/COMP_OFF; typed API→Prisma leave-type map; engine now computes `lopDays` (30 − present − late) and the payslip persists both LOP fields per the schema formula. Removed stray compile artifacts `src/lib/people/leaves.js`, `src/lib/core/result.js`.
+- **C7-4 session rotation:** `src/lib/sessionRotation.ts` built on the REAL mechanism (JWT `sess` epoch claim + proxy DB re-check): `isSessionExpired` (policy), `needsRotation` (epoch staleness — mismatch refuses refresh, re-login), `rotateSession`/`refreshSession` (reissue same claims, fresh expiry, signed via existing jose signer). 12 TDD tests incl. JWT round-trip. Additive — zero changes to existing auth flows.
+- **Smoke-found adapter bugs fixed:** payslip FK used `employeeCode` instead of the auto-created `SalaryStructure.id` (FK failure); payroll run route queried `AttendanceLog.userId` with employee codes instead of resolving `User.employeeNumber` (attendance silently always empty); attendance route hardcoded `shiftId: "SHIFT-01"`.
+- **C7-6 real-DB smoke:** `scripts/v2-smoke-people.mjs` + `npm run test:c7-6` (CI-wired) — 14/14 green on `mfgmax_v2_test`.
+- **Gate:** `npm test` **512/512 across 26 suites**; tsc exit 0; `as any` scan clean (people lib + people routes + sessionRotation); verify-counts synced to 348 API routes.
+- **Docs:** C7 plan marked COMPLETE; DEPTH_03 F8 + DEPTH_04 W10 carry v2 status notes; HANDOVER cycle table updated.
+
+---
+
 ## Date: 2026-08-28
 
 ### 🎯 Session Objectives
@@ -25,6 +132,32 @@ Develop and expand the Smart Manufacturing Enterprise MES/ERP platform into a co
 * 7-stage automated factory integration test runner executing complete manufacturing lifecycles across database records:
   $$\text{BOM Explosion} \longrightarrow \text{MRP Requisition} \longrightarrow \text{Work Order Dispatch} \longrightarrow \text{Kiosk Clocking} \longrightarrow \text{Subcontracting DC} \longrightarrow \text{AS9102 FAI} \longrightarrow \text{Job Costing}$$
 * Sub-20ms transactional speed with 100% health score verification.
+
+---
+
+### C8-9 — Maintenance Completion Wave (2026-09-05)
+
+#### Motivation
+C8's cycle gate passed, but a DEPTH_03 F9 / DEPTH_04 W11 audit showed three workflow-critical gaps still open: tool-life decrement was not wired into the v2 production-logging path, G-4 (expired instrument) was enforced only at crib issue — never at measurement time, and machine DOWN/FAULT events did not auto-create BREAKDOWN jobs. Delivered as the C8-9 completion wave per `docs/plans/2026-09-05-cycle8-completion.md`.
+
+#### Engines (pure, TDD)
+- `src/lib/maintenance/productionWear.ts` — LOG_GOOD wear projection reusing C8 `recordCycles`/`consumeUnits`; `crossedThreshold` fires exactly once on the NEEDS_REGRIND/SCRAPPED crossing (no per-LOG_GOOD CONSUME spam; SCRAPPED unreachable — skipped upstream).
+- `src/lib/quality/inspectionGate.ts` — G-4 measurement gate + counter arithmetic validation (passed+failed ≤ total).
+- `src/lib/maintenance/breakdownScan.ts` — detect / create / duplicate-suppress / cooldown for machine FAULT → BREAKDOWN.
+
+#### Adapters & routes
+- `applyProductionToolWearTx` (maintenanceTx) wired into `applyJobAction` LOG_GOOD — audited `MACHINE:TOOL_WEAR`.
+- `createInspectionTx` (qualityTx) + `POST /api/v2/quality/inspections` — audited `QualityInspection:INSPECTION_CREATED`.
+- `scanBreakdownsTx` + `POST /api/v2/maintenance/breakdowns/scan` — audited `MaintenanceJob:BREAKDOWN_AUTO_CREATED`.
+
+#### Verification
+- `npm test` — 535/535 across 24 suites (new: maintenanceProductionToolWear 9 tests incl. crossing-once, qualityInspectionGate, breakdownScan).
+- `tsc --noEmit` — 0 errors (2 transient self-introduced errors fixed cast-free: no-overlap enum comparison in productionWear; `qty` undefined-narrowing in applyJobAction).
+- `as any` scan — 0 hits in all touched dirs.
+- Real-DB smoke `npm run test:c8-8` — extended 15→20 scenarios, **20/20** on `mfgmax_v2_test` (smoke-run fixes: real enum values `GAUGE`/`OK`, dropped invalid `createdAt` orderBy on MaintenanceJob).
+
+#### Docs synced
+DEPTH_03 F9, DEPTH_04 W11, HANDOVER (C8-9 section), cycle8-completion plan (COMPLETE), MEMORY (top entry + counts), LOOP_LOG (iteration 12).
 
 #### 5. Shopfloor AI Copilot & Factory Intelligence (`/ai/assistant`)
 * Connected Generative AI query processor to live database state (Machines, Work Orders, Quality, Alarms, Stock).

@@ -18,7 +18,11 @@
     "desktop:dev": "electron .",
     "dist": "next build && node scripts/verify-build.js && node scripts/build-desktop-resources.js && node scripts/harden-desktop.js && electron-builder --win nsis",
     "test": "node --import tsx --test desktop/tests/*.test.js tests/*.test.ts",
-    "ci": "node scripts/verify-counts.mjs && tsc --noEmit && npm run build && node scripts/verify-build.js && node --import tsx --test desktop/tests/*.test.js tests/*.test.ts"
+    "test:c6-6": "node --import tsx scripts/v2-smoke-adapters.mjs",
+    "test:c6-6:http": "node --import tsx scripts/v2-smoke-routes.mjs",
+    "test:c7-6": "node --import tsx scripts/v2-smoke-people.mjs",
+    "test:c8-8": "node --import tsx scripts/v2-smoke-maintenance.mjs",
+    "ci": "node scripts/verify-counts.mjs && tsc --noEmit && npm run build && node scripts/verify-build.js && npm run test:c6-6 && npm run test:c6-6:http && npm run test:c7-6 && npm run test:c8-8 && node --import tsx --test desktop/tests/*.test.js tests/*.test.ts"
   },
   "build": {
     "appId": "com.mfgmax.desktop",

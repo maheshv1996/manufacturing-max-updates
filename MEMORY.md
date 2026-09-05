@@ -1,9 +1,14 @@
 # System Memory & State
 
 The company brain. Every module listed below was verified against the codebase on this audit:
-274 pages, 329 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
+274 pages, 359 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
 
 ## Completed Modules (newest first)
+- **C8-9 MAINTENANCE COMPLETION (v2, 2026-09-05):** closed the three workflow-critical C8 gaps —
+  - **(1) Production tool wear (W11 core):** pure projection `src/lib/maintenance/productionWear.ts` (reuses C8 `recordCycles`/`consumeUnits`) + adapter `applyProductionToolWearTx` wired into shopfloor `applyJobAction` LOG_GOOD — cycle tools warn at threshold → RETIRE at max life; unit dies consume → NEEDS_REGRIND with the CONSUME alert firing exactly once on the crossing (no per-LOG_GOOD log spam). Audited `MACHINE:TOOL_WEAR`.
+  - **(2) G-4 at measurement time:** `src/lib/quality/inspectionGate.ts` + `createInspectionTx` + route `/api/v2/quality/inspections` — expired/quarantined/retired gauges refuse to record an inspection (nothing persists); counter arithmetic validated (passed+failed ≤ total).
+  - **(3) Machine FAULT → BREAKDOWN auto-scan:** `src/lib/maintenance/breakdownScan.ts` + `scanBreakdownsTx` + route `/api/v2/maintenance/breakdowns/scan` — SCAN (read-only candidates) vs SCAN_AND_CREATE; duplicate suppression while a BREAKDOWN job is open; `cooldownMinutes` guards re-open after closure. Audited `MaintenanceJob:BREAKDOWN_AUTO_CREATED`.
+  - Gates: suite **535/535 across 24 suites**, tsc 0, cast scan clean, real-DB smoke `test:c8-8` extended **20/20** on `mfgmax_v2_test` (wear thresholds/retire/crossing-once, G-4 refusal + valid inspection, FAULT detect→create→suppress→cooldown→re-open, audit coverage). Plan: `docs/plans/2026-09-05-cycle8-completion.md`.
 
 - **FULL-STACK SOFTWARE HARDENING (security, a11y, memory, desktop, 2026-09-05):**
   - **(1) Modern Web Security (`modern-web-guidance`)**: `next.config.ts` configured with `poweredByHeader: false` (removes Next.js framework fingerprint) and production-grade HTTP security headers on `/:path*` (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Cross-Origin-Opener-Policy: same-origin-allow-popups`, `Cross-Origin-Resource-Policy: same-origin`, `Strict-Transport-Security: max-age=31536000`). `/api/auth/logout` sets `Clear-Site-Data: "cookies", "storage"`.

@@ -100,6 +100,6 @@ test("journalEntryToRupees: converts paise to rupees", () => {
     { accountCode: "4010", side: "CREDIT", amount: 100_00 },
   ]);
   const rupees = journalEntryToRupees(entry);
-  assert.equal(rupees.lines[0].amount, 1);
-  assert.equal(rupees.lines[1].amount, 1);
+  assert.equal(rupees.lines[0].amount, 100);
+  assert.equal(rupees.lines[1].amount, 100);
 });

@@ -1,65 +1,118 @@
 # Manufacturing Max — Handover
 
-**Stack:** Next.js 16.3 standalone + Prisma 7.9 + embedded Postgres (`pgbin`) / `file:app.db` fallback, Electron `nsis` (`MfgMaxData/`, `backups/`, `logs/`).
+**Branch:** `v2` (DEPTH_04 typed-core rebuild)
+**Last Updated:** 2026-09-05
 
 ## Run
 ```bash
 npm install
-npx prisma db push   # adds SequenceCounter + IdempotencyKey (PR1)
+npx prisma db push
 npx prisma db seed
 npm run dev          # http://localhost:3000
-npm run dist         # → dist/ManufacturingMax-Setup-1.0.0.exe (verify-build + harden-desktop + bytenode)
 ```
-Desktop: `desktop/electron/main.js` → `DesktopApp` (`launcher.js`) handles `SESSION_SECRET` (`MfgMaxData/secrets.json`), `embeddedDb` init, `migrate deploy`, `seedIfEmpty`, `watchdog` (server+db), `scheduleDailyBackup 20:00`, `scheduleIdempotencyPrune 02:15` (`desktop/lib/pruneIdempotency.js` via `pg`/`node:sqlite`, 7-day TTL), `scheduleLedgerIntegrity 02:30` (`desktop/lib/ledgerIntegrity.js` POSTs `/api/finance/gl-integrity` with the control-token Bearer; the proxy admits that one endpoint via `MFGMAX_CONTROL_TOKEN` mirroring the kiosk gate — every other `/api/*` still needs a session).
 
-## Auth / Proxy
-`src/proxy.ts:15` public: `/terminal`, `/track`, `/api/auth/*`, `/api/health`, `/api/setup`, `/landing`, `/showroom`, `/ops/andon`. Kiosk APIs (`/api/operator`, `/api/terminal`, `/api/attendance/clock`, `/api/ipcc`, `/api/hold-points`) public but `MFGMAX_KIOSK_TOKEN` gate if set (`x-kiosk-token`). Others require `app_session` JWT (`jose`) + `sessionEpoch` re-check + `permissionForPath` → `can()` (`src/lib/permissions.ts:99` phantom manager heuristic removed — must list `ops.view` etc explicitly). `plantScope.ts:6` now fail-closed (`throw` if no `app_session`).
+## v2 Patterns (must follow)
+- Pure engines in `src/lib/*` — no DB calls inside engine files
+- Typed `Result<T,E>` from `src/lib/core/result.ts`
+- `AppError` envelope with `code`, `message`, `details`
+- Zod validation at API edges via `parseOr400`
+- Prisma `$transaction` for all mutations
+- `buildAuditEvent` + in-tx `auditLog.create`
+- `runIdempotent` + `IdempotencyKey` for client-supplied dedupe
+- Money in **integer paise** end-to-end (`toPaise` / `fromPaise` / `formatRupees`)
+- Enum mapping helpers because **Prisma schema enums differ from engine enums**:
+  - `SalesOrderStatus`: DB = `DRAFT/CONFIRMED/IN_PRODUCTION/PARTIALLY_DISPATCHED/DISPATCHED/INVOICED/CANCELLED`; engine = `DRAFT/CONFIRMED/IN_PROGRESS/COMPLETED/CANCELLED`
+  - `InvoiceStatus`: DB = `UNPAID/PARTIAL/PAID`; engine = `DRAFT/SENT/PARTIAL/PAID/OVERDUE`
+  - `Payment` model has **no `status` field**; payment status is returned in adapter response only
 
-## Data Integrity (PR1-4 + ledger)
-- Money is **integer paise** end-to-end (`src/lib/money.ts` row-mappers): GL (`JournalEntry/JournalLine` debit+credit paise, `totalDebit/totalCredit`), and documents (Invoice, Payment, SupplierInvoice, ExpenseClaim, TreasuryTransaction, BankStatementEntry, Customer.creditLimit, BudgetLine). Rupee contract at every API edge; `Float` columns hold exact integers by convention.
-- Ledger provenance: `GlIntegrityRun` records every backfill execution and integrity scan. `src/lib/glBackfill.ts` replays missing docs (invoices/payments/expense/payroll) idempotently; `src/lib/glIntegrity.ts` scans for posted-but-unbalanced entries + unposted docs; `/finance/gl-backfill` workbench + finance-hub banner surface both; the 02:30 desktop sweep keeps the record fresh daily.
-- `src/app/api/register/[entity]` maps money models (`MONEY_MODEL_BY_ENTITY`) both ways, GET and POST.
+## Completed Cycles
+| Cycle | Module | Status |
+|-------|--------|--------|
+| C1 | Typed Core + Org Model | Done |
+| C2 | Shop Floor / MES | Done |
+| C3 | Quality / Compliance | Done |
+| C4 | Change Control / ECO | Done |
+| C5 | Supply Chain / Inventory / Purchasing | Done |
+| C6 | Commercial & Finance Core | **Done** |
+| C7 | People & Payroll Core | **Done** |
+| C8 | Maintenance, Tooling & Calibration | **Done** |
 
-## Data Integrity (PR1-4)
-- `src/lib/sequence.ts` `nextSequenceTx` via `SequenceCounter` (no `count()+1` race) used in `purchasing:117`, `grn:203`, `invoices`, `quotations`, `vouchers`, `ncr`.
-- `src/lib/idempotency.ts` `IdempotencyKey` (`clientId @unique`) replaces in-memory `Set` in `operator/action:10`, `attendance/clock:5`, `inventory`, `grn`, `purchasing`, `invoices`, `quotations`, `vouchers`. Offline queue (`lib/offlineSync.ts:290` `X-Client-ID`) dedupes correctly over watchdog restarts. Pruned daily `02:15` via launcher + `src/instrumentation.ts:15` when `DESKTOP_MODE`.
-- `inventory/route.ts:165` `OUT` now `updateMany where gte` atomic; `grn` + `purchasing RECEIVE` + `operator LOG_GOOD/LOG_SCRAP` + `invoices` + `quotations` + `vouchers` all `$transaction`.
-- `costingEngine.ts:194` no longer fabricates `planned*0.25` for `IN_PROGRESS`; `mrpEngine.ts:107` cycle guard `visited Set` + `MAX_BOM_DEPTH 20` + lot truncation note.
-- `upload/route.ts:7` no longer `fs.writeFile` to `public/uploads` (read-only on Vercel, lost on dump) → data URI in `Setting.branding.logoUrl` via `prisma.setting.upsert`, `ALLOWED_LOGO_TYPES` + `maxFileUploadMb` + `system.edit` gate.
+## C6 Current State (2026-09-05)
 
-## Validation / Errors
-`src/lib/validate.ts` `parseOr400` + `zod@4.4.3` on `purchasing CREATE_PO`, `invoices`, `quotations`, `vouchers`; 150 POST routes got minimal `typeof body` guard via `scripts/harden-api-routes.mjs` (96 `500` leaks stripped `details: error.message` → `"Internal Server Error"`). Remaining per-field schemas can follow same pattern.
+### Completed
+- Fixed 3 pre-existing TS errors in C6 engine files
+- `npm test` passes: **479/479**
+- C6-5 typed transaction adapters created:
+  - `src/lib/commercial/commercialTx.ts` — quotation, SO, dispatch, invoice, payment adapters
+  - `src/lib/finance/financeTx.ts` — journal posting, reversal, treasury, fixed assets
+- `/api/v2/commercial` routes:
+  - `quotations` (create)
+  - `quotations/[id]/action` (transition)
+  - `sales-orders` (create)
+  - `sales-orders/[id]/action` (transition)
+  - `invoices` (create)
+  - `invoices/[id]/action` (transition)
+  - `payments` (create)
+- `/api/v2/finance` routes:
+  - `journal-entries` (post)
+  - `journal-entries/[id]/action` (reverse)
 
-## Pages
-`src/app/page.tsx:7` gateway → `onboarding` if `!onboardingComplete`; `onboarding/page.tsx:8` now `force-dynamic` + first-run anonymous allow (`!complete && userCount===0`). 51 server pages added `force-dynamic` (`scripts/add-dynamic.mjs`). `PageHeader` (`src/app/components/shared/PageHeader.tsx:33` `iconTone` map) exemplars: `commercial/quotations amber`, `people/attendance violet`, `quality/fqc emerald` — pattern for remaining 31.
+### TS Errors Fixed This Session
+- Removed unused `toPaise` in `src/lib/commercial/invoices.ts`
+- Added optional `name?: string` to `GlAccountLike` in `src/lib/finance/trialBalance.ts`
+- Removed unused `DepreciationScheduleRow` import in `tests/financeFixedAssets.test.ts`
+- `commercialTx.ts`: removed unused `Prisma` import → changed to `import type { PrismaClient, Prisma } from "@prisma/client"`
+- `commercialTx.ts`: removed unused `PaymentStatus` import
+- `commercialTx.ts`: removed unused `DispatchAction` import (dispatch module not yet wired)
+- `financeTx.ts`: made `period` optional in `PostJournalEntryInput`
+- `financeTx.ts`: removed unused `FixedAssetInput` import
+- `commercialTx.ts`: replaced remaining `as any` casts with typed `Prisma.SalesOrderStatus` and `Prisma.InvoiceStatus`
 
-## Verify
-`npx tsc --noEmit` (0) → `npm run build` (168) → `npm run test` (50 desktop) → `npx prisma db push` already synced. `LOG_DIR`/`BACKUP_DIR` via `serverEnv()`.
+### C6-6 Verification Gate (2026-09-05)
+- **Adapter smoke test** (`npm run test:c6-6`): **11/11 pass**
+- **HTTP smoke test** (`npm run test:c6-6:http`): **10/10 pass** against `mfgmax_v2_test`
+- **`as any` scan**: clean across `src/lib/commercial`, `src/lib/finance`, `src/app/api/v2/commercial`, `src/app/api/v2/finance`
+- **`reconcileBankTx`**: implemented as pure function returning `ReconcileResult` without persisting `GstReconRun` (Option C)
 
-## Next
-- ESLint `no-error-message-in-500` to lock `internalError()`
-- `vercel.json` cron or keep launcher prune (offline already)
-- Per-field `zod` for remaining 150 minimal-guarded POSTs as features land
-- Tier-2 org backlog (full analysis in `docs/ORG_GAP_ANALYSIS.md`):
-  1. Org chart + RACI + ~10 seeded functional role bundles (PLANT_HEAD,
-     DEPT_HEAD, BUYER, STOREKEEPER, ACCOUNTANT, HR_EXEC, EHS_OFFICER,
-     IT_ADMIN, AUDITOR, RISK_OWNER) - reuses existing permission keys,
-     zero schema change for the bundles; wire `risk.view`/`risk.edit` into
-     the risk-register gates.
-  2. Exit / offboarding management (notice -> handover -> FnF -> asset
-     recovery -> access revocation -> exit interview).
-  3. Supplier audits (cadence + findings + CAPA linkage) and CSAT / VOC.
-  4. TDS compliance tracker; MOC beyond ECO; policy acknowledgements;
-     anonymous whistleblower channel; contract expiry alerts into the
-     digest. (Visitor logs, PPE issues and fleet already exist.)
-  5. Tier-3 (grep-verified absent, see `docs/ORG_GAP_ANALYSIS.md`):
-     credit/debit notes + returns, CSR (customer-specific requirements)
-     matrix, skill/competency matrix + SOP sign-off, gratuity provisioning,
-     employee loans & advances, petty cash, e-invoice IRN + GSTR-1/3B
-     exports, board resolutions + related-party registers, password policy
-     enforcement, cheque register, insurance claims, sales quota/commission.
-  6. Tier-4 (grep-verified absent): supplier portal/ASN, accident register
-     with LTI, POSH/ICC cases, employee credential expiry, litigation
-     register, IP register, tender/bid management, BG/LC register, capex
-     request (CER) with ROI, product recall/notices. (Announcements,
-     haz-waste, write-offs, defect tracking already exist.)
+## Next Steps
+1. **C7 planning** — C6 verification passed; ready to plan C7.
+2. **Wire remaining C6-5 adapters** — dispatch transition, payment transition routes not yet exposed (non-blocking).
+3. **C6-6 scripts in CI** — `npm run test:c6-6` and `npm run test:c6-6:http` added to `package.json` `ci` script.
+
+## C7 Current State (2026-09-05) — COMPLETE
+
+- Engines (TDD): `src/lib/people/{employees,attendance,leaves,payroll}.ts` + `src/lib/sessionRotation.ts` — suite **512/512 across 26 suites**, tsc clean, cast-free.
+- Schema: `LeaveStatus` += `CANCELLED`; `LeaveType` += `MATERNITY|PATERNITY|COMP_OFF`.
+- Adapter + routes: `src/lib/people/peopleTx.ts`; `/api/v2/people/{employees,attendance,leaves,leaves/[id]/action,payroll,payroll/[month]/run}`.
+- Smoke: `npm run test:c7-6` (CI-wired) — 14/14 on `mfgmax_v2_test` (employee→attendance→leave→payroll→audits→session-rotation).
+
+### Boundaries
+- Session rotation is additive; existing auth flows unaffected.
+- v1 people pages (`src/app/people/`) are retired after parity review, not deleted until parity review happens.
+
+## C8 Current State (2026-09-05) — COMPLETE
+
+- Engines (TDD, 57 tests): `src/lib/maintenance/{jobState,pm,toolLife,calibration,spares,permit}.ts` — suite **569/569 across 28 suites**, tsc clean, cast-free.
+- Adapter: `src/lib/maintenance/maintenanceTx.ts` (engine-gated, in-tx audits).
+- Routes: `/api/v2/maintenance/{jobs,jobs/[id]/action,pm-rules,pm-rules/scan,maintenance-tools/[id]/action,instruments/[id]/action,spares/issue,permits,permits/[id]/action}` — PM run-hours from RUNNING telemetry; per-leg permit authz (EHS→ehs.approve).
+- Smoke: `npm run test:c8-8` (CI-wired) — 15/15 on `mfgmax_v2_test`.
+- Guards landed: P28 RCA+countermeasure on >60min breakdowns; G-4 expired-instrument refusal; max-regrind mandatory replace; no silent negative spare stock; 3-leg permit approval.
+
+## C8-9 Completion (2026-09-05) — COMPLETE
+
+Closed the three workflow-critical gaps found by the C8 completeness audit (plan: `docs/plans/2026-09-05-cycle8-completion.md`):
+
+- **C8-9a Tool wear on LOG_GOOD (W11):** pure `productionWear.projectProductionToolWear` → `maintenanceTx.applyProductionToolWearInTx`, wired into `shopfloor/applyJobAction.ts` LOG_GOOD. Cycle tools warn→RETIRED via the v2 engine (parity change vs v1 `MAINTENANCE`); unit tools auto-consume to NEEDS_REGRIND with a single `ToolLifeLog` CONSUME row **only on the state crossing** (no per-LOG_GOOD alert spam). RETIRED/SCRAPPED tooling never re-arms.
+- **C8-9b G-4 at measurement time:** pure `inspectionGate` → `qualityTx.createInspectionTx` refuses expired/quarantined/retired gauges (`calibratedToolId` path) and validates passed+failed ≤ total; route `POST /api/v2/quality/inspections`.
+- **C8-9c Breakdown auto-scan (W11 Andon):** pure `breakdownScan` → `maintenanceTx.scanBreakdownsTx`; route `POST /api/v2/maintenance/breakdowns/scan` with `mode=SCAN|SCAN_AND_CREATE` and `cooldownMinutes` re-open guard. FAULT machine with no open BREAKDOWN → candidate; one job per machine; open job or cooldown suppresses.
+- Verification: suite **535/535 / 24 suites**; tsc 0 errors; cast-free; real-DB smoke **20/20** (`test:c8-8` extended with the three lifecycle blocks + audits incl. `MACHINE:TOOL_WEAR`, `MaintenanceJob:BREAKDOWN_AUTO_CREATED`, `QualityInspection:INSPECTION_CREATED`).
+- Still deferred (unchanged): predictive RUL engine, MTBF/MTTR analytics, spare auto-reorder POs, cal-recall scope, v2 React UI for `/maintenance/*`.
+
+## Key Files
+- `docs/plans/2026-09-05-cycle7-people-payroll.md` — C7 task breakdown
+- `src/lib/commercial/commercialTx.ts` — C6-5 commercial adapters
+- `src/lib/finance/financeTx.ts` — C6-5 finance adapters
+- `prisma/schema.prisma` — source of truth for DB enums and models
+- `src/lib/commercial/salesOrders.ts` — engine `SalesOrderStatus` = `DRAFT|CONFIRMED|IN_PROGRESS|COMPLETED|CANCELLED`
+- `src/lib/commercial/invoices.ts` — engine `InvoiceStatus` = `DRAFT|SENT|PARTIAL|PAID|OVERDUE`
+- `src/lib/finance/glPosting.ts` — engine `JournalLine` type

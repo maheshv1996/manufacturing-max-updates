@@ -78,4 +78,7 @@ next-env.d.ts
 
 /src/generated/prisma
 
+# stray compiled output (IDE auto-transpile artifacts inside the all-TS src tree)
+/src/**/*.js
+
 .vercel

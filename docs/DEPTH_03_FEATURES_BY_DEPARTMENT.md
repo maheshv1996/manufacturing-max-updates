@@ -164,6 +164,8 @@ Module enable/disable follows the org's `activeDepartments` Setting (a plant tha
 **AI:** HR copilot — policy Q&A, role-grant summaries, payroll exception explainers, expiring-cert digest, exit-checklist drafts.
 **Code anchors:** `/people/*`, `/api/{attendance,leaves,overtime,payroll,roster,training,certifications,appraisals,access-review,recruitment}*`, `src/lib/{payrollEngine,employeeLookup,attendanceLogic…}.ts`, `prisma/seed-rbac.ts`.
 
+> **v2 rebuild status (C7 COMPLETE, 2026-09-05):** the people/payroll **state core** is rebuilt DB-proven on `v2` — pure engines `src/lib/people/{employees,attendance,leaves,payroll}.ts` + `src/lib/sessionRotation.ts` (TDD: 12 tests), typed adapter `src/lib/people/peopleTx.ts` (engine-gated, in-tx audits), routes `/api/v2/people/{employees,attendance,leaves,leaves/[id]/action,payroll,payroll/[month]/run}`. `LeaveStatus` gained `CANCELLED`; `LeaveType` gained `MATERNITY|PATERNITY|COMP_OFF`; payslips now carry engine-computed `lopDays`+`lopDeduction`. Real-DB smoke (`npm run test:c7-6`, CI-wired): employee→attendance(26P/2L)→leave approve/cancel/reject→payroll run with LOP integrity→idempotent re-run→audits→session-rotation round-trip, 14/14 green.
+
 ---
 
 ## F9. Maintenance, Reliability & Tooling (workspace `maintenance`)
@@ -178,6 +180,8 @@ Module enable/disable follows the org's `activeDepartments` Setting (a plant tha
 
 **Key records:** F9 list + `ToolLifeLog`, `InstrumentIssue`, `CalLabRequisition`/`CalLabVendorRating`, `SparePart`.
 **Config vs guardrail:** PM rules, thresholds, min spares, tool-life policy = configurable; G-4 (no expired instrument measuring), safety-release gates = guardrails.
+
+> **v2 rebuild status (C8 COMPLETE, 2026-09-05):** maintenance/tooling **state core** rebuilt DB-proven on `v2` — engines `src/lib/maintenance/{jobState,pm,toolLife,calibration,spares,permit}.ts` (TDD, 57 tests), adapter `src/lib/maintenance/maintenanceTx.ts` (engine-gated, audited), routes `/api/v2/maintenance/*` (jobs + actions, pm-rules + scan/auto-create, tool life actions, instrument G-4 issue/return/recal, spares/kit issue, permit-to-work with per-leg authz). Guardrail enforcement: P28 RCA+countermeasure on long breakdowns, G-4 expired/quarantined instrument refusal, mandatory replace at max regrinds/life, no silent negative spare stock, 3-leg permit approval. Real-DB smoke `npm run test:c8-8` (CI-wired) 15/15 green → **20/20 after C8-9 completion (same day)**: production tool wear wired into v2 LOG_GOOD (`productionWear.ts` + `applyProductionToolWearTx` inside shopfloor `applyJobAction`), G-4 enforced at measurement time (not just crib issue) via `inspectionGate.ts` + `createInspectionTx` + `/api/v2/quality/inspections`, and machine-FAULT → BREAKDOWN auto-scan (`breakdownScan.ts` + `/api/v2/maintenance/breakdowns/scan`, create + duplicate-suppress + cooldown). Still deferred to later cycles: RUL/predictive engine, MTBF/MTTR analytics, spare auto-reorder POs, cal scope recall. DEPTH_04 W11 note for workflow detail.
 **AI:** maintenance copilot — checklist drafts from history, failure-pattern explainers, spares pre-pick, recall-scope drafts.
 **Code anchors:** `/maintenance/*`, `/api/maintenance/*`, `src/lib/{calibration,capacityEngine}.ts`, `desktop/lib/watchdog.js` (server-side analog).
 

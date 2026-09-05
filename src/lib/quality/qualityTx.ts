@@ -13,6 +13,7 @@ import { transitionNcr, type NcrActionCtx, type NcrStatus } from "./ncrState";
 import { advanceEightD, type EightDEvidence, type EightDStage } from "./eightD";
 import { transitionFai, type FaiActionCtx, type FaiStatus } from "./fai";
 import { releasePackage, mutatePackage, type ReleaseInput } from "./dataPackage";
+import { assertInstrumentUsable } from "./inspectionGate";
 
 type Tx = Prisma.TransactionClient;
 
@@ -421,5 +422,87 @@ export async function mutateDataPackageTx(db: PrismaClient, input: MutateDataPac
       return updated;
     });
   const r = await withIdempotency(db, input.clientId, "quality:datapackage:mutate", run);
+  return r.duplicate ? { duplicate: true } : r.value;
+}
+
+// ---------------------------------------------------------------- inspections (C8-9b G-4 gate)
+
+export interface CreateInspectionInput {
+  actor: QualityActor;
+  clientId?: string;
+  workOrderId: string;
+  inspectorId?: string;
+  totalInspected: number;
+  passed: number;
+  failed: number;
+  defectCodeId?: string;
+  /** The recording instrument — G-4 requires it to be usable for measurement now. */
+  calibratedToolId?: string;
+  notes?: string;
+}
+
+export async function createInspectionTx(db: PrismaClient, input: CreateInspectionInput) {
+  const run = async () =>
+    db.$transaction(async (tx) => {
+      const total = Number(input.totalInspected);
+      const passed = Number(input.passed);
+      const failed = Number(input.failed);
+      if (!Number.isInteger(total) || total <= 0) throw validation("totalInspected must be a positive integer");
+      if (!Number.isInteger(passed) || passed < 0) throw validation("passed must be a non-negative integer");
+      if (!Number.isInteger(failed) || failed < 0) throw validation("failed must be a non-negative integer");
+      if (passed + failed > total) throw validation("passed + failed cannot exceed totalInspected");
+
+      const wo = await tx.workOrder.findUnique({ where: { id: input.workOrderId }, select: { id: true } });
+      if (!wo) throw notFound("Work order not found");
+
+      // G-4 (C8-9b): an EXPIRED / RETIRED / QUARANTINED / non-ACTIVE instrument can
+      // never record a measurement — enforced here at the data boundary, not just UI.
+      if (input.calibratedToolId) {
+        const inst = await tx.calibratedTool.findUnique({ where: { id: input.calibratedToolId } });
+        if (!inst) throw notFound("Instrument not found");
+        const gate = assertInstrumentUsable(
+          {
+            id: inst.id,
+            serialNumber: inst.serialNumber,
+            calibratedAt: inst.calibratedAt,
+            expiresAt: inst.expiresAt,
+            location: inst.location as "LAB_CABINET" | "WITH_OPERATOR" | "SHOPFLOOR" | "QUARANTINE",
+            lifecycle: inst.lifecycle as "PROCUREMENT" | "ACTIVE" | "RETIRED",
+          },
+          new Date(),
+        );
+        if (!gate.ok) {
+          throw validation(`Instrument ${inst.serialNumber} cannot record this inspection: ${gate.message} (G-4)`);
+        }
+      }
+
+      const created = await tx.qualityInspection.create({
+        data: {
+          workOrderId: input.workOrderId,
+          inspectorId: input.inspectorId ?? null,
+          totalInspected: total,
+          passed,
+          failed,
+          defectCodeId: input.defectCodeId ?? null,
+          calibratedToolId: input.calibratedToolId ?? null,
+          notes: input.notes ?? null,
+        },
+        select: { id: true, workOrderId: true, totalInspected: true, passed: true, failed: true },
+      });
+      await audit(tx, input.actor.name ?? "QC", {
+        actor: input.actor.id,
+        action: "INSPECTION_CREATED",
+        entityType: "QualityInspection",
+        entityId: created.id,
+        details: JSON.stringify({
+          workOrderId: created.workOrderId,
+          total: created.totalInspected,
+          passed: created.passed,
+          failed: created.failed,
+        }),
+      });
+      return created;
+    });
+  const r = await withIdempotency(db, input.clientId, "quality:inspection:create", run);
   return r.duplicate ? { duplicate: true } : r.value;
 }
