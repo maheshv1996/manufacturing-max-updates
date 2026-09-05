@@ -40,6 +40,22 @@ npm run dev          # http://localhost:3000
 | C10 | Reports, Digest & Print Center | **Done** |
 | C11 | AI Copilot Framework | **Done** |
 | C12 | System, Admin & Config (Custom Entities, Org-Chart, Terminology) | **Done** |
+| C13 | Plant-Server Scale, Desktop Integration & Go-Live Hardening | **Done** |
+
+## C13 Current State (2026-09-05) — COMPLETE (MASTER REBUILD 100% COMPLETE)
+
+- **Engines (TDD, 4 tests):**
+  - `src/lib/scale/concurrencyBenchmark.ts`: Pure scale evaluation engine for simulating high-concurrency plant-server workloads (500+ users), exact linear percentile interpolation (`min`, `max`, `avg`, `p50`, `p90`, `p95`, `p99`), throughput measurement (`ops/sec`), and SLA threshold evaluation.
+- **Desktop Platform Hardening:**
+  - `desktop/launcher.js`: Standalone server orchestration, environment bindings (`DB_POOL_MAX`, `PLANT_TZ`, `AI_TIER_DEFAULT`), and embedded Postgres watchdog.
+  - `desktop/lib/vault.js`: Backup rotation (keep 30), filename generation, disaster recovery simulation.
+  - `desktop/lib/license.js`: Machine fingerprinting and 14-day grace activation state machine (`evaluateActivation`).
+- **Verification:**
+  - Unit tests: **654/654 pass across 32 suites** (4 new C13 benchmark tests).
+  - Real-DB smoke: `scripts/v2-smoke-scale-desktop.mjs` (`npm run test:c13-13`) — **6/6 PASS** on `mfgmax_v2_test`.
+  - Benchmarks: **1,041+ ops/sec** read throughput (p50: 4ms, p95: 74ms), **789+ ops/sec** transactional write burst (p50: 5.5ms, p95: 12.5ms). Zero deadlocks.
+  - G-9 Idempotency race test: 5 concurrent requests with identical client ID yielded exactly 1 execution and 4 deduplicated skips with cached response.
+  - TypeScript: `tsc --noEmit` exit 0 (0 errors), zero `as any` casts. Census: 274 pages, 387 API routes, 214 models, 106 enums.
 
 ## C12 Current State (2026-09-05) — COMPLETE
 
