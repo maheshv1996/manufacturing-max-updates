@@ -39,6 +39,29 @@ npm run dev          # http://localhost:3000
 | C9 | EHS, Lean & Continuous Improvement | **Done** |
 | C10 | Reports, Digest & Print Center | **Done** |
 | C11 | AI Copilot Framework | **Done** |
+| C12 | System, Admin & Config (Custom Entities, Org-Chart, Terminology) | **Done** |
+
+## C12 Current State (2026-09-05) — COMPLETE
+
+- **Engines (TDD, 13 tests across 3 suites):**
+  - `src/lib/custom/customEngine.ts`: Dynamic JSON record validation against user-defined field definitions (`text`, `number`, `date`, `select`, `boolean`), required field checks, options membership, and safe slug generation.
+  - `src/lib/org/reportingLineEngine.ts`: Pure DAG cycle detection preventing direct loops (A -> B -> A), indirect multi-hop loops (A -> B -> C -> A), and self-reporting (A -> A); active window resolution; nested org hierarchy tree builder.
+  - `src/lib/system/terminologyEngine.ts`: Configurable terminology mapping with safe fallback to canonical manufacturing terms and dictionary validation.
+- **Adapters:**
+  - `src/lib/custom/customTx.ts`: `createCustomEntityTx`, `updateCustomEntityTx`, `createCustomRecordTx`, `updateCustomRecordTx`, `deleteCustomRecordTx`, `getCustomEntitiesTx`, `getCustomRecordsTx` with single `$transaction` mutations and in-tx `AuditLog` rows.
+  - `src/lib/org/reportingLineTx.ts`: `createReportingLineTx` (with pre-commit DAG cycle detection), `terminateReportingLineTx`, `getReportingLinesTx`, `getOrgChartHierarchyTx`.
+  - `src/lib/system/settingsTx.ts`: `getTerminologyMapTx`, `updateTerminologyMapTx`, `getSystemConstantsTx`, `updateSystemConstantsTx`.
+- **Routes:**
+  - `/api/v2/custom/entities` (GET, POST) & `/api/v2/custom/entities/[id]` (GET, PATCH)
+  - `/api/v2/custom/records` (GET, POST) & `/api/v2/custom/records/[id]` (GET, PATCH, DELETE)
+  - `/api/v2/org/reporting-lines` (GET, POST) & `/api/v2/org/reporting-lines/[id]` (DELETE)
+  - `/api/v2/org/chart` (GET)
+  - `/api/v2/system/terminology` (GET, PUT)
+  - `/api/v2/system/constants` (GET, PUT)
+- **Verification:**
+  - Unit tests: **650/650 pass across 31 suites** (13 new C12 tests).
+  - Real-DB smoke: `scripts/v2-smoke-system-admin.mjs` (`npm run test:c12-12`) — **12/12 PASS** on `mfgmax_v2_test`.
+  - Zero `as any` casts, strict TypeScript compilation (0 errors), census synced (387 API routes).
 
 ## C11 Current State (2026-09-05) — COMPLETE
 

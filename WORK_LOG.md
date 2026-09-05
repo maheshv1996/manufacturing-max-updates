@@ -2,6 +2,31 @@
 
 ## Date: 2026-09-05
 
+### 🎯 Cycle 12: System, Admin & Config (Custom Entities, Org-Chart, Terminology) — COMPLETE
+- **Pure Engines**:
+  - `src/lib/custom/customEngine.ts`: Dynamic JSON record validation against field definitions (`text`, `number`, `date`, `select`, `boolean`), required field checks, options membership, and safe slug generation.
+  - `src/lib/org/reportingLineEngine.ts`: Pure DAG cycle detection preventing direct loops (A -> B -> A), indirect multi-hop loops (A -> B -> C -> A), and self-reporting (A -> A); active date window resolution (`validFrom`, `validTo`); nested hierarchy tree builder combining units, head seats, and members.
+  - `src/lib/system/terminologyEngine.ts`: Configurable terminology mapping with safe fallback to canonical manufacturing terms and dictionary validation.
+- **Typed Adapters**:
+  - `src/lib/custom/customTx.ts`: `createCustomEntityTx`, `updateCustomEntityTx`, `createCustomRecordTx`, `updateCustomRecordTx`, `deleteCustomRecordTx`, `getCustomEntitiesTx`, `getCustomRecordsTx` with single `$transaction` mutations and in-tx `AuditLog` rows (`CUSTOM_ENTITY_CREATED`, `CUSTOM_ENTITY_UPDATED`, `CUSTOM_RECORD_CREATED`, `CUSTOM_RECORD_UPDATED`, `CUSTOM_RECORD_DELETED`).
+  - `src/lib/org/reportingLineTx.ts`: `createReportingLineTx` (with pre-commit DAG cycle detection), `terminateReportingLineTx`, `getReportingLinesTx`, `getOrgChartHierarchyTx` with in-tx `AuditLog` (`REPORTING_LINE_CREATED`, `REPORTING_LINE_TERMINATED`).
+  - `src/lib/system/settingsTx.ts`: `getTerminologyMapTx`, `updateTerminologyMapTx`, `getSystemConstantsTx`, `updateSystemConstantsTx` with in-tx `AuditLog` (`TERMINOLOGY_UPDATED`, `SYSTEM_CONSTANTS_UPDATED`).
+- **API Routes**:
+  - `/api/v2/custom/entities` (GET, POST) & `/api/v2/custom/entities/[id]` (GET, PATCH)
+  - `/api/v2/custom/records` (GET, POST) & `/api/v2/custom/records/[id]` (GET, PATCH, DELETE)
+  - `/api/v2/org/reporting-lines` (GET, POST) & `/api/v2/org/reporting-lines/[id]` (DELETE)
+  - `/api/v2/org/chart` (GET)
+  - `/api/v2/system/terminology` (GET, PUT)
+  - `/api/v2/system/constants` (GET, PUT)
+- **Verification Gates**:
+  - TDD unit tests: `tests/customEntityEngine.test.ts`, `tests/orgReportingLineEngine.test.ts`, `tests/systemTerminologyEngine.test.ts` (13 tests passing, full suite **650/650 passing across 31 suites**).
+  - Real-DB smoke test: `scripts/v2-smoke-system-admin.mjs` (`npm run test:c12-12`) — **12/12 PASS** against `mfgmax_v2_test`.
+  - TypeScript compilation: `tsc --noEmit` exit 0.
+  - Zero `as any` casts.
+  - Census: synchronized to **274 pages, 387 API routes, 214 models, 106 enums**.
+
+---
+
 ### 🎯 Cycle 11: AI Copilot Framework (DEPTH_05) — COMPLETE
 - **Pure Engines**:
   - `src/lib/copilot/seatContext.ts`: Assembles `SeatContextBundle` (identity, preferred language EN/TE/HI, terminal context, active seats, effective level rank, effective scope, acting coverage, reporting chain, plant context, and approval workload). Pure scope trimmer (`trimDataByScope`) filters record collections (`SELF`, `TEAM`, `UNIT`, `PLANT`, `ALL`) before data reaches any model. Pure tool authorization gate (`canInvokeTool`) checks permission key and level rank.
