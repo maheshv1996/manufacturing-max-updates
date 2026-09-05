@@ -18,7 +18,8 @@
   - Real-DB smoke test: `scripts/v2-smoke-scale-desktop.mjs` (`npm run test:c13-13`) — **6/6 PASS** against `mfgmax_v2_test`.
   - TypeScript compilation: `tsc --noEmit` exit 0 (0 errors).
   - Zero `as any` casts.
-  - Census: synchronized to **274 pages, 387 API routes, 214 models, 106 enums**.
+  - Next.js 16 production build: `npm run build` cleanly passed with 0 errors across 274 pages and 387 API routes.
+  - Asset verification: `node scripts/verify-build.js` PASS (6,429 server files, 28,690 asset refs verified).
   - Master program status: **All 13 cycles (C1–C13) 100% COMPLETE**.
 
 ---
