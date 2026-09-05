@@ -1,9 +1,17 @@
 # System Memory & State
 
 The company brain. Every module listed below was verified against the codebase on this audit:
-274 pages, 369 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
+274 pages, 374 API routes, 214 Prisma models, 106 enums. NO UPDATE = NOT DONE.
 
 ## Completed Modules (newest first)
+- **C10 REPORTS, DIGEST & PRINT CENTER (v2, 2026-09-05):** completed C10 typed-core module —
+  - **(1) Morning Digest & Anomaly Engine:** `src/lib/reports/digest.ts` + `getMorningDigestTx` + route `/api/v2/reports/digest` — timezone-aware (`plantTz` UTC+05:30) midnight-pinned calculations for plant/machine OEE (availability, performance, quality), previous-day delta, best/worst machine rankings, and automated overnight SLA breach detector (24h complaint ACK, 10d 8D CAPA, low stock below minStock, and critical safety incidents).
+  - **(2) Production Register:** `src/lib/reports/registers.ts` + `getProductionRegisterTx` + route `/api/v2/reports/production` — aggregates production & downtime logs per work order/machine, computes good/scrap/rework quantities, planned vs actual completion %, and scrap %.
+  - **(3) Stock Valuation Register:** `src/lib/reports/registers.ts` + `getStockValuationRegisterTx` + route `/api/v2/reports/stock-valuation` — calculates raw material inventory on-hand, reorder warnings, and exact integer paise valuation (`currentStock * unitCostPaise`).
+  - **(4) Job Profitability Register:** `src/lib/reports/registers.ts` + `getJobProfitabilityRegisterTx` + route `/api/v2/reports/job-profitability` — reconciles work order invoices, direct material, direct labor, machine overhead, and scrap penalty to derive exact gross margin in paise, margin %, and status (`PROFITABLE`, `BREAKEVEN`, `UNPROFITABLE`).
+  - **(5) Job Traveler & Print Center:** `src/lib/reports/printTraveler.ts` + `getJobTravelerPrintDataTx` + route `/api/v2/reports/traveler/[id]` — high-fidelity physical traveler data package with sequential routing steps, quality hold points (G-2), AS9102 FAI required indicator (G-1), material heat/mill cert traceability, inspection dimensions, and tamper-evident SHA-256 verification hash; emits in-tx `AuditLog` `EXPORT_TRAVELER`.
+  - Gates: suite **620/620 across 24 suites**, `tsc --noEmit` clean (0 errors), zero `as any` casts, real-DB smoke `test:c10-10` **11/11 PASS** on `mfgmax_v2_test`. Census: 274 pages, 374 API routes, 214 models, 106 enums.
+
 - **C9 EHS, LEAN & CONTINUOUS IMPROVEMENT (v2, 2026-09-05):** completed C9 typed-core module —
   - **(1) Safety Incident Machine & F10 Closure Evidence:** `src/lib/ehs/safety.ts` + `reportIncidentTx`/`incidentActionTx` + routes `/api/v2/ehs/incidents` and `/api/v2/ehs/incidents/[id]/action` — validates type/severity/location/description; `START_INVESTIGATION` mandates `capaOwner`; `CLOSE` refuses without `actionTaken` plus either `rootCause` or `fiveWhyReason` (stamps `closedAt`/`closedBy`). Append/transition-only, zero deletion.
   - **(2) P27 Near-Miss Quota:** `observationQuotaRows` + `nearMissQuotaTx` + route `/api/v2/ehs/quota` — projects monthly manager quota performance from `NEAR_MISS`, `HAZARD`, `PPE_VIOLATION` incidents against `ehsObservationQuota` setting (default 4).

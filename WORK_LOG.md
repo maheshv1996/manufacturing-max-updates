@@ -2,7 +2,26 @@
 
 ## Date: 2026-09-05
 
-### 🎯 Session Objectives
+### 🎯 Cycle 10: Reports, Digest & Print Center (F1/F12) — COMPLETE
+- **Pure Engines**:
+  - `src/lib/reports/digest.ts`: Timezone-aware (`plantTz` UTC+05:30) executive morning briefing, OEE Availability/Performance/Quality math, delta vs previous period, best/worst machine ranking, and overnight SLA breach detection (24h complaint ACK, 10d 8D CAPA, low stock below minStock, critical safety incidents).
+  - `src/lib/reports/registers.ts`: Production Register, Stock Valuation Register (integer paise valuation, reorder alerts), Job Profitability Register (gross margins in paise, margin %, status), Supplier Scorecards, Sales & GST Register.
+  - `src/lib/reports/printTraveler.ts`: Physical shopfloor job traveler data package, sequential routing steps, quality hold points (G-2), AS9102 FAI badge (G-1), material heat/mill cert traceability, inspection dimensions, and tamper-evident SHA-256 verification hash.
+- **Typed Adapters**:
+  - `src/lib/reports/reportsTx.ts`: `getMorningDigestTx`, `getProductionRegisterTx`, `getStockValuationRegisterTx`, `getJobProfitabilityRegisterTx`, `getJobTravelerPrintDataTx` (with in-tx `AuditLog` `EXPORT_TRAVELER`). Zero `as any` casts.
+- **API Routes**:
+  - `/api/v2/reports/digest`
+  - `/api/v2/reports/production`
+  - `/api/v2/reports/stock-valuation`
+  - `/api/v2/reports/job-profitability`
+  - `/api/v2/reports/traveler/[id]`
+- **Verification Gates**:
+  - TDD unit tests: `tests/reportDigest.test.ts`, `tests/reportRegisters.test.ts`, `tests/reportPrint.test.ts` (12 tests passing, full suite **620/620 passing across 24 suites**).
+  - Real-DB smoke test: `scripts/v2-smoke-reports.mjs` (`npm run test:c10-10`) — **11/11 PASS** against `mfgmax_v2_test`.
+  - TypeScript compilation: `tsc --noEmit` exit 0.
+  - Census: synchronized to **274 pages, 374 API routes, 214 models, 106 enums**.
+
+---
 Continue C6 (Commercial & Finance Core) on the `v2` branch: wire remaining C6-5 adapters not yet exposed via routes, run verification gates, create C7 plan, and update handover documentation.
 
 ---
