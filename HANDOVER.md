@@ -1,7 +1,8 @@
 # Manufacturing Max — Handover
 
-**Branch:** `v2` (DEPTH_04 typed-core rebuild)
+**Branch:** `master` (All 13 Rebuild Cycles Merged & Tagged `v2.0.0`)
 **Last Updated:** 2026-09-05
+**Release Tag:** `v2.0.0`
 
 ## Run
 ```bash
