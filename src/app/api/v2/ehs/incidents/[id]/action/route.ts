@@ -23,8 +23,9 @@ const bodySchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "ehs.edit")) throw forbidden("ehs.edit required");
@@ -37,7 +38,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const result = await incidentActionTx(
       prisma,
       { id: user.id, name: user.name },
-      params.id,
+      id,
       a.action,
       a.action === "START_INVESTIGATION"
         ? { capaOwner: a.capaOwner, dueDate: a.dueDate }

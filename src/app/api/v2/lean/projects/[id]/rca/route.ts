@@ -23,8 +23,9 @@ const bodySchema = z.object({
     .nullable(),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "projects.edit")) throw forbidden("projects.edit required");
@@ -36,7 +37,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const rca = await recordRcaTx(
       prisma,
       { id: user.id, name: user.name },
-      params.id,
+      id,
       parsed.value,
     );
     return NextResponse.json({ success: true, rca });

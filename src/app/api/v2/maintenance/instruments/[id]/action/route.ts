@@ -24,8 +24,9 @@ const bodySchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "maintenance.edit")) throw forbidden("maintenance.edit required");
@@ -43,7 +44,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             notes: parsed.value.notes,
           }
         : parsed.value;
-    const result = await instrumentActionTx(prisma, { id: user.id, name: user.name }, params.id, action);
+    const result = await instrumentActionTx(prisma, { id: user.id, name: user.name }, id, action);
     return NextResponse.json({ success: true, instrument: result });
   } catch (e) {
     const api = toApiError(e);

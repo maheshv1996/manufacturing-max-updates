@@ -15,8 +15,9 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("IMPLEMENT") }),
 ]);
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id) throw forbidden("Authentication required");
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const idea = await upvoteIdeaTx(
         prisma,
         { id: user.id, name: user.name },
-        params.id,
+        id,
       );
       return NextResponse.json({ success: true, idea });
     }
@@ -42,7 +43,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const idea = await transitionIdeaTx(
       prisma,
       { id: user.id, name: user.name },
-      params.id,
+      id,
       a.action,
     );
     return NextResponse.json({ success: true, idea });

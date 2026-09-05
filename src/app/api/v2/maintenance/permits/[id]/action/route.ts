@@ -22,8 +22,9 @@ const LEG_PERMISSION: Record<"EHS" | "MAINTENANCE" | "PRODUCTION", string> = {
   PRODUCTION: "ops.edit",
 };
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "maintenance.edit")) throw forbidden("maintenance.edit required");
@@ -39,7 +40,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       throw forbidden("maintenance.edit or ehs.approve required to void");
     }
 
-    const permit = await permitActionTx(prisma, { id: user.id, name: user.name }, params.id, a);
+    const permit = await permitActionTx(prisma, { id: user.id, name: user.name }, id, a);
     return NextResponse.json({ success: true, permit });
   } catch (e) {
     const api = toApiError(e);

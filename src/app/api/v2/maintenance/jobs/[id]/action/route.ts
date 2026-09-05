@@ -19,8 +19,9 @@ const bodySchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "maintenance.edit")) throw forbidden("maintenance.edit required");
@@ -33,7 +34,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const result = await transitionJobTx(
       prisma,
       { id: user.id, name: user.name },
-      params.id,
+      id,
       a.action === "START"
         ? { action: "START" }
         : { action: "CLOSE", laborHours: a.laborHours, rootCause: a.rootCause, countermeasure: a.countermeasure },

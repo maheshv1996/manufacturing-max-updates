@@ -16,9 +16,10 @@ const actionSchema = z.object({
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "people.edit")) throw forbidden("people.edit required");
@@ -30,13 +31,13 @@ export async function POST(
 
     switch (action) {
       case "APPROVE":
-        await approveLeave(prisma, { id: user.id, name: user.name }, params.id, note);
+        await approveLeave(prisma, { id: user.id, name: user.name }, id, note);
         break;
       case "REJECT":
-        await rejectLeave(prisma, { id: user.id, name: user.name }, params.id, note);
+        await rejectLeave(prisma, { id: user.id, name: user.name }, id, note);
         break;
       case "CANCEL":
-        await cancelLeave(prisma, { id: user.id, name: user.name }, params.id);
+        await cancelLeave(prisma, { id: user.id, name: user.name }, id);
         break;
     }
 

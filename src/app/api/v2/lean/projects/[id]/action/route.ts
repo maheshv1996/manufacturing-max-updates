@@ -13,8 +13,9 @@ const bodySchema = z.object({
   action: z.enum(["ADVANCE_PHASE", "HOLD", "RESUME", "COMPLETE"]),
 });
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "projects.edit")) throw forbidden("projects.edit required");
@@ -26,7 +27,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const project = await projectActionTx(
       prisma,
       { id: user.id, name: user.name },
-      params.id,
+      id,
       parsed.value.action,
     );
     return NextResponse.json({ success: true, project });

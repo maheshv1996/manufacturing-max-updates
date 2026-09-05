@@ -15,8 +15,9 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SCRAP"), reason: z.string().trim().min(1).max(1000) }),
 ]);
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const headersList = await headers();
     const user = getUserFromHeaders(headersList);
     if (!user.id || !can(user, "maintenance.edit")) throw forbidden("maintenance.edit required");
@@ -25,7 +26,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const parsed = parseOr400(bodySchema, body);
     if (parsed.tag === "err") throw parsed.error;
 
-    const result = await maintenanceToolActionTx(prisma, { id: user.id, name: user.name }, params.id, parsed.value);
+    const result = await maintenanceToolActionTx(prisma, { id: user.id, name: user.name }, id, parsed.value);
     return NextResponse.json({ success: true, tool: result });
   } catch (e) {
     const api = toApiError(e);
